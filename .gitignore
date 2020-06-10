@@ -108,7 +108,7 @@ celerybeat-schedule
 .env
 .venv
 env/
-venv/
+#venv/  Jzhu, 2020-06-09
 ENV/
 env.bak/
 venv.bak/
