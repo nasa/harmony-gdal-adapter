@@ -325,24 +325,16 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def get_variables(self, filename):
         gdalinfo_lines = self.cmd("gdalinfo", filename)
         result = []
-
         # Normal case of NetCDF / HDF, where variables are subdatasets
         for subdataset in filter((lambda line: re.match(r"^\s*SUBDATASET_\d+_NAME=", line)), gdalinfo_lines):
             result.append(ObjectView({ "name": re.split(r":", subdataset)[-1] }))
-        if result:
+        if len(result) > 0:
             return result
 
         # GeoTIFFs, where variables are bands, with descriptions set to their variable name
         for subdataset in filter((lambda line: re.match(r"^\s*Description = ", line)), gdalinfo_lines):
             result.append(ObjectView({ "name": re.split(r" = ", subdataset)[-1] }))
-        if result:
-            return result
-
-        # Some GeoTIFFdoes not have descriptions. directly use Band # as the variables
-        for subdataset in filter((lambda line: re.match(r"^Band", line)), gdalinfo_lines):
-            result.append(ObjectView({ "name": re.split(r" = ", subdataset)[-1] }))
-        if result:
-            return result
+        return result
 
     def is_geotiff(self, filename):
         gdalinfo_lines = self.cmd("gdalinfo", filename)

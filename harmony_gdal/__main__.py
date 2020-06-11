@@ -12,6 +12,9 @@ import harmony
 
 from .transform import HarmonyAdapter
 
+#run in the debug mode
+#import pdb; pdb.set_trace()
+
 def main():
     """
     Parses command line arguments and invokes the appropriate method to respond to them
