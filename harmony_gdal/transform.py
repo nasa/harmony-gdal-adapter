@@ -340,7 +340,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         # Some GeoTIFFdoes not have descriptions. directly use Band # as the variables
         for subdataset in filter((lambda line: re.match(r"^Band", line)), gdalinfo_lines):
-            result.append(ObjectView({ "name": re.split(r" = ", subdataset)[-1] }))
+            result.append(ObjectView({ "name": re.split(r"=", subdataset)[-1] }))
         if result:
             return result
 
