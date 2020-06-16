@@ -1,5 +1,5 @@
 #enter into har-gdal-env virtual env
-conda activate har-gdal-env
+#conda activate har-gdal-env
 #create env variables based on key/value pairs in .env file
 export $(grep -v '^#' ../harmony/.env | xargs)
 echo "check..."
