@@ -99,52 +99,40 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
                 variables = self.get_variables(granule.local_filename)
                 is_geotiff = self.is_geotiff(granule.local_filename)
-                if not granule.variables:
-                    granule.variables = variables
-
-                for variable in granule.variables:
-                    band = None
-                    if is_geotiff:
-                        # For geotiffs, we can't reference variables by name but need to reference
-                        # by raster band instead
-                        index = next(i for i, v in enumerate(variables) if v.name == variable.name)
-                        if index is None:
-                            return self.completed_with_error('band not found: ' + variable)
-                        band = index + 1
+                
+                if is_geotiff and (not granule.variables): #proces geotiff and all band
                         filename = granule.local_filename
-                    else:
-                        # For non-geotiffs, we reference variables by appending a file path
-                        layer_format = self.read_layer_format(
-                            granule.collection,
-                            granule.local_filename,
-                            variable.name
-                        )
-                        filename = layer_format.format(granule.local_filename)
+                        layer_id = granule.id + '__all'
+                        band=None
+                        result, layernames=self.combin_transfer(layernames, layer_id, filename, output_dir, band)
+                          
+                else:
 
-                    layer_id = granule.id + '__' + variable.name
-                    filename = self.subset(
-                        layer_id,
-                        filename,
-                        output_dir,
-                        band
-                    )
-                    filename = self.reproject(
-                        layer_id,
-                        filename,
-                        output_dir
-                    )
-                    filename = self.resize(
-                        layer_id,
-                        filename,
-                        output_dir
-                    )
-                    result = self.add_to_result(
-                        layer_id,
-                        filename,
-                        output_dir
-                    )
-                    layernames.append(layer_id)
-
+                    if not granule.variables:      
+                        granule.variables = variables
+                      
+                    for variable in granule.variables:
+                        band = None
+                        if is_geotiff:
+                            # For geotiffs, we can't reference variables by name but need to reference
+                            # by raster band instead
+                            index = next(i for i, v in enumerate(variables) if v.name == variable.name)
+                            if index is None:
+                                return self.completed_with_error('band not found: ' + variable)
+                            band = index + 1
+                            filename = granule.local_filename
+                        else:
+                            # For non-geotiffs, we reference variables by appending a file path
+                            layer_format = self.read_layer_format(
+                                granule.collection,
+                                granule.local_filename,
+                                variable.name
+                            )
+                            filename = layer_format.format(granule.local_filename)
+                        
+                        layer_id = granule.id + '__' + variable.name
+                            
+                        result, layernames=self.combin_transfer(layernames, layer_id, filename, output_dir, band)
 
                 if not message.isSynchronous:
                     # Send a single file and reset
@@ -347,3 +335,30 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def is_geotiff(self, filename):
         gdalinfo_lines = self.cmd("gdalinfo", filename)
         return gdalinfo_lines[0] == "Driver: GTiff/GeoTIFF"
+
+    def combin_transfer(self, layernames, layer_id, filename, output_dir, band):
+
+        filename = self.subset(
+                        layer_id,
+                        filename,
+                        output_dir,
+                        band
+                    )
+        filename = self.reproject(
+                        layer_id,
+                        filename,
+                        output_dir
+                    )
+        filename = self.resize(
+                        layer_id,
+                        filename,
+                        output_dir
+                    )
+        result = self.add_to_result(
+                        layer_id,
+                        filename,
+                        output_dir
+                    )
+        layernames.append(layer_id)
+
+        return result, layernames                    

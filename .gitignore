@@ -133,3 +133,5 @@ dmypy.json
 
 #  local notes
 /notes
+# venv
+venv/
