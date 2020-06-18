@@ -105,7 +105,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                         layer_id = granule.id + '__all'
                         band=None
                         layer_id, filename, output_dir=self.combin_transfer(layer_id, filename, output_dir, band)
-                        result=rename_to_result(self, layer_id, filename, output_dir)
+                        result=self.rename_to_result(layer_id, filename, output_dir)
                         layernames.append(layer_id)
                 else:
 

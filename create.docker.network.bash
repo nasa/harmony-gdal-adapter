@@ -9,3 +9,13 @@ then
    docker network create harmony
 
 fi
+
+#docker run --network harmony makes docker get the host/run/systemd/resolve/resolv.conf, while host/etc/resolv.conf -> host/run//run/systemd/resolve/stub-resolv.conf, we need make docker /etc/resolv.conf be /host/etc/resolv.conf
+
+cd /run/systemd/resolve
+
+sudo mv resolv.conf resolv.conf.orig
+
+sudo cp stub-resolv.conf resolv.conf
+
+
