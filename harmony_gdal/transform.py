@@ -334,7 +334,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         # GeoTIFFs, where variables are bands, with descriptions set to their variable name
         for subdataset in filter((lambda line: re.match(r"^\s*Description = ", line)), gdalinfo_lines):
-            result.append(ObjectView({ "name": re.split(r" = ", subdataset)[-1] }))
+            result.append(ObjectView({ "name": re.split(r"=", subdataset)[-1] }))
         if result:
             return result
 
