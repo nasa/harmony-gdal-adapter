@@ -31,6 +31,7 @@ mime_to_options = {
     "image/tiff": ["-co", "COMPRESS=LZW"]
 }
 
+
 class ObjectView(object):
     """
     Simple class to make a dict look like an object.
@@ -41,6 +42,7 @@ class ObjectView(object):
         >>> o.key
         'value'
     """
+
     def __init__(self, d):
         """
         Allows accessing the keys of dictionary d as though they
@@ -52,6 +54,7 @@ class ObjectView(object):
             a dictionary whose keys we want to access as object properties
         """
         self.__dict__ = d
+
 
 class HarmonyAdapter(BaseHarmonyAdapter):
     """
@@ -74,7 +77,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         message = self.message
 
         if message.subset and message.subset.shape:
-            logger.warn('Ignoring subset request for user shapefile %s' % (message.subset.shape.href,))
+            logger.warn('Ignoring subset request for user shapefile %s' %
+                        (message.subset.shape.href,))
 
         try:
             # Limit to the first granule.  See note in method documentation
@@ -88,60 +92,31 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             layernames = []
 
             operations = dict(
-                is_variable_subset = True,
-                is_regridded = bool(message.format.crs),
-                is_subsetted = bool(message.subset and message.subset.bbox)
+                is_variable_subset=True,
+                is_regridded=bool(message.format.crs),
+                is_subsetted=bool(message.subset and message.subset.bbox)
             )
 
             result = None
             for i, granule in enumerate(granules):
                 self.download_granules([granule])
 
-                variables = self.get_variables(granule.local_filename)
-                is_geotiff = self.is_geotiff(granule.local_filename)
-
-                if is_geotiff and (not granule.variables): #proces geotiff and all band
-                        filename = granule.local_filename
-                        layer_id = granule.id + '__all'
-                        band=None
-                        layer_id, filename, output_dir=self.combin_transfer(layer_id, filename, output_dir, band)
-                        result=self.rename_to_result(layer_id, filename, output_dir)
-                        layernames.append(layer_id)
-                else:
-
-                    if not granule.variables:
-                        granule.variables = variables
-
-                    for variable in granule.variables:
-                        band = None
-                        if is_geotiff:
-                            # For geotiffs, we can't reference variables by name but need to reference
-                            # by raster band instead
-                            index = next(i for i, v in enumerate(variables) if v.name == variable.name)
-                            if index is None:
-                                return self.completed_with_error('band not found: ' + variable)
-                            band = index + 1
-                            filename = granule.local_filename
-                        else:
-                            # For non-geotiffs, we reference variables by appending a file path
-                            layer_format = self.read_layer_format(
-                                granule.collection,
-                                granule.local_filename,
-                                variable.name
+                file_type = self.get_filetype(granule.local_filename)
+                if file_type == 'tif':
+                    layernames, result = self.process_geotiff(
+                            granule,output_dir,layernames,operations,message.isSynchronous
                             )
-                            filename = layer_format.format(granule.local_filename)
-
-
-                        layer_id = granule.id + '__' + variable.name
-
-                        layer_id, filename, output_dir=self.combin_transfer(layer_id, filename, output_dir, band)
-
-                        result = self.add_to_result(
-                            layer_id,
-                            filename,
-                            output_dir
-                        )
-                        layernames.append(layer_id)
+                elif file_type == 'nc':
+                    layernames, result = self.process_netcdf(
+                            granule,output_dir,layernames,operations,message.isSynchronous
+                            )
+                elif file_type == 'zip':
+                    layernames, result = self.process_zip(
+                            granule,output_dir,layernames,operations,message.isSynchronous
+                             )
+                else:
+                    logger.exception(e)
+                    self.completed_with_error('No reconized file foarmat, not process')
 
                 if not message.isSynchronous:
                     # Send a single file and reset
@@ -153,11 +128,14 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     self.prepare_output_dir(output_dir)
                     layernames = []
                     result = None
+######################################
+
 
             if message.isSynchronous:
                 self.update_layernames(result, layernames)
                 result = self.reformat(result, output_dir)
-                self.completed_with_local_file(result, source_granule=granules[-1], **operations)
+                self.completed_with_local_file(
+                    result, source_granule=granules[-1], **operations)
             else:
                 self.async_completed_successfully()
 
@@ -167,6 +145,138 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         finally:
             self.cleanup()
+
+
+###########################################################
+    def process_geotiff(self, granule, output_dir, layernames, operations,isSynchronous):
+
+        if not granule.variables:
+            # process geotiff and all bands
+
+            filename = granule.local_filename
+            layer_id = granule.id + '__all'
+            band = None
+            layer_id, filename, output_dir = self.combin_transfer(
+                layer_id, filename, output_dir, band)
+            result = self.rename_to_result(
+                layer_id, filename, output_dir)
+            layernames.append(layer_id)
+        else:
+
+            variables = self.get_variables(granule.local_filename)
+
+            for variable in granule.variables:
+
+                band = None
+
+                index = next(i for i, v in enumerate(
+                        variables) if v.name == variable.name)
+                if index is None:
+                    return self.completed_with_error('band not found: ' + variable)
+                band = index + 1
+
+                filename = granule.local_filename
+
+                layer_id = granule.id + '__' + variable.name
+
+                layer_id, filename, output_dir = self.combin_transfer(
+                    layer_id, filename, output_dir, band)
+
+                result = self.add_to_result(
+                                    layer_id,
+                                    filename,
+                                    output_dir
+                                )
+                layernames.append(layer_id)
+
+        return layernames, result
+
+#########################################################
+    def process_netcdf(self, granule, output_dir, layernames, operations, isSynchronous):
+
+        if not granule.variables:
+            variables = self.get_variables(granule.local_filename)
+            granule.variables = variables
+
+        for variable in granule.variables:
+
+            band = None
+                                    # For non-geotiffs, we reference variables by appending a file path
+            layer_format = self.read_layer_format(
+                        granule.collection,
+                        granule.local_filename,
+                        variable.name
+                        )
+            filename = layer_format.format(
+                        granule.local_filename)
+
+            layer_id = granule.id + '__' + variable.name
+
+            layer_id, filename, output_dir = self.combin_transfer(
+                                    layer_id, filename, output_dir, band)
+
+            result = self.add_to_result(
+                                    layer_id,
+                                    filename,
+                                    output_dir
+                                )
+            layernames.append(layer_id)
+
+        return layernames, result
+
+####################################################
+
+    def process_zip(self, granule, output_dir, layernames, operations, isSynchronous):
+        # proces geotiff and all band
+        if is_geotiff and (not granule.variables):
+            filename = granule.local_filename
+            layer_id = granule.id + '__all'
+            band = None
+            layer_id, filename, output_dir = self.combin_transfer(
+                    layer_id, filename, output_dir, band)
+            result = self.rename_to_result(
+                    layer_id, filename, output_dir)
+            layernames.append(layer_id)
+        else:
+
+            if not granule.variables:
+                granule.variables = variables
+
+            for variable in granule.variables:
+                band = None
+                if is_geotiff:
+                    # For geotiffs, we can't reference variables by name but need to reference
+                    # by raster band instead
+                    index = next(i for i, v in enumerate(
+                        variables) if v.name == variable.name)
+                    if index is None:
+                        return self.completed_with_error('band not found: ' + variable)
+                    band = index + 1
+                    filename = granule.local_filename
+                else:
+                    # For non-geotiffs, we reference variables by appending a file path
+                    layer_format = self.read_layer_format(
+                        granule.collection,
+                        granule.local_filename,
+                        variable.name
+                        )
+                    filename = layer_format.format(
+                        granule.local_filename)
+
+                    layer_id = granule.id + '__' + variable.name
+                    layer_id, filename, output_dir = self.combin_transfer(
+                        layer_id, filename, output_dir, band)
+
+                    result = self.add_to_result(
+                        layer_id,
+                        filename,
+                        output_dir
+                        )
+                    layernames.append(layer_id)
+
+            return layernames, result
+
+##########################################################
 
     def update_layernames(self, filename, layernames):
         """
@@ -198,7 +308,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         self.cmd('mkdir', '-p', output_dir)
 
     def cmd(self, *args):
-        self.logger.info(args[0] + " " + " ".join(["'{}'".format(arg) for arg in args[1:]]))
+        self.logger.info(
+            args[0] + " " + " ".join(["'{}'".format(arg) for arg in args[1:]]))
         result_str = subprocess.check_output(args).decode("utf-8")
         return result_str.split("\n")
 
@@ -216,18 +327,23 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             if float(bbox[2]) < float(bbox[0]):
                 # If the bounding box crosses the antimeridian, subset into the east half and west half and merge
                 # the result
-                west_dstfile = "%s/%s" % (dstdir, normalized_layerid + '__west_subsetted.tif')
-                east_dstfile = "%s/%s" % (dstdir, normalized_layerid + '__east_subsetted.tif')
-                dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
-                west = command + ["-projwin", '-180', bbox[3], bbox[2], bbox[1], srcfile, west_dstfile]
-                east = command + ["-projwin", bbox[0], bbox[3], '180', bbox[1], srcfile, east_dstfile]
+                west_dstfile = "%s/%s" % (dstdir,
+                                          normalized_layerid + '__west_subsetted.tif')
+                east_dstfile = "%s/%s" % (dstdir,
+                                          normalized_layerid + '__east_subsetted.tif')
+                dstfile = "%s/%s" % (dstdir,
+                                     normalized_layerid + '__subsetted.tif')
+                west = command + ["-projwin", '-180', bbox[3],
+                                  bbox[2], bbox[1], srcfile, west_dstfile]
+                east = command + ["-projwin", bbox[0], bbox[3],
+                                  '180', bbox[1], srcfile, east_dstfile]
                 self.cmd(*west)
                 self.cmd(*east)
                 self.cmd('gdal_merge.py',
-                    '-o', dstfile,
-                    '-of', "GTiff",
-                    east_dstfile,
-                    west_dstfile)
+                         '-o', dstfile,
+                         '-of', "GTiff",
+                         east_dstfile,
+                         west_dstfile)
                 return dstfile
 
             command.extend(["-projwin", bbox[0], bbox[3], bbox[2], bbox[1]])
@@ -244,12 +360,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         normalized_layerid = layerid.replace('/', '_')
         dstfile = "%s/%s" % (dstdir, normalized_layerid + '__reprojected.tif')
         self.cmd('gdalwarp',
-            "-t_srs",
-            crs,
-            srcfile,
-            dstfile)
+                 "-t_srs",
+                 crs,
+                 srcfile,
+                 dstfile)
         return dstfile
-
 
     def resize(self, layerid, srcfile, dstdir):
         command = ['gdal_translate']
@@ -269,15 +384,14 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         self.cmd(*command)
         return dstfile
 
-
     def add_to_result(self, layerid, srcfile, dstdir):
         tmpfile = "%s/tmp-result.tif" % (dstdir)
         dstfile = "%s/result.tif" % (dstdir)
 
         command = ['gdal_merge.py',
-                '-o', tmpfile,
-                '-of', "GTiff",
-                '-separate']
+                   '-o', tmpfile,
+                   '-of', "GTiff",
+                   '-separate']
         command.extend(mime_to_options["image/tiff"])
 
         if not os.path.exists(dstfile):
@@ -307,9 +421,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         dstfile = "%s/translated.%s" % (dstdir, mime_to_extension[output_mime])
 
         command = ['gdal_translate',
-                '-of', mime_to_gdal[output_mime],
-                '-scale',
-                srcfile, dstfile]
+                   '-of', mime_to_gdal[output_mime],
+                   '-scale',
+                   srcfile, dstfile]
         self.cmd(*command)
 
         return dstfile
@@ -330,43 +444,56 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         # Normal case of NetCDF / HDF, where variables are subdatasets
         for subdataset in filter((lambda line: re.match(r"^\s*SUBDATASET_\d+_NAME=", line)), gdalinfo_lines):
-            result.append(ObjectView({ "name": re.split(r":", subdataset)[-1] }))
+            result.append(ObjectView({"name": re.split(r":", subdataset)[-1]}))
         if result:
             return result
 
         # GeoTIFFs, where variables are bands, with descriptions set to their variable name
         for subdataset in filter((lambda line: re.match(r"^\s*Description = ", line)), gdalinfo_lines):
-            result.append(ObjectView({ "name": re.split(r" = ", subdataset)[-1] }))
+            result.append(ObjectView(
+                {"name": re.split(r" = ", subdataset)[-1]}))
         if result:
             return result
 
         # Some GeoTIFFdoes not have descriptions. directly use Band # as the variables
         for subdataset in filter((lambda line: re.match(r"^Band", line)), gdalinfo_lines):
-            result.append(ObjectView({ "name": re.split(r"=", subdataset)[-1] }))
+            result.append(ObjectView({"name": re.split(r"=", subdataset)[-1]}))
         if result:
             return result
+
+    def get_filetype(self, filename):
+
+        file_basenamewithpath, file_extension = os.path.splitext(filename)
+        if file_extension in ['.nc']:
+            return 'nc'
+        elif file_extension in ['.tif','.tiff']:
+            return 'tif'
+        elif file_extension in [ '.zip']:
+            return 'zip'
+        else:
+            return 'others'
 
     def is_geotiff(self, filename):
         gdalinfo_lines = self.cmd("gdalinfo", filename)
         return gdalinfo_lines[0] == "Driver: GTiff/GeoTIFF"
 
-    def combin_transfer(self,layer_id, filename, output_dir, band):
+    def combin_transfer(self, layer_id, filename, output_dir, band):
 
         filename = self.subset(
-                        layer_id,
-                        filename,
-                        output_dir,
-                        band
-                    )
+            layer_id,
+            filename,
+            output_dir,
+            band
+        )
         filename = self.reproject(
-                        layer_id,
-                        filename,
-                        output_dir
-                    )
+            layer_id,
+            filename,
+            output_dir
+        )
         filename = self.resize(
-                        layer_id,
-                        filename,
-                        output_dir
-                    )
+            layer_id,
+            filename,
+            output_dir
+        )
 
-        return layer_id,filename,output_dir
+        return layer_id, filename, output_dir
