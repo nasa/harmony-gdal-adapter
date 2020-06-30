@@ -4,16 +4,20 @@
 #    python3 -m harmony_gdal --harmony-action invoke --harmony-input "$(cat ../harmony/example/service-operation.json)"
 
 import sys
+import os
 import subprocess
 import os
 import urllib.request
 import urllib.parse
 import re
 import boto3
-
+import rasterio
+import zipfile
+import math
+from affine import Affine
+from osgeo import gdal, osr
 from harmony import BaseHarmonyAdapter
 
-from osgeo import gdal
 
 mime_to_gdal = {
     "image/tiff": "GTiff",
@@ -128,6 +132,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     self.prepare_output_dir(output_dir)
                     layernames = []
                     result = None
+
 ######################################
 
 
@@ -227,54 +232,23 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 ####################################################
 
     def process_zip(self, granule, output_dir, layernames, operations, isSynchronous):
-        # proces geotiff and all band
-        if is_geotiff and (not granule.variables):
-            filename = granule.local_filename
-            layer_id = granule.id + '__all'
-            band = None
-            layer_id, filename, output_dir = self.combin_transfer(
-                    layer_id, filename, output_dir, band)
-            result = self.rename_to_result(
-                    layer_id, filename, output_dir)
-            layernames.append(layer_id)
-        else:
+ 
+        [tiffile, ncfile]=self.pack_zipfile(granule.local_filename, output_dir)
+        
+        if tiffile:
 
-            if not granule.variables:
-                granule.variables = variables
+            granule.local_filename=tiffile
 
-            for variable in granule.variables:
-                band = None
-                if is_geotiff:
-                    # For geotiffs, we can't reference variables by name but need to reference
-                    # by raster band instead
-                    index = next(i for i, v in enumerate(
-                        variables) if v.name == variable.name)
-                    if index is None:
-                        return self.completed_with_error('band not found: ' + variable)
-                    band = index + 1
-                    filename = granule.local_filename
-                else:
-                    # For non-geotiffs, we reference variables by appending a file path
-                    layer_format = self.read_layer_format(
-                        granule.collection,
-                        granule.local_filename,
-                        variable.name
-                        )
-                    filename = layer_format.format(
-                        granule.local_filename)
+            layernames, result = self.process_geotiff(granule, output_dir, layernames, operations,isSynchronous)
 
-                    layer_id = granule.id + '__' + variable.name
-                    layer_id, filename, output_dir = self.combin_transfer(
-                        layer_id, filename, output_dir, band)
+        if ncfile:
 
-                    result = self.add_to_result(
-                        layer_id,
-                        filename,
-                        output_dir
-                        )
-                    layernames.append(layer_id)
+            granule.local_filename=ncfile
 
-            return layernames, result
+            layernames, result = self.process_netcdf(self, granule, output_dir, layernames, operations, isSynchronous)
+
+        return layernames, result
+
 
 ##########################################################
 
@@ -313,12 +287,37 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         result_str = subprocess.check_output(args).decode("utf-8")
         return result_str.split("\n")
 
+    def is_rotated_geotransform(self, srcfile):
+        #check if the srcfile includes a rotated geotransform
+        dataset=gdal.Open(srcfile)
+        gt=dataset.GetGeoTransform()
+        check=False
+        if gt[2] != 0.0 or gt[4] != 0:
+            check=True
+        return check
+
     def subset(self, layerid, srcfile, dstdir, band=None):
         normalized_layerid = layerid.replace('/', '_')
         subset = self.message.subset
         if not subset:
             return srcfile
 
+        if subset.bbox:
+            [left, bottom, right, top]=self.get_bbox(srcfile)
+            subsetbbox=subset.bbox
+            
+            [b0,b1], transform = self.lonlat2projcoord(srcfile,subsetbbox[0],subsetbbox[1])
+
+            [b2,b3], transform = self.lonlat2projcoord(srcfile,subsetbbox[2],subsetbbox[3])
+
+            if any( x == None for x in [b0,b1,b2,b3] ):
+
+                return srcfile
+
+            if  b0<=left and b1<=bottom and b2>=right and b3>=top:
+                    
+                return srcfile
+        
         command = ['gdal_translate', '-of', 'GTiff']
         if band is not None:
             command.extend(['-b', '%s' % (band)])
@@ -336,22 +335,38 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 west = command + ["-projwin", '-180', bbox[3],
                                   bbox[2], bbox[1], srcfile, west_dstfile]
                 east = command + ["-projwin", bbox[0], bbox[3],
-                                  '180', bbox[1], srcfile, east_dstfile]
-                self.cmd(*west)
-                self.cmd(*east)
+                                    '180', bbox[1], srcfile, east_dstfile]
+
+                if self.is_rotated_geotransform(srcfile):
+                    west_bbox=[ '-180', bbox[3],bbox[2], bbox[1]]
+
+                    west_dstfile=self.subset_rotated(srcfile, west_dstfile, west_bbox, band=None)
+                    
+                    east_bbox=[ bbox[0], bbox[3],'180', bbox[1]]
+
+                    east_dstfile=self.subset_rotated(srcfile, east_dstfile, bbox,band=None)
+
+                else:
+                    self.cmd(*west)
+                    self.cmd(*east)
+
                 self.cmd('gdal_merge.py',
                          '-o', dstfile,
                          '-of', "GTiff",
                          east_dstfile,
                          west_dstfile)
                 return dstfile
+            
+            dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
 
-            command.extend(["-projwin", bbox[0], bbox[3], bbox[2], bbox[1]])
+            if self.is_rotated_geotransform(srcfile):
+                dstfile=self.subset_rotated(srcfile, dstfile, bbox, band=None)
+            else:
+                command.extend(["-projwin", bbox[0], bbox[3], bbox[2], bbox[1]])
+                command.extend([srcfile, dstfile])
+                self.cmd(*command)
 
-        dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
-        command.extend([srcfile, dstfile])
-        self.cmd(*command)
-        return dstfile
+            return dstfile
 
     def reproject(self, layerid, srcfile, dstdir):
         crs = self.message.format.crs
@@ -478,13 +493,14 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return gdalinfo_lines[0] == "Driver: GTiff/GeoTIFF"
 
     def combin_transfer(self, layer_id, filename, output_dir, band):
-
+    
         filename = self.subset(
             layer_id,
             filename,
             output_dir,
             band
         )
+
         filename = self.reproject(
             layer_id,
             filename,
@@ -497,3 +513,169 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         )
 
         return layer_id, filename, output_dir
+
+
+    def get_bbox(self, filename):
+        ds_raster = rasterio.open(filename)
+        bounds = ds_raster.bounds
+        left= bounds.left
+        bottom = bounds.bottom
+        right = bounds.right
+        top = bounds.top
+        return [left, bottom, right, top]
+
+    def pack_zipfile(self, zipfilename, output_dir, variables=None):
+
+        #unzip the file
+        
+        with zipfile.ZipFile(zipfilename, 'r') as zip_ref:
+            zip_ref.extractall(output_dir+'/unzip')
+
+
+        filelist_tif=self.get_file_from_unzipfiles(output_dir+'/unzip', 'tif',variables)
+
+        tmptif=None
+
+        tmpfile=output_dir+'/tmpfile'
+
+        if filelist_tif:
+               
+            #stack the single-band files into a multiple-band file
+            tmptif=self.stacking(filelist_tif, tmpfile)
+
+        tmpnc=None  
+
+        filelist_nc=self.get_file_from_unzipfiles(output_dir+'/unzip', 'nc')
+
+        if filelist_nc:
+
+            tmpnc=filelist_nc
+
+        return tmptif, tmpnc
+    
+
+    def get_file_from_unzipfiles(self, extract_dir, filetype,variables=None):
+        
+        #check if there are geotiff files
+    
+        lstfile=extract_dir +'/list.txt'
+
+        command=['ls',
+                extract_dir+'/*.'+filetype,
+                '>',
+                lstfile
+                ] 
+
+        cmdline=' '.join(map(str, command))
+
+        os.system(cmdline)
+
+        filelist=None
+
+        if os.path.isfile(lstfile) and os.path.getsize(lstfile) > 0:
+
+            with open(lstfile) as f:
+                filelist = f.read().splitlines()
+            
+            ch_filelist=[]
+
+            if variables:
+
+                for variable in variables:
+
+                    variable_raw=fr"{variable}"
+
+                    m=re.search(variable,filelist)
+
+                    if m:
+                        ch_filelist.append(m.string)
+
+                #filelist_str=' '.join(map(str,ch_filelist))      
+                 
+                filelist=ch_filelist 
+            
+                
+                #filelist_str=' '.join(map(str, filelist))
+
+        return filelist
+    
+    def stacking(self, infilelist, outputfile):
+
+        # Read metadata of first file
+        with rasterio.open(infilelist[0]) as src0:
+            meta = src0.meta
+
+        # Update meta to reflect the number of layers
+        meta.update(count = len(infilelist))
+
+        # Read each layer and write it to stack
+        with rasterio.open(outputfile, 'w', **meta) as dst:
+            for id, layer in enumerate(infilelist, start=1):
+                with rasterio.open(layer) as src1:
+                    dst.write_band(id, src1.read(1))
+
+        return outputfile
+       
+
+    def subset_rotated(self, tiffile, outputfile, bbox, band=None):
+
+        RasterFormat = 'GTiff'
+
+        raw_file_name = os.path.splitext(os.path.basename(tiffile))[0]
+
+        ll_lon, ll_lat,ur_lon, ur_lat = float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])
+
+        #covert bbox to tiffile's coordinator
+
+        dataset = gdal.Open(tiffile)
+
+        llxy, transform = self.lonlat2projcoord(dataset,ll_lon,ll_lat)
+
+        urxy, transform = self.lonlat2projcoord(dataset,ur_lon,ur_lat)
+
+        if any( x == None for x in [ llxy[0],llxy[1],urxy[0],urxy[1] ] ):
+
+            return tiffile
+
+        shapes=[ llxy[0],llxy[1], urxy[0],urxy[1] ]
+
+        xRes=transform[1]
+
+        yRes=transform[5]
+
+        gdal.Warp(outputfile, dataset, format=RasterFormat, outputBounds=shapes, xRes=xRes, yRes=yRes, dstSRS=projection, resampleAlg=gdal.GRA_NearestNeighbour, options=['COMPRESS=DEFLATE'])
+
+        dataset=None
+
+        return outputfile
+
+    def lonlat2projcoord(self,srcfile,lon,lat):
+
+        #covert bbox to dataset's coordinator
+
+        src = osr.SpatialReference()
+
+        src.SetWellKnownGeogCS("WGS84")
+
+        dataset=gdal.Open(srcfile)
+
+        transform=dataset.GetGeoTransform()
+
+        xRes=transform[1]
+
+        yRes=transform[5]
+
+        projection = dataset.GetProjection()
+
+        dst = osr.SpatialReference(projection)
+
+        ct = osr.CoordinateTransformation(src, dst)
+
+        xy = ct.TransformPoint(lon, lat)
+        
+        if math.isinf(xy[0]) or math.isinf(xy[1]) or math.isinf(xy[2]):
+        
+            xy=[None,None]
+
+        return [ xy[0], xy[1] ], transform 
+
