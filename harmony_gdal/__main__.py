@@ -14,7 +14,7 @@ from .transform import HarmonyAdapter
 
 #run in the debug mode
 
-import pdb; pdb.set_trace()
+#import pdb; pdb.set_trace()
 
 def main():
     """
