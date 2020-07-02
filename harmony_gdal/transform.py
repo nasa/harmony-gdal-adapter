@@ -157,8 +157,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         if not granule.variables:
             # process geotiff and all bands
-
+            
             filename = granule.local_filename
+            #file_base= os.path.basename(filename)
             layer_id = granule.id + '__all'
             band = None
             layer_id, filename, output_dir = self.combin_transfer(
@@ -181,8 +182,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 band = index + 1
 
                 filename = granule.local_filename
-
-                layer_id = granule.id + '__' + variable.name
+                #file_base= os.path.basename(filename)
+                layer_id = granule.id + '__'  + variable.name
 
                 layer_id, filename, output_dir = self.combin_transfer(
                     layer_id, filename, output_dir, band)
@@ -232,7 +233,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 ####################################################
 
     def process_zip(self, granule, output_dir, layernames, operations, isSynchronous):
- 
+         
         [tiffile, ncfile]=self.pack_zipfile(granule.local_filename, output_dir)
         
         if tiffile:
@@ -240,6 +241,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             granule.local_filename=tiffile
 
             layernames, result = self.process_geotiff(granule, output_dir, layernames, operations,isSynchronous)
+
 
         if ncfile:
 
@@ -304,8 +306,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         if subset.bbox:
             [left, bottom, right, top]=self.get_bbox(srcfile)
+            #bbox[0]=minlon, bbox[1]=maxlon, bbox[2]=minlat, bbox[3]=maxlat
             subsetbbox=subset.bbox
-            
+            bbox = [str(c) for c in subset.bbox]
+
             [b0,b1], transform = self.lonlat2projcoord(srcfile,subsetbbox[0],subsetbbox[1])
 
             [b2,b3], transform = self.lonlat2projcoord(srcfile,subsetbbox[2],subsetbbox[3])
@@ -317,15 +321,18 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             if  b0<=left and b1<=bottom and b2>=right and b3>=top:
                     
                 return srcfile
+
+            if float(bbox[2]) < float(bbox[0]) or float(bbox[3]) < float(bbox[1]):
+                #current version, if users input above subset condition, do not do subset.
+                return srcfile
         
         command = ['gdal_translate', '-of', 'GTiff']
         if band is not None:
             command.extend(['-b', '%s' % (band)])
         if subset.bbox:
-            bbox = [str(c) for c in subset.bbox]
             if float(bbox[2]) < float(bbox[0]):
-                # If the bounding box crosses the antimeridian, subset into the east half and west half and merge
-                # the result
+                # If the bounding box crosses the antimeridian, subset into the east half and west half and merge the result
+                #box defined in -projwin id from ul to lr
                 west_dstfile = "%s/%s" % (dstdir,
                                           normalized_layerid + '__west_subsetted.tif')
                 east_dstfile = "%s/%s" % (dstdir,
@@ -338,11 +345,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                                     '180', bbox[1], srcfile, east_dstfile]
 
                 if self.is_rotated_geotransform(srcfile):
-                    west_bbox=[ '-180', bbox[3],bbox[2], bbox[1]]
+
+                    #box defined in subset_rotated is from ll to ur
+                    west_bbox=[ '-180', bbox[1],bbox[2], bbox[3]]
 
                     west_dstfile=self.subset_rotated(srcfile, west_dstfile, west_bbox, band=None)
                     
-                    east_bbox=[ bbox[0], bbox[3],'180', bbox[1]]
+                    east_bbox=[ bbox[0], bbox[1],'180', bbox[3]]
 
                     east_dstfile=self.subset_rotated(srcfile, east_dstfile, bbox,band=None)
 
@@ -491,6 +500,20 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def is_geotiff(self, filename):
         gdalinfo_lines = self.cmd("gdalinfo", filename)
         return gdalinfo_lines[0] == "Driver: GTiff/GeoTIFF"
+    
+    def combin_transfer_rotated(self, layer_id, filenamelist, output_dir, band):
+        #gdal_warp can only process single-band rotated image
+
+        outfilelist=[]
+        for filename in filenamelist:
+            layer_id, filename, output_dir=self.combin_transfer(self, layer_id, filename, output_dir, band)
+            outfilelist.append(filename)
+
+        #comabine them into a tiff file
+        outputfile=output_dir+'/rotated.tif'
+        outputfile=self.stacking(outfilelist, outputfile)
+    
+        return layer_id, outputfile, output_dir
 
     def combin_transfer(self, layer_id, filename, output_dir, band):
     
@@ -531,15 +554,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         with zipfile.ZipFile(zipfilename, 'r') as zip_ref:
             zip_ref.extractall(output_dir+'/unzip')
 
-
-        filelist_tif=self.get_file_from_unzipfiles(output_dir+'/unzip', 'tif',variables)
-
         tmptif=None
-
-        tmpfile=output_dir+'/tmpfile'
-
+           
+        filelist_tif=self.get_file_from_unzipfiles(output_dir+'/unzip', 'tif',variables)
+        
         if filelist_tif:
-               
+            tmpfile=output_dir+'/tmpfile'       
             #stack the single-band files into a multiple-band file
             tmptif=self.stacking(filelist_tif, tmpfile)
 
@@ -616,8 +636,25 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return outputfile
        
-
     def subset_rotated(self, tiffile, outputfile, bbox, band=None):
+
+        RasterFormat = 'GTiff'
+
+        raw_file_name = os.path.splitext(os.path.basename(tiffile))[0]
+
+        [ll_lon, ll_lat,ur_lon, ur_lat]=bbox
+
+        command = ['gdalwarp']
+
+        command.extend(['-te',ll_lon,ll_lat,ur_lon,ur_lat,'-te_srs', 'EPSG:4326'])
+
+        command.extend([tiffile, outputfile])
+
+        self.cmd(*command)
+
+        return outputfile
+
+    def subset_rotated1(self, tiffile, outputfile, bbox, band=None):
 
         RasterFormat = 'GTiff'
 
@@ -629,9 +666,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         dataset = gdal.Open(tiffile)
 
-        llxy, transform = self.lonlat2projcoord(dataset,ll_lon,ll_lat)
+        projection=dataset.GetProjection()
 
-        urxy, transform = self.lonlat2projcoord(dataset,ur_lon,ur_lat)
+        llxy, transform = self.lonlat2projcoord(tiffile,ll_lon,ll_lat)
+
+        urxy, transform = self.lonlat2projcoord(tiffile,ur_lon,ur_lat)
 
         if any( x == None for x in [ llxy[0],llxy[1],urxy[0],urxy[1] ] ):
 
