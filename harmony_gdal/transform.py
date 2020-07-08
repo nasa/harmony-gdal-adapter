@@ -175,8 +175,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
                 band = None
 
-                index = next(i for i, v in enumerate(
-                        variables) if v.name == variable.name)
+                index = next( i for i, v in enumerate(
+                        variables) if v.name.lower() == variable.name.lower() )
                 if index is None:
                     return self.completed_with_error('band not found: ' + variable)
                 band = index + 1
