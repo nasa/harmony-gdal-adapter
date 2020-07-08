@@ -289,6 +289,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         result_str = subprocess.check_output(args).decode("utf-8")
         return result_str.split("\n")
 
+
     def is_rotated_geotransform(self, srcfile):
         #check if the srcfile includes a rotated geotransform
         dataset=gdal.Open(srcfile)
@@ -329,6 +330,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         command = ['gdal_translate', '-of', 'GTiff']
         if band is not None:
             command.extend(['-b', '%s' % (band)])
+
         if subset.bbox:
             if float(bbox[2]) < float(bbox[0]):
                 # If the bounding box crosses the antimeridian, subset into the east half and west half and merge the result
@@ -369,7 +371,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
 
             if self.is_rotated_geotransform(srcfile):
-                dstfile=self.subset_rotated(srcfile, dstfile, bbox, band=None)
+                dstfile=self.subset_rotated(srcfile, dstfile, bbox, band)
             else:
                 command.extend(["-projwin", bbox[0], bbox[3], bbox[2], bbox[1]])
                 command.extend([srcfile, dstfile])
@@ -481,7 +483,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         # Some GeoTIFFdoes not have descriptions. directly use Band # as the variables
         for subdataset in filter((lambda line: re.match(r"^Band", line)), gdalinfo_lines):
-            result.append(ObjectView({"name": re.split(r"=", subdataset)[-1]}))
+            #result.append(ObjectView({"name": re.split(r"=", subdataset)[-1]}))
+            tmpline=re.split(r" ", subdataset)
+            result.append(ObjectView({"name": tmpline[0].strip()+tmpline[1].strip(), }))
         if result:
             return result
 
@@ -643,6 +647,18 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         raw_file_name = os.path.splitext(os.path.basename(tiffile))[0]
 
         [ll_lon, ll_lat,ur_lon, ur_lat]=bbox
+        
+        if band:
+
+            command = ['gdal_translate']
+
+            command.extend(['-b', '%s' % (band)])
+
+            command.extend([tiffile, 'tmp/data/tmpbandfile'])
+            
+            self.cmd(*command)
+
+            tiffile='tmp/data/tmpbandfile'
 
         command = ['gdalwarp']
 
