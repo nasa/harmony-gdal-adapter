@@ -371,7 +371,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
 
             if self.is_rotated_geotransform(srcfile):
-                dstfile=self.subset_rotated(srcfile, dstfile, bbox, band)
+                dstfile=self.subset2(srcfile,dstfile,bbox,band)
             else:
                 command.extend(["-projwin", bbox[0], bbox[3], bbox[2], bbox[1]])
                 command.extend([srcfile, dstfile])
@@ -670,39 +670,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return outputfile
 
-    def subset_rotated1(self, tiffile, outputfile, bbox, band=None):
-
-        RasterFormat = 'GTiff'
-
-        raw_file_name = os.path.splitext(os.path.basename(tiffile))[0]
-
-        ll_lon, ll_lat,ur_lon, ur_lat = float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])
-
-        #covert bbox to tiffile's coordinator
-
-        dataset = gdal.Open(tiffile)
-
-        projection=dataset.GetProjection()
-
-        llxy, transform = self.lonlat2projcoord(tiffile,ll_lon,ll_lat)
-
-        urxy, transform = self.lonlat2projcoord(tiffile,ur_lon,ur_lat)
-
-        if any( x == None for x in [ llxy[0],llxy[1],urxy[0],urxy[1] ] ):
-
-            return tiffile
-
-        shapes=[ llxy[0],llxy[1], urxy[0],urxy[1] ]
-
-        xRes=transform[1]
-
-        yRes=transform[5]
-
-        gdal.Warp(outputfile, dataset, format=RasterFormat, outputBounds=shapes, xRes=xRes, yRes=yRes, dstSRS=projection, resampleAlg=gdal.GRA_NearestNeighbour, options=['COMPRESS=DEFLATE'])
-
-        dataset=None
-
-        return outputfile
 
     def lonlat2projcoord(self,srcfile,lon,lat):
 
@@ -734,3 +701,139 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return [ xy[0], xy[1] ], transform 
 
+    def subset2(self, tiffile, outputfile,bbox, band=None, shapefile=None):
+
+        #bbox=[min_lon,min_lat, max_lon,max_lat]
+
+        RasterFormat = 'GTiff'
+
+        ref_ds=gdal.Open(tiffile)
+
+        gt=ref_ds.GetGeoTransform()
+
+        boxproj, src_proj, proj = self.boxwrs84_boxproj(bbox, ref_ds)
+
+        ul_x, ul_y, ul_i,ul_j, cols, rows=self.calc_subset_window(ref_ds,boxproj)
+
+        command=['gdal_translate']
+
+        if band:
+            command.extend(['-b', '%s' % (band)])
+
+        command.extend( [ '-srcwin', str(ul_i), str(ul_j), str(cols), str(rows) ] )
+        command.extend([tiffile, outputfile])
+
+        self.cmd(*command)
+        
+        return outputfile
+
+    def calc_subset_window(self, ds, box):
+
+        #box is defined as [minx,miny,maxx,maxy]
+
+        def calc_rotated_angle_corner_coord(gt, ncol, nrow):
+            #get rotated ange of the rotation geotransform, with data size of ncol and nrow
+            transform = Affine.from_gdal(*gt)
+
+            ul=transform.c, transform.f #upperleft
+
+            ll=transform * (0, nrow)  # lowerleft
+
+            lr=transform * (ncol, nrow)    # lower right
+
+            ur=transform * (ncol, 0)     # upper right
+
+            rotated_angle=math.atan((ur[1]-ul[1])/(ur[0]-ul[0]))
+
+            return rotated_angle, ul,ur,lr,ll
+        
+        def calc_ij_coord(gt, col, row):
+            x = gt[0] + col * gt[1] + row * gt[2]
+            y = gt[3] + col * gt[4] + row * gt[5]
+            return x,y
+
+        def calc_coord_ij(gt, x,y ):
+            cols=int( ( gt[5]*x-gt[2]*y-gt[0]*gt[5]+gt[3]*gt[2] )/( gt[1]*gt[5]-gt[4]*gt[2] ) )
+            rows=int( ( gt[4]*x-gt[1]*y-gt[0]*gt[4]+gt[3]*gt[1] )/( gt[2]*gt[4]-gt[1]*gt[5] ) )
+            return cols, rows
+
+        def rotate_ab(angle, l, h):
+            b=(l-h*math.tan(angle))/(1-math.tan(angle)**2)
+            a=(h-l*math.tan(angle))*math.tan(angle)/(1-math.tan(angle)**2)
+            return a, b
+
+        ncol = ds.RasterXSize
+
+        nrow = ds.RasterYSize
+
+        gt=ds.GetGeoTransform()
+
+        angle,ul,ur,lr,ll=calc_rotated_angle_corner_coord(gt, ncol, nrow)
+
+        anglev=abs(angle)
+
+        l = box[2]-box[0]
+
+        h = box[3]-box[1]
+
+        a, b = rotate_ab(anglev, l, h)
+
+        if angle <= 0:
+
+            ul_x=box[0]+a
+            ul_y=box[3]
+            rl_x=box[0]+b
+            rl_y=box[1]
+        else:
+            ul_x=box[0]+b
+            ul_y=box[3]
+            rl_x=box[0]+a
+            rl_y=box[1]
+
+        ul_i, ul_j=calc_coord_ij(gt, ul_x,ul_y)
+
+        rl_i, rl_j=calc_coord_ij(gt, rl_x,rl_y)
+
+        cols=rl_i-ul_i
+
+        rows=rl_j-ul_j
+
+        ul_x, ul_y = calc_ij_coord(gt, ul_i, ul_j)
+
+        return ul_x, ul_y, ul_i, ul_j, cols, rows
+
+    def boxwrs84_boxproj(self, boxwrs84, ref_ds):
+        #boxwrs84 is defined as [min_lon,min_lat, max_lon, max_lat], ref_ds is reference dataset
+        #return boxprj, box in reference projection
+
+        boxwrs84=[float(i) for i in boxwrs84]
+
+        src = osr.SpatialReference()
+
+        src.SetWellKnownGeogCS("WGS84")
+
+        src_proj=src.ExportToWkt()
+
+        transform=ref_ds.GetGeoTransform()
+
+        xRes=transform[1]
+
+        yRes=transform[5]
+
+        projection = ref_ds.GetProjection()
+
+        dst = osr.SpatialReference(projection)
+
+        ct = osr.CoordinateTransformation(src, dst)
+
+        ll_lon,ll_lat = boxwrs84[0],boxwrs84[1]
+
+        ur_lon,ur_lat = boxwrs84[2],boxwrs84[3]
+
+        llxy = ct.TransformPoint(ll_lon, ll_lat)
+
+        urxy = ct.TransformPoint(ur_lon, ur_lat)
+
+        boxproj=[ llxy[0],llxy[1], urxy[0],urxy[1] ]
+
+        return boxproj, src_proj, projection
