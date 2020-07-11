@@ -14,10 +14,11 @@ import boto3
 import rasterio
 import zipfile
 import math
+from math import atan, tan, sqrt
 from affine import Affine
-from osgeo import gdal, osr
+from osgeo import gdal, osr, ogr
 from harmony import BaseHarmonyAdapter
-
+import pyproj
 
 mime_to_gdal = {
     "image/tiff": "GTiff",
@@ -371,7 +372,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
 
             if self.is_rotated_geotransform(srcfile):
-                dstfile=self.subset2(srcfile,dstfile,bbox,band)
+                dstfile=self.subset2(srcfile, dstfile, subsetbbox, band)
+                #dstfile=self.subset_rotated(srcfile, dstfile, bbox, band)
             else:
                 command.extend(["-projwin", bbox[0], bbox[3], bbox[2], bbox[1]])
                 command.extend([srcfile, dstfile])
@@ -718,95 +720,43 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         command=['gdal_translate']
 
         if band:
-            command.extend(['-b', '%s' % (band)])
+            command.extend(['-b', '%s' % (band) ])
 
         command.extend( [ '-srcwin', str(ul_i), str(ul_j), str(cols), str(rows) ] )
         command.extend([tiffile, outputfile])
 
         self.cmd(*command)
         
+        #read back the outputfile and adjust the gt
+
+        dsout =gdal.Open(outputfile,gdal.GA_Update)
+
+        gtout=dsout.GetGeoTransform()
+
+        lst=[]
+
+        for t in gtout:
+
+            lst.append(t)
+
+        lst[0]=ul_x
+
+        lst[3]=ul_y
+
+        gtout=tuple(lst)
+
+        dsout.SetGeoTransform(gtout)
+
+        dsout.FlushCache() ##saves to disk!!
+
+        dsout = None
+
         return outputfile
 
-    def calc_subset_window(self, ds, box):
-
-        #box is defined as [minx,miny,maxx,maxy]
-
-        def calc_rotated_angle_corner_coord(gt, ncol, nrow):
-            #get rotated ange of the rotation geotransform, with data size of ncol and nrow
-            transform = Affine.from_gdal(*gt)
-
-            ul=transform.c, transform.f #upperleft
-
-            ll=transform * (0, nrow)  # lowerleft
-
-            lr=transform * (ncol, nrow)    # lower right
-
-            ur=transform * (ncol, 0)     # upper right
-
-            rotated_angle=math.atan((ur[1]-ul[1])/(ur[0]-ul[0]))
-
-            return rotated_angle, ul,ur,lr,ll
-        
-        def calc_ij_coord(gt, col, row):
-            x = gt[0] + col * gt[1] + row * gt[2]
-            y = gt[3] + col * gt[4] + row * gt[5]
-            return x,y
-
-        def calc_coord_ij(gt, x,y ):
-            cols=int( ( gt[5]*x-gt[2]*y-gt[0]*gt[5]+gt[3]*gt[2] )/( gt[1]*gt[5]-gt[4]*gt[2] ) )
-            rows=int( ( gt[4]*x-gt[1]*y-gt[0]*gt[4]+gt[3]*gt[1] )/( gt[2]*gt[4]-gt[1]*gt[5] ) )
-            return cols, rows
-
-        def rotate_ab(angle, l, h):
-            b=(l-h*math.tan(angle))/(1-math.tan(angle)**2)
-            a=(h-l*math.tan(angle))*math.tan(angle)/(1-math.tan(angle)**2)
-            return a, b
-
-        ncol = ds.RasterXSize
-
-        nrow = ds.RasterYSize
-
-        gt=ds.GetGeoTransform()
-
-        angle,ul,ur,lr,ll=calc_rotated_angle_corner_coord(gt, ncol, nrow)
-
-        anglev=abs(angle)
-
-        l = box[2]-box[0]
-
-        h = box[3]-box[1]
-
-        a, b = rotate_ab(anglev, l, h)
-
-        if angle <= 0:
-
-            ul_x=box[0]+a
-            ul_y=box[3]
-            rl_x=box[0]+b
-            rl_y=box[1]
-        else:
-            ul_x=box[0]+b
-            ul_y=box[3]
-            rl_x=box[0]+a
-            rl_y=box[1]
-
-        ul_i, ul_j=calc_coord_ij(gt, ul_x,ul_y)
-
-        rl_i, rl_j=calc_coord_ij(gt, rl_x,rl_y)
-
-        cols=rl_i-ul_i
-
-        rows=rl_j-ul_j
-
-        ul_x, ul_y = calc_ij_coord(gt, ul_i, ul_j)
-
-        return ul_x, ul_y, ul_i, ul_j, cols, rows
 
     def boxwrs84_boxproj(self, boxwrs84, ref_ds):
         #boxwrs84 is defined as [min_lon,min_lat, max_lon, max_lat], ref_ds is reference dataset
         #return boxprj, box in reference projection
-
-        boxwrs84=[float(i) for i in boxwrs84]
 
         src = osr.SpatialReference()
 
@@ -834,6 +784,134 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         urxy = ct.TransformPoint(ur_lon, ur_lat)
 
+        dstproj4=dst.ExportToProj4()
+
+        ct2 = pyproj.Proj(dstproj4)
+
+        llxy2=ct2(ll_lon, ll_lat)
+
+        urxy2=ct2(ur_lon, ur_lat)
+
         boxproj=[ llxy[0],llxy[1], urxy[0],urxy[1] ]
 
-        return boxproj, src_proj, projection
+        boxproj2=[ llxy2[0],llxy2[1], urxy2[0],urxy2[1] ]
+
+        return boxproj2, src_proj, projection
+
+    def calc_rotated_angle_corner_coord(self, gt, ncol, nrow):
+        #get rotated ange of the rotation geotransform, with data size of ncol and nrow
+        transform = Affine.from_gdal(*gt)
+
+        ul=transform.c, transform.f #upperleft
+
+        ll=transform * (0, nrow)  # lowerleft
+
+        lr=transform * (ncol, nrow)    # lower right
+
+        ur=transform * (ncol, 0)     # upper right
+
+        rotated_angle=math.atan((ur[1]-ul[1])/(ur[0]-ul[0]))
+
+        return rotated_angle, ul,ur,lr,ll
+        
+
+    def calc_ij_coord(self, gt, col, row):
+        t0=gt[0]
+        t1=gt[1]
+        t2=gt[2]
+        t3=gt[3]
+        t4=gt[4]
+        t5=gt[5]
+        x = t0 + col * t1 + row * t2
+        y = t3 + col * t4 + row * t5
+        return x,y
+
+
+    def calc_coord_ij(self, gt, x,y ):
+        t0=gt[0]
+        t1=gt[1]
+        t2=gt[2]
+        t3=gt[3]
+        t4=gt[4]
+        t5=gt[5]
+        cols=int( (t5*x-t2*y-t0*t5+t3*t2)/(t1*t5-t4*t2) )
+        rows=int( (t4*x-t1*y-t0*t4+t3*t1)/(t2*t4-t1*t5) )
+        return cols, rows
+
+
+
+    def rotate_ab(self,angle, l, h):
+        b=(l-h*math.tan(angle))/(1-math.tan(angle)**2)
+        a=(h-l*math.tan(angle))*math.tan(angle)/(1-math.tan(angle)**2)
+        return a, b
+
+    def calc_rotated_ul(self, gt, ul_i,ul_j):
+
+        ul_x, ul_y = calc_ij_coord(gt, ul_i, ul_j)
+
+        nx, rx = divmod(ul_x-gt[0], gt[1])
+
+        ny, ry = divmod(ul_y-gt[3], gt[5])
+
+        if gt[2]<0:
+            ul_x=ul_x-0.5*rx
+            ul_y=ul_y-0.5*ry
+        else:
+            ul_x=ul_x+0.5*rx
+            ul_y=ul_y+0.5*ry
+
+        return ul_x, ul_y
+
+    def calc_subset_window(self,ds,box):
+        #box=[minx,miny,maxx,maxy]
+        ncol = ds.RasterXSize
+
+        nrow = ds.RasterYSize
+
+        gt=ds.GetGeoTransform()
+
+        angle,ul,ur,lr,ll=self.calc_rotated_angle_corner_coord(gt, ncol, nrow)
+
+        anglev=abs(angle)
+
+        #l = sqrt( (ur[0]-ul[0])**2+(ur[1]-ul[1])**2 )
+
+        #h = sqrt( (ur[0]-lr[0])**2+(ur[1]-lr[1])**2 )
+
+        l = box[2]-box[0]
+
+        h = box[3]-box[1]
+
+        a, b = self.rotate_ab(anglev, l, h)
+
+        #if angle <= 0:
+        #    ul_x=box[0]+a
+        #    ul_y=box[3]
+        #    rl_x=box[0]+b
+        #    rl_y=box[1]
+        #else:
+        #    ul_x=box[0]+b
+        #    ul_y=box[3]
+        #    rl_x=box[0]+a
+        #    rl_y=box[1]
+
+        ul_x=box[0]
+
+        ul_y=box[3]
+
+        rl_x=box[2]
+
+        rl_y=box[1]
+
+        ul_i, ul_j=self.calc_coord_ij(gt, ul_x,ul_y)
+
+        rl_i, rl_j=self.calc_coord_ij(gt, rl_x,rl_y)
+
+        cols=rl_i-ul_i
+
+        rows=rl_j-ul_j
+
+        ul_x, ul_y = self.calc_ij_coord(gt, ul_i, ul_j)
+
+        return ul_x, ul_y, ul_i, ul_j, cols, rows
+
