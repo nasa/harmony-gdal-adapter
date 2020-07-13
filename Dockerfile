@@ -1,1 +1,1 @@
-Dockerfile.ubuntu20.04-py3.8.2-gdal3.2dev
+Dockerfile.ubuntu20.04-py3.8.2-gdal3.1.2

@@ -19,6 +19,7 @@ from affine import Affine
 from osgeo import gdal, osr, ogr
 from harmony import BaseHarmonyAdapter
 import pyproj
+import numpy as np
 
 mime_to_gdal = {
     "image/tiff": "GTiff",
@@ -324,10 +325,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     
                 return srcfile
 
-            if float(bbox[2]) < float(bbox[0]) or float(bbox[3]) < float(bbox[1]):
-                #current version, if users input above subset condition, do not do subset.
-                return srcfile
-        
         command = ['gdal_translate', '-of', 'GTiff']
         if band is not None:
             command.extend(['-b', '%s' % (band)])
@@ -352,11 +349,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     #box defined in subset_rotated is from ll to ur
                     west_bbox=[ '-180', bbox[1],bbox[2], bbox[3]]
 
-                    west_dstfile=self.subset_rotated(srcfile, west_dstfile, west_bbox, band=None)
+                    west_dstfile=self.subset2(srcfile, west_dstfile, west_bbox, band=None)
                     
                     east_bbox=[ bbox[0], bbox[1],'180', bbox[3]]
 
-                    east_dstfile=self.subset_rotated(srcfile, east_dstfile, bbox,band=None)
+                    east_dstfile=self.subset2(srcfile, east_dstfile, east_bbox, band=None)
 
                 else:
                     self.cmd(*west)
@@ -372,8 +369,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
 
             if self.is_rotated_geotransform(srcfile):
-                dstfile=self.subset2(srcfile, dstfile, subsetbbox, band)
-                #dstfile=self.subset_rotated(srcfile, dstfile, bbox, band)
+                #dstfile=self.subset2(srcfile, dstfile, subsetbbox, band)
+                dstfile=self.subset4(srcfile, dstfile, subsetbbox, band)
+
             else:
                 command.extend(["-projwin", bbox[0], bbox[3], bbox[2], bbox[1]])
                 command.extend([srcfile, dstfile])
@@ -675,7 +673,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
     def lonlat2projcoord(self,srcfile,lon,lat):
 
-        #covert bbox to dataset's coordinator
+        #covert lon and lat to dataset's coord
 
         src = osr.SpatialReference()
 
@@ -693,10 +691,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         dst = osr.SpatialReference(projection)
 
-        ct = osr.CoordinateTransformation(src, dst)
+        dstproj4=dst.ExportToProj4()
 
-        xy = ct.TransformPoint(lon, lat)
-        
+        ct2 = pyproj.Proj(dstproj4)
+
+        xy=ct2(lon, lat)
+
         if math.isinf(xy[0]) or math.isinf(xy[1]) or math.isinf(xy[2]):
         
             xy=[None,None]
@@ -715,7 +715,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         boxproj, src_proj, proj = self.boxwrs84_boxproj(bbox, ref_ds)
 
-        ul_x, ul_y, ul_i,ul_j, cols, rows=self.calc_subset_window(ref_ds,boxproj)
+        ul_x, ul_y, deltx, delty, ul_i, ul_j, cols, rows=self.calc_subset_window(ref_ds,boxproj)
+
+        ul_x=ul_x+deltx
+
+        ul_y=ul_y+delty
 
         command=['gdal_translate']
 
@@ -723,33 +727,98 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             command.extend(['-b', '%s' % (band) ])
 
         command.extend( [ '-srcwin', str(ul_i), str(ul_j), str(cols), str(rows) ] )
+
         command.extend([tiffile, outputfile])
 
         self.cmd(*command)
         
-        #read back the outputfile and adjust the gt
+        return outputfile
 
-        dsout =gdal.Open(outputfile,gdal.GA_Update)
 
-        gtout=dsout.GetGeoTransform()
+    def subset4(self, tiffile, outputfile, bbox, band=None, shapefile=None):
 
-        lst=[]
+        #bbox=[min_lon,min_lat, max_lon,max_lat]
 
-        for t in gtout:
+        def fillnodata(data, i1,j1, i2,j2, nodata):
 
-            lst.append(t)
+            data1=np.ma.array(data, mask=True, fill_value=nodata)
 
-        lst[0]=ul_x
+            #x direction (xres) corresponds to rows in data array
+            #y direction (yres) corresponds to rows in data array
+            data1.mask[j1:j2,i1:i2]=False
 
-        lst[3]=ul_y
+            data2=data1.filled()
 
-        gtout=tuple(lst)
+            return data2
 
-        dsout.SetGeoTransform(gtout)
+        RasterFormat = 'GTiff'
 
-        dsout.FlushCache() ##saves to disk!!
+        ref_ds=gdal.Open(tiffile)
 
-        dsout = None
+        gt=ref_ds.GetGeoTransform()
+
+        boxproj, src_proj, proj = boxwrs84_boxproj(bbox, ref_ds)
+
+        ul_x, ul_y, deltx, delty, ul_i, ul_j, subcols, subrows=calc_subset_window(ref_ds,boxproj)
+
+        lr_i=ul_i+subcols
+
+        lr_j=ul_j+subrows
+
+        #create a copy of the tiffile
+        driver = gdal.GetDriverByName('GTiff')
+        driver = ref_ds.GetDriver()
+        out_ds = driver.CreateCopy(outputfile, ref_ds, strict=0)
+
+        cols=out_ds.RasterXSize
+        rows=out_ds.RasterYSize
+        nb=out_ds.RasterCount
+        nodata=out_ds.GetRasterBand(1).GetNoDataValue()
+        datatype=gdal.GetDataTypeName(out_ds.GetRasterBand(1).DataType)
+        if datatype =='Byte':
+            nodata=255
+        else:
+            nodata=-1
+        
+        if band:
+
+            i=band
+
+            in_band = ref_ds.GetRasterBand(i)
+
+            in_data = in_band.ReadAsArray( 0, 0, cols, rows)
+
+            out_data=np.copy(in_data)
+
+            out_data1=fillnodata(out_data, ul_i, ul_j, lr_i, lr_j, nodata)
+
+            out_band = out_ds.GetRasterBand(i)
+
+            out_band.WriteArray(out_data1)
+
+            out_band.SetNoDataValue(nodata)
+
+        else:
+
+            for i in range(1,nb+1):
+
+                in_band = ref_ds.GetRasterBand(i)
+
+                in_data = in_band.ReadAsArray( 0, 0, cols, rows)
+
+                out_data=np.copy(in_data)
+
+                out_data1=fillnodata(out_data, ul_i, ul_j, lr_i, lr_j, nodata)
+
+                out_band = out_ds.GetRasterBand(i)
+
+                out_band.WriteArray(out_data1)
+
+                out_band.SetNoDataValue(nodata)
+
+        out_ds.FlushCache() #saves to disk!!
+
+        del out_ds
 
         return outputfile
 
@@ -774,15 +843,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         dst = osr.SpatialReference(projection)
 
-        ct = osr.CoordinateTransformation(src, dst)
-
         ll_lon,ll_lat = boxwrs84[0],boxwrs84[1]
 
         ur_lon,ur_lat = boxwrs84[2],boxwrs84[3]
-
-        llxy = ct.TransformPoint(ll_lon, ll_lat)
-
-        urxy = ct.TransformPoint(ur_lon, ur_lat)
 
         dstproj4=dst.ExportToProj4()
 
@@ -791,8 +854,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         llxy2=ct2(ll_lon, ll_lat)
 
         urxy2=ct2(ur_lon, ur_lat)
-
-        boxproj=[ llxy[0],llxy[1], urxy[0],urxy[1] ]
 
         boxproj2=[ llxy2[0],llxy2[1], urxy2[0],urxy2[1] ]
 
@@ -811,8 +872,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         ur=transform * (ncol, 0)     # upper right
 
         rotated_angle=math.atan((ur[1]-ul[1])/(ur[0]-ul[0]))
+        
+        deltx=(ur[0]-ul[0])*( 1 - math.cos(rotated_angle) )/ncol
 
-        return rotated_angle, ul,ur,lr,ll
+        delty=(lr[1]-ur[1])*( 1 - math.cos(rotated_angle) )/nrow
+
+        return rotated_angle,deltx,delty,ul,ur,lr,ll
         
 
     def calc_ij_coord(self, gt, col, row):
@@ -863,37 +928,24 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return ul_x, ul_y
 
     def calc_subset_window(self,ds,box):
-        #box=[minx,miny,maxx,maxy]
+
+        #box is defined as [minx,miny,maxx,maxy]
+
         ncol = ds.RasterXSize
 
         nrow = ds.RasterYSize
 
         gt=ds.GetGeoTransform()
 
-        angle,ul,ur,lr,ll=self.calc_rotated_angle_corner_coord(gt, ncol, nrow)
+        angle,deltx,delty,ul,ur,lr,ll=self.calc_rotated_angle_corner_coord(gt, ncol, nrow)
 
         anglev=abs(angle)
-
-        #l = sqrt( (ur[0]-ul[0])**2+(ur[1]-ul[1])**2 )
-
-        #h = sqrt( (ur[0]-lr[0])**2+(ur[1]-lr[1])**2 )
 
         l = box[2]-box[0]
 
         h = box[3]-box[1]
 
         a, b = self.rotate_ab(anglev, l, h)
-
-        #if angle <= 0:
-        #    ul_x=box[0]+a
-        #    ul_y=box[3]
-        #    rl_x=box[0]+b
-        #    rl_y=box[1]
-        #else:
-        #    ul_x=box[0]+b
-        #    ul_y=box[3]
-        #    rl_x=box[0]+a
-        #    rl_y=box[1]
 
         ul_x=box[0]
 
@@ -913,5 +965,5 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         ul_x, ul_y = self.calc_ij_coord(gt, ul_i, ul_j)
 
-        return ul_x, ul_y, ul_i, ul_j, cols, rows
+        return ul_x,ul_y,deltx,delty,ul_i,ul_j,cols,rows
 
