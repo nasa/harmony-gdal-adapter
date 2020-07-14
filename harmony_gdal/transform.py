@@ -304,80 +304,61 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def subset(self, layerid, srcfile, dstdir, band=None):
         normalized_layerid = layerid.replace('/', '_')
         subset = self.message.subset
+
         if subset.bbox==None and subset.shape==None:
             return srcfile
 
         if subset.bbox:
             [left, bottom, right, top]=self.get_bbox(srcfile)
-            #bbox[0]=minlon, bbox[1]=maxlon, bbox[2]=minlat, bbox[3]=maxlat
+            #bbox in srcfile is defined as bbox[0]=leftlon, bbox[1]=bottomlat, bbox[2]=rigthlon, bbox[3]=toplat
             subsetbbox=subset.bbox
+            #subset is defined as leflon,bottomlat,rightlon,toplat
             bbox = [str(c) for c in subset.bbox]
-
             [b0,b1], transform = self.lonlat2projcoord(srcfile,subsetbbox[0],subsetbbox[1])
-
             [b2,b3], transform = self.lonlat2projcoord(srcfile,subsetbbox[2],subsetbbox[3])
-
             if any( x == None for x in [b0,b1,b2,b3] ):
-
                 return srcfile
 
             if  b0<=left and b1<=bottom and b2>=right and b3>=top:
-                    
                 return srcfile
 
-        command = ['gdal_translate', '-of', 'GTiff']
-        if band is not None:
-            command.extend(['-b', '%s' % (band)])
-
-        if subset.bbox:
-            if float(bbox[2]) < float(bbox[0]):
-                # If the bounding box crosses the antimeridian, subset into the east half and west half and merge the result
-                #box defined in -projwin id from ul to lr
-                west_dstfile = "%s/%s" % (dstdir,
-                                          normalized_layerid + '__west_subsetted.tif')
-                east_dstfile = "%s/%s" % (dstdir,
-                                          normalized_layerid + '__east_subsetted.tif')
-                dstfile = "%s/%s" % (dstdir,
-                                     normalized_layerid + '__subsetted.tif')
-                west = command + ["-projwin", '-180', bbox[3],
-                                  bbox[2], bbox[1], srcfile, west_dstfile]
-                east = command + ["-projwin", bbox[0], bbox[3],
-                                    '180', bbox[1], srcfile, east_dstfile]
-
-                if self.is_rotated_geotransform(srcfile):
-
+            if self.is_rotated_geotransform(srcfile):
+                if float(bbox[2]) < float(bbox[0]):
                     #box defined in subset_rotated is from ll to ur
                     west_bbox=[ '-180', bbox[1],bbox[2], bbox[3]]
-
-                    west_dstfile=self.subset2(srcfile, west_dstfile, west_bbox, band=None)
-                    
+                    west_dstfile=self.subset2(srcfile, west_dstfile, west_bbox, band)
                     east_bbox=[ bbox[0], bbox[1],'180', bbox[3]]
-
-                    east_dstfile=self.subset2(srcfile, east_dstfile, east_bbox, band=None)
-
+                    east_dstfile=self.subset2(srcfile, east_dstfile, east_bbox, band)
+                    self.cmd('gdal_merge.py','-o', dstfile,'-of', "GTiff", east_dstfile, west_dstfile)
+                    return dstfile
                 else:
+                    dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
+                    dstfile=self.subset2(srcfile, dstfile, subsetbbox, band)
+                    return dstfile
+            else:    
+                command = ['gdal_translate', '-of', 'GTiff']
+                if band is not None:
+                    command.extend(['-b', '%s' % (band)])
+
+                if float(bbox[2]) < float(bbox[0]):
+                    # If the bounding box crosses the antimeridian, subset into the east half and west half
+                    # and merge the result.
+                    #box defined in -projwin id from ul to lr.
+                    west_dstfile = "%s/%s" % (dstdir, normalized_layerid + '__west_subsetted.tif')
+                    east_dstfile = "%s/%s" % (dstdir, normalized_layerid + '__east_subsetted.tif')
+                    dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
+                    west = command + ["-projwin", '-180', bbox[3], bbox[2], bbox[1], srcfile, west_dstfile]
+                    east = command + ["-projwin", bbox[0], bbox[3],'180', bbox[1], srcfile, east_dstfile]
                     self.cmd(*west)
                     self.cmd(*east)
-
-                self.cmd('gdal_merge.py',
-                         '-o', dstfile,
-                         '-of', "GTiff",
-                         east_dstfile,
-                         west_dstfile)
-                return dstfile
-            
-            dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
-
-            if self.is_rotated_geotransform(srcfile):
-                #dstfile=self.subset2(srcfile, dstfile, subsetbbox, band)
-                dstfile=self.subset4(srcfile, dstfile, subsetbbox, band)
-
-            else:
-                command.extend(["-projwin", bbox[0], bbox[3], bbox[2], bbox[1]])
-                command.extend([srcfile, dstfile])
-                self.cmd(*command)
-
-            return dstfile
+                    self.cmd('gdal_merge.py','-o', dstfile,'-of', "GTiff", east_dstfile, west_dstfile)
+                    return dstfile
+                else: 
+                    dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
+                    command.extend(["-projwin", bbox[0], bbox[3], bbox[2], bbox[1]])
+                    command.extend([srcfile, dstfile])
+                    self.cmd(*command)
+                    return dstfile
 
     def reproject(self, layerid, srcfile, dstdir):
         crs = self.message.format.crs
@@ -614,12 +595,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     if m:
                         ch_filelist.append(m.string)
 
-                #filelist_str=' '.join(map(str,ch_filelist))      
-                 
                 filelist=ch_filelist 
-            
-                
-                #filelist_str=' '.join(map(str, filelist))
 
         return filelist
     
@@ -640,98 +616,36 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return outputfile
        
-    def subset_rotated(self, tiffile, outputfile, bbox, band=None):
-
-        RasterFormat = 'GTiff'
-
-        raw_file_name = os.path.splitext(os.path.basename(tiffile))[0]
-
-        [ll_lon, ll_lat,ur_lon, ur_lat]=bbox
-        
-        if band:
-
-            command = ['gdal_translate']
-
-            command.extend(['-b', '%s' % (band)])
-
-            command.extend([tiffile, 'tmp/data/tmpbandfile'])
-            
-            self.cmd(*command)
-
-            tiffile='tmp/data/tmpbandfile'
-
-        command = ['gdalwarp']
-
-        command.extend(['-te',ll_lon,ll_lat,ur_lon,ur_lat,'-te_srs', 'EPSG:4326'])
-
-        command.extend([tiffile, outputfile])
-
-        self.cmd(*command)
-
-        return outputfile
-
 
     def lonlat2projcoord(self,srcfile,lon,lat):
-
         #covert lon and lat to dataset's coord
-
-        src = osr.SpatialReference()
-
-        src.SetWellKnownGeogCS("WGS84")
-
         dataset=gdal.Open(srcfile)
-
         transform=dataset.GetGeoTransform()
-
-        xRes=transform[1]
-
-        yRes=transform[5]
-
         projection = dataset.GetProjection()
-
         dst = osr.SpatialReference(projection)
-
         dstproj4=dst.ExportToProj4()
-
         ct2 = pyproj.Proj(dstproj4)
-
         xy=ct2(lon, lat)
-
-        if math.isinf(xy[0]) or math.isinf(xy[1]) or math.isinf(xy[2]):
-        
+        if math.isinf(xy[0]) or math.isinf(xy[1]):
             xy=[None,None]
-
+            
         return [ xy[0], xy[1] ], transform 
 
     def subset2(self, tiffile, outputfile,bbox, band=None, shapefile=None):
-
         #bbox=[min_lon,min_lat, max_lon,max_lat]
-
         RasterFormat = 'GTiff'
-
         ref_ds=gdal.Open(tiffile)
-
         gt=ref_ds.GetGeoTransform()
-
         boxproj, src_proj, proj = self.boxwrs84_boxproj(bbox, ref_ds)
-
-        ul_x, ul_y, deltx, delty, ul_i, ul_j, cols, rows=self.calc_subset_window(ref_ds,boxproj)
-
-        ul_x=ul_x+deltx
-
-        ul_y=ul_y+delty
-
+        ul_x, ul_y, ul_i, ul_j, cols, rows=self.calc_subset_window(ref_ds, boxproj)
         command=['gdal_translate']
 
         if band:
             command.extend(['-b', '%s' % (band) ])
 
         command.extend( [ '-srcwin', str(ul_i), str(ul_j), str(cols), str(rows) ] )
-
         command.extend([tiffile, outputfile])
-
         self.cmd(*command)
-        
         return outputfile
 
 
@@ -740,230 +654,104 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         #bbox=[min_lon,min_lat, max_lon,max_lat]
 
         def fillnodata(data, i1,j1, i2,j2, nodata):
-
             data1=np.ma.array(data, mask=True, fill_value=nodata)
-
             #x direction (xres) corresponds to rows in data array
             #y direction (yres) corresponds to rows in data array
             data1.mask[j1:j2,i1:i2]=False
-
             data2=data1.filled()
-
             return data2
 
         RasterFormat = 'GTiff'
-
         ref_ds=gdal.Open(tiffile)
-
         gt=ref_ds.GetGeoTransform()
-
         boxproj, src_proj, proj = boxwrs84_boxproj(bbox, ref_ds)
-
-        ul_x, ul_y, deltx, delty, ul_i, ul_j, subcols, subrows=calc_subset_window(ref_ds,boxproj)
-
+        ul_x, ul_y, ul_i, ul_j, subcols, subrows=calc_subset_window(ref_ds,boxproj)
         lr_i=ul_i+subcols
-
         lr_j=ul_j+subrows
 
         #create a copy of the tiffile
         driver = gdal.GetDriverByName('GTiff')
         driver = ref_ds.GetDriver()
         out_ds = driver.CreateCopy(outputfile, ref_ds, strict=0)
-
         cols=out_ds.RasterXSize
         rows=out_ds.RasterYSize
         nb=out_ds.RasterCount
         nodata=out_ds.GetRasterBand(1).GetNoDataValue()
         datatype=gdal.GetDataTypeName(out_ds.GetRasterBand(1).DataType)
+
         if datatype =='Byte':
             nodata=255
         else:
             nodata=-1
         
         if band:
-
             i=band
-
             in_band = ref_ds.GetRasterBand(i)
-
             in_data = in_band.ReadAsArray( 0, 0, cols, rows)
-
             out_data=np.copy(in_data)
-
             out_data1=fillnodata(out_data, ul_i, ul_j, lr_i, lr_j, nodata)
-
             out_band = out_ds.GetRasterBand(i)
-
             out_band.WriteArray(out_data1)
-
             out_band.SetNoDataValue(nodata)
-
         else:
-
             for i in range(1,nb+1):
-
                 in_band = ref_ds.GetRasterBand(i)
-
                 in_data = in_band.ReadAsArray( 0, 0, cols, rows)
-
                 out_data=np.copy(in_data)
-
                 out_data1=fillnodata(out_data, ul_i, ul_j, lr_i, lr_j, nodata)
-
                 out_band = out_ds.GetRasterBand(i)
-
                 out_band.WriteArray(out_data1)
-
                 out_band.SetNoDataValue(nodata)
-
         out_ds.FlushCache() #saves to disk!!
-
         del out_ds
-
         return outputfile
 
 
     def boxwrs84_boxproj(self, boxwrs84, ref_ds):
         #boxwrs84 is defined as [min_lon,min_lat, max_lon, max_lat], ref_ds is reference dataset
-        #return boxprj, box in reference projection
-
+        #return boxprj in reference projection
         src = osr.SpatialReference()
-
         src.SetWellKnownGeogCS("WGS84")
-
         src_proj=src.ExportToWkt()
-
         transform=ref_ds.GetGeoTransform()
-
         xRes=transform[1]
-
         yRes=transform[5]
-
         projection = ref_ds.GetProjection()
-
         dst = osr.SpatialReference(projection)
-
         ll_lon,ll_lat = boxwrs84[0],boxwrs84[1]
-
         ur_lon,ur_lat = boxwrs84[2],boxwrs84[3]
-
         dstproj4=dst.ExportToProj4()
-
         ct2 = pyproj.Proj(dstproj4)
-
         llxy2=ct2(ll_lon, ll_lat)
-
         urxy2=ct2(ur_lon, ur_lat)
-
         boxproj2=[ llxy2[0],llxy2[1], urxy2[0],urxy2[1] ]
-
         return boxproj2, src_proj, projection
 
-    def calc_rotated_angle_corner_coord(self, gt, ncol, nrow):
-        #get rotated ange of the rotation geotransform, with data size of ncol and nrow
-        transform = Affine.from_gdal(*gt)
-
-        ul=transform.c, transform.f #upperleft
-
-        ll=transform * (0, nrow)  # lowerleft
-
-        lr=transform * (ncol, nrow)    # lower right
-
-        ur=transform * (ncol, 0)     # upper right
-
-        rotated_angle=math.atan((ur[1]-ul[1])/(ur[0]-ul[0]))
-        
-        deltx=(ur[0]-ul[0])*( 1 - math.cos(rotated_angle) )/ncol
-
-        delty=(lr[1]-ur[1])*( 1 - math.cos(rotated_angle) )/nrow
-
-        return rotated_angle,deltx,delty,ul,ur,lr,ll
-        
 
     def calc_ij_coord(self, gt, col, row):
-        t0=gt[0]
-        t1=gt[1]
-        t2=gt[2]
-        t3=gt[3]
-        t4=gt[4]
-        t5=gt[5]
-        x = t0 + col * t1 + row * t2
-        y = t3 + col * t4 + row * t5
+        transform = Affine.from_gdal(*gt)
+        x,y = transform * (col, row)
         return x,y
 
 
     def calc_coord_ij(self, gt, x,y ):
-        t0=gt[0]
-        t1=gt[1]
-        t2=gt[2]
-        t3=gt[3]
-        t4=gt[4]
-        t5=gt[5]
-        cols=int( (t5*x-t2*y-t0*t5+t3*t2)/(t1*t5-t4*t2) )
-        rows=int( (t4*x-t1*y-t0*t4+t3*t1)/(t2*t4-t1*t5) )
-        return cols, rows
+        transform = Affine.from_gdal(*gt)
+        rev_transform=~transform
+        cols, rows =rev_transform*(x,y)
+        return int(cols), int(rows)
 
-
-
-    def rotate_ab(self,angle, l, h):
-        b=(l-h*math.tan(angle))/(1-math.tan(angle)**2)
-        a=(h-l*math.tan(angle))*math.tan(angle)/(1-math.tan(angle)**2)
-        return a, b
-
-    def calc_rotated_ul(self, gt, ul_i,ul_j):
-
-        ul_x, ul_y = calc_ij_coord(gt, ul_i, ul_j)
-
-        nx, rx = divmod(ul_x-gt[0], gt[1])
-
-        ny, ry = divmod(ul_y-gt[3], gt[5])
-
-        if gt[2]<0:
-            ul_x=ul_x-0.5*rx
-            ul_y=ul_y-0.5*ry
-        else:
-            ul_x=ul_x+0.5*rx
-            ul_y=ul_y+0.5*ry
-
-        return ul_x, ul_y
 
     def calc_subset_window(self,ds,box):
-
         #box is defined as [minx,miny,maxx,maxy]
-
-        ncol = ds.RasterXSize
-
-        nrow = ds.RasterYSize
-
         gt=ds.GetGeoTransform()
-
-        angle,deltx,delty,ul,ur,lr,ll=self.calc_rotated_angle_corner_coord(gt, ncol, nrow)
-
-        anglev=abs(angle)
-
-        l = box[2]-box[0]
-
-        h = box[3]-box[1]
-
-        a, b = self.rotate_ab(anglev, l, h)
-
         ul_x=box[0]
-
         ul_y=box[3]
-
         rl_x=box[2]
-
         rl_y=box[1]
-
         ul_i, ul_j=self.calc_coord_ij(gt, ul_x,ul_y)
-
         rl_i, rl_j=self.calc_coord_ij(gt, rl_x,rl_y)
-
         cols=rl_i-ul_i
-
         rows=rl_j-ul_j
-
         ul_x, ul_y = self.calc_ij_coord(gt, ul_i, ul_j)
-
-        return ul_x,ul_y,deltx,delty,ul_i,ul_j,cols,rows
+        return ul_x,ul_y,ul_i,ul_j,cols,rows
 
