@@ -631,6 +631,25 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             
         return [ xy[0], xy[1] ], transform 
 
+    def subset_rotated(self, tiffile, outputfile, bbox, band=None):
+        RasterFormat = 'GTiff'
+        raw_file_name = os.path.splitext(os.path.basename(tiffile))[0]
+        [ll_lon, ll_lat,ur_lon, ur_lat]=bbox
+        if band:
+            command = ['gdal_translate']
+            command.extend(['-b', '%s' % (band)])
+            command.extend([tiffile, 'tmp/data/tmpbandfile'])
+            self.cmd(*command)
+            tiffile='tmp/data/tmpbandfile'
+
+        command = ['gdalwarp']
+        command.extend(['-te',ll_lon,ll_lat,ur_lon,ur_lat,'-te_srs', 'EPSG:4326'])
+        command.extend([tiffile, outputfile])
+        self.cmd(*command)
+        return outputfile
+
+
+
     def subset2(self, tiffile, outputfile,bbox, band=None, shapefile=None):
         #bbox=[min_lon,min_lat, max_lon,max_lat]
         RasterFormat = 'GTiff'
