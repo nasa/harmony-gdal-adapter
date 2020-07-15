@@ -4,6 +4,7 @@ phases:
   pre_build:
     commands:
       - $(aws ecr get-login --no-include-email --region $AWS_DEFAULT_REGION)
+      - mkdir deps && aws s3 sync s3://asf-harmony-service-lib-py deps
   build:
     commands:
       - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .
