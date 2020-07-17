@@ -310,56 +310,23 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         if subset.bbox:
             [left, bottom, right, top]=self.get_bbox(srcfile)
-            #bbox in srcfile is defined as bbox[0]=leftlon, bbox[1]=bottomlat, bbox[2]=rigthlon, bbox[3]=toplat
+            #subset.bbox in srcfile is defined from ll to ur
             subsetbbox=subset.bbox
-            #subset is defined as leflon,bottomlat,rightlon,toplat
             bbox = [str(c) for c in subset.bbox]
             [b0,b1], transform = self.lonlat2projcoord(srcfile,subsetbbox[0],subsetbbox[1])
             [b2,b3], transform = self.lonlat2projcoord(srcfile,subsetbbox[2],subsetbbox[3])
             if any( x == None for x in [b0,b1,b2,b3] ):
                 return srcfile
-
-            if  b0<=left and b1<=bottom and b2>=right and b3>=top:
-                return srcfile
-
-            if self.is_rotated_geotransform(srcfile):
-                if float(bbox[2]) < float(bbox[0]):
-                    #box defined in subset_rotated is from ll to ur
-                    west_bbox=[ '-180', bbox[1],bbox[2], bbox[3]]
-                    west_dstfile=self.subset2(srcfile, west_dstfile, west_bbox, band)
-                    east_bbox=[ bbox[0], bbox[1],'180', bbox[3]]
-                    east_dstfile=self.subset2(srcfile, east_dstfile, east_bbox, band)
-                    self.cmd('gdal_merge.py','-o', dstfile,'-of', "GTiff", east_dstfile, west_dstfile)
-                    return dstfile
-                else:
-                    dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
-                    dstfile=self.subset2(srcfile, dstfile, subsetbbox, band)
-                    return dstfile
-            else:    
-                command = ['gdal_translate', '-of', 'GTiff']
-                if band is not None:
-                    command.extend(['-b', '%s' % (band)])
-
-                if float(bbox[2]) < float(bbox[0]):
-                    # If the bounding box crosses the antimeridian, subset into the east half and west half
-                    # and merge the result.
-                    #box defined in -projwin id from ul to lr.
-                    west_dstfile = "%s/%s" % (dstdir, normalized_layerid + '__west_subsetted.tif')
-                    east_dstfile = "%s/%s" % (dstdir, normalized_layerid + '__east_subsetted.tif')
-                    dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
-                    west = command + ["-projwin", '-180', bbox[3], bbox[2], bbox[1], srcfile, west_dstfile]
-                    east = command + ["-projwin", bbox[0], bbox[3],'180', bbox[1], srcfile, east_dstfile]
-                    self.cmd(*west)
-                    self.cmd(*east)
-                    self.cmd('gdal_merge.py','-o', dstfile,'-of', "GTiff", east_dstfile, west_dstfile)
-                    return dstfile
-                else: 
-                    dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
-                    command.extend(["-projwin", bbox[0], bbox[3], bbox[2], bbox[1]])
-                    command.extend([srcfile, dstfile])
-                    self.cmd(*command)
-                    return dstfile
-
+            #subset2 can do both rotated and non-rotated images
+            dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
+            dstfile=self.subset2(srcfile, dstfile, subsetbbox, band)
+            return dstfile
+        if subset.shape:
+            #to be done
+            dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')            
+            self.cmd('cp ', srcfile, dstfile) 
+            return 
+            
     def reproject(self, layerid, srcfile, dstdir):
         crs = self.message.format.crs
         if not crs:
@@ -651,14 +618,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
 
     def subset2(self, tiffile, outputfile,bbox, band=None, shapefile=None):
-        #bbox=[min_lon,min_lat, max_lon,max_lat]
+        #bbox is defined from ll to ur
         RasterFormat = 'GTiff'
         ref_ds=gdal.Open(tiffile)
         gt=ref_ds.GetGeoTransform()
-        boxproj, src_proj, proj = self.boxwrs84_boxproj(bbox, ref_ds)
+        boxproj, proj = self.boxwrs84_boxproj(bbox, ref_ds)
         ul_x, ul_y, ul_i, ul_j, cols, rows=self.calc_subset_window(ref_ds, boxproj)
         command=['gdal_translate']
-
         if band:
             command.extend(['-b', '%s' % (band) ])
 
@@ -683,7 +649,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         RasterFormat = 'GTiff'
         ref_ds=gdal.Open(tiffile)
         gt=ref_ds.GetGeoTransform()
-        boxproj, src_proj, proj = boxwrs84_boxproj(bbox, ref_ds)
+        boxproj, proj = boxwrs84_boxproj(bbox, ref_ds)
         ul_x, ul_y, ul_i, ul_j, subcols, subrows=calc_subset_window(ref_ds,boxproj)
         lr_i=ul_i+subcols
         lr_j=ul_j+subrows
@@ -727,24 +693,18 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
 
     def boxwrs84_boxproj(self, boxwrs84, ref_ds):
-        #boxwrs84 is defined as [min_lon,min_lat, max_lon, max_lat], ref_ds is reference dataset
-        #return boxprj in reference projection
-        src = osr.SpatialReference()
-        src.SetWellKnownGeogCS("WGS84")
-        src_proj=src.ExportToWkt()
-        transform=ref_ds.GetGeoTransform()
-        xRes=transform[1]
-        yRes=transform[5]
+        #boxwrs84 is defined from ll to ur, ref_ds is reference dataset
+        #return boxprj is also defined as from ll to ur in reference projection
         projection = ref_ds.GetProjection()
         dst = osr.SpatialReference(projection)
         ll_lon,ll_lat = boxwrs84[0],boxwrs84[1]
         ur_lon,ur_lat = boxwrs84[2],boxwrs84[3]
         dstproj4=dst.ExportToProj4()
-        ct2 = pyproj.Proj(dstproj4)
-        llxy2=ct2(ll_lon, ll_lat)
-        urxy2=ct2(ur_lon, ur_lat)
-        boxproj2=[ llxy2[0],llxy2[1], urxy2[0],urxy2[1] ]
-        return boxproj2, src_proj, projection
+        ct = pyproj.Proj(dstproj4)
+        llxy=ct(ll_lon, ll_lat)
+        urxy=ct(ur_lon, ur_lat)
+        boxproj=[ llxy[0],llxy[1], urxy[0],urxy[1] ]
+        return boxproj, projection
 
 
     def calc_ij_coord(self, gt, col, row):
@@ -761,7 +721,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
 
     def calc_subset_window(self,ds,box):
-        #box is defined as [minx,miny,maxx,maxy]
+        #box is defined from ll to ur
         gt=ds.GetGeoTransform()
         ul_x=box[0]
         ul_y=box[3]
