@@ -308,6 +308,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         if subset.bbox==None and subset.shape==None:
             return srcfile
 
+
         if subset.bbox:
             [left, bottom, right, top]=self.get_bbox(srcfile)
             #subset.bbox in srcfile is defined from ll to ur
