@@ -318,10 +318,40 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             [b2,b3], transform = self.lonlat2projcoord(srcfile,subsetbbox[2],subsetbbox[3])
             if any( x == None for x in [b0,b1,b2,b3] ):
                 return srcfile
-            #subset2 can do both rotated and non-rotated images
-            dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
-            dstfile=self.subset2(srcfile, dstfile, subsetbbox, band)
-            return dstfile
+            
+            if self.is_rotated_geotransform(srcfile):
+                #process rotated image
+                dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
+                dstfile=self.subset2(srcfile, dstfile, subsetbbox, band)
+                return dstfile
+            else:
+                #process no-rotated iamge
+                command = ['gdal_translate', '-of', 'GTiff']
+                if band is not None:
+                    command.extend(['-b', '%s' % (band)])
+
+                if float(bbox[2]) < float(bbox[0]):
+                    # For image with the bounding box crosses the antimeridian, subset into the east half and west half
+                    # and merge the result.
+                    #bbox defined in -projwin id from ul to lr.
+                    west_dstfile = "%s/%s" % (dstdir, normalized_layerid + '__west_subsetted.tif')
+                    east_dstfile = "%s/%s" % (dstdir, normalized_layerid + '__east_subsetted.tif')
+                    dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
+                    #in -projwin, box is defined from ul to lr
+                    west = command + ["-projwin", '-180', bbox[3], bbox[2], bbox[1], srcfile, west_dstfile]
+                    east = command + ["-projwin", bbox[0], bbox[3],'180', bbox[1], srcfile, east_dstfile]
+                    self.cmd(*west)
+                    self.cmd(*east)
+                    self.cmd('gdal_merge.py','-o', dstfile,'-of', "GTiff", east_dstfile, west_dstfile)
+                    return dstfile
+                else:
+                    #for image with the bounding box does not crossover the antimeridian
+                    dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
+                    command.extend(["-projwin", bbox[0], bbox[3], bbox[2], bbox[1]])
+                    command.extend([srcfile, dstfile])
+                    self.cmd(*command)
+                    return dstfile
+
         if subset.shape:
             #to be done
             dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')            
