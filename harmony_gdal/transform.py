@@ -486,16 +486,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     
     def combin_transfer_rotated(self, layer_id, filenamelist, output_dir, band):
         #gdal_warp can only process single-band rotated image
-
         outfilelist=[]
         for filename in filenamelist:
             layer_id, filename, output_dir=self.combin_transfer(self, layer_id, filename, output_dir, band)
             outfilelist.append(filename)
-
         #comabine them into a tiff file
         outputfile=output_dir+'/rotated.tif'
         outputfile=self.stacking(outfilelist, outputfile)
-    
         return layer_id, outputfile, output_dir
 
     def combin_transfer(self, layer_id, filename, output_dir, band):
