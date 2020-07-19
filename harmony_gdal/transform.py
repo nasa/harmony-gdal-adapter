@@ -310,7 +310,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
 
         if subset.bbox:
-            [left, bottom, right, top]=self.get_bbox(srcfile)
+            #[left, bottom, right, top]=self.get_bbox(srcfile)
+            [left, bottom, right, top]=self.get_bbox2(srcfile)
             #subset.bbox in srcfile is defined from ll to ur
             subsetbbox=subset.bbox
             bbox = [str(c) for c in subset.bbox]
@@ -526,6 +527,17 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         right = bounds.right
         top = bounds.top
         return [left, bottom, right, top]
+
+    def get_bbox2(self, filename):
+        ds=gdal.Open(filename)
+        gt=ds.GetGeoTransform()
+        cols = ds.RasterXSize
+        rows = ds.RasterYSize
+        ul_x, ul_y=self.calc_ij_coord(gt, 0, 0)
+        ur_x, ur_y=self.calc_ij_coord(gt, cols, 0)
+        lr_x, lr_y=self.calc_ij_coord(gt, cols, rows)
+        ll_x, ll_y=self.calc_ij_coord(gt, 0, rows)
+        return [min(ul_x,ll_x), min(ll_y,lr_y), max(lr_x,ur_x), max(ul_y,ur_y)] 
 
     def pack_zipfile(self, zipfilename, output_dir, variables=None):
 
