@@ -6,7 +6,7 @@ if [ "$rst" != "harmony" ]
 
 then
 
-   docker network create harmony
+   docker network create harmony --subnet 172.24.24.0/24
 
 fi
 
