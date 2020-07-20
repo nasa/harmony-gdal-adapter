@@ -564,7 +564,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                         ch_filelist.append(m.string)
 
                 filelist=ch_filelist 
-
         return filelist
     
     def stacking(self, infilelist, outputfile):
