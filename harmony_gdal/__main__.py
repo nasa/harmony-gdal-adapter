@@ -34,4 +34,5 @@ def main():
         parser.error("Only --harmony CLIs are supported")
 
 if __name__ == "__main__":
+
     main()
