@@ -301,13 +301,24 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             check=True
         return check
 
+    def varsubset(self, layerid, srcfile, dstfile, band=None):
+        if band:
+            command = ['gdal_translate']
+            command.extend(['-b', '%s' % (band) ])
+            command.extend([srcfile, dstfile])
+            self.cmd(*command)
+            return dstfile
+        else:
+            return srcfile
+            
     def subset(self, layerid, srcfile, dstdir, band=None):
         normalized_layerid = layerid.replace('/', '_')
         subset = self.message.subset
-
+        
         if subset.bbox==None and subset.shape==None:
-            return srcfile
-
+            dstfile = "%s/%s" % (dstdir, normalized_layerid + '__varsubsetted.tif')
+            dstfile=self.varsubset(layerid, srcfile, dstfile, band)
+            return dstfile
 
         if subset.bbox:
             #[left, bottom, right, top]=self.get_bbox(srcfile)
@@ -319,8 +330,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             [b2,b3], transform = self.lonlat2projcoord(srcfile,subsetbbox[2],subsetbbox[3])
             
             if any( x == None for x in [b0,b1,b2,b3] ):
-                return srcfile
-            
+                dstfile = "%s/%s" % (dstdir, normalized_layerid + '__varsubsetted.tif')
+                dstfile=self.varsubset(layerid, srcfile, dstfile, band)
+                return dstfile
+
             dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
             dstfile=self.subset2(srcfile, dstfile, subsetbbox, band)
             return dstfile
@@ -329,7 +342,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             #to be done
             dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')            
             self.cmd('cp ', srcfile, dstfile) 
-            return 
+            return dstfile 
             
     def reproject(self, layerid, srcfile, dstdir):
         crs = self.message.format.crs
