@@ -219,6 +219,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                         granule.local_filename)
 
             layer_id = granule.id + '__' + variable.name
+            
+            #convert a subdataset from the nc fileinto a geotif file
+            filename=self.nc2tiff(layer_id,filename,output_dir)
 
             layer_id, filename, output_dir = self.combin_transfer(
                                     layer_id, filename, output_dir, band)
@@ -300,6 +303,27 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         if gt[2] != 0.0 or gt[4] != 0:
             check=True
         return check
+
+    def nc2tiff(self, layerid, filename, dstdir):
+        def search(myDict, lookupkey):
+            for key, value in myDict.items():
+                if lookupkey in key:
+                    return myDict[key]
+            return None
+
+        normalized_layerid = layerid.replace('/', '_')
+        dstfile = "%s/%s" % (dstdir, normalized_layerid + '__nc2tiff.tif')
+        ds=gdal.Open(filename)
+        metadata=ds.GetMetadata()
+        crs_wkt=search(metadata, "crs_wkt")
+        if crs_wkt:
+            command=['gdal_translate','-a_srs']
+            command.extend([crs_wkt])
+            command.extend([filename, dstfile])
+            self.cmd(*command)
+            return dstfile
+        return filename
+
 
     def varsubset(self, layerid, srcfile, dstfile, band=None):
         if band:
@@ -724,26 +748,3 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         transform = Affine.from_gdal(*gt)
         x,y = transform * (col, row)
         return x,y
-
-
-    def calc_coord_ij(self, gt, x,y ):
-        transform = Affine.from_gdal(*gt)
-        rev_transform=~transform
-        cols, rows =rev_transform*(x,y)
-        return int(cols), int(rows)
-
-
-    def calc_subset_window(self,ds,box):
-        #box is defined from ll to ur
-        gt=ds.GetGeoTransform()
-        ul_x=box[0]
-        ul_y=box[3]
-        rl_x=box[2]
-        rl_y=box[1]
-        ul_i, ul_j=self.calc_coord_ij(gt, ul_x,ul_y)
-        rl_i, rl_j=self.calc_coord_ij(gt, rl_x,rl_y)
-        cols=rl_i-ul_i
-        rows=rl_j-ul_j
-        ul_x, ul_y = self.calc_ij_coord(gt, ul_i, ul_j)
-        return ul_x,ul_y,ul_i,ul_j,cols,rows
-
