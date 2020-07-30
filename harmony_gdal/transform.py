@@ -399,7 +399,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         self.cmd(*command)
         return dstfile
 
-    def add_to_result(self, layerid, srcfile, dstdir):
+    def add_to_result_orig(self, layerid, srcfile, dstdir):
         tmpfile = "%s/tmp-result.tif" % (dstdir)
         dstfile = "%s/result.tif" % (dstdir)
 
@@ -419,6 +419,50 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         self.cmd('mv', tmpfile, dstfile)
 
         return dstfile
+
+    def add_to_result(self, layerid, srcfile, dstdir):
+        tmpfile = "%s/tmp-result.tif" % (dstdir)
+        dstfile = "%s/result.tif" % (dstdir)
+        if not os.path.exists(dstfile):
+            self.cmd('cp', srcfile, dstfile)
+            return dstfile
+
+        tmpfile=self.stackwithmetadata(dstfile,srcfile,tmpfile)
+        self.cmd('mv', tmpfile, dstfile)
+
+        return dstfile
+
+
+    def stackwithmetadata(self,file1,file2,outfile):
+        #file1 and file2 are geotiff files
+        def migrate_raster_metadata2band_metadata(file):
+            ds=gdal.Open(file, gdal.GA_Update)
+            md=ds.GetMetadata()
+            bandnum=ds.RasterCount
+            bmds=[]
+            for i in range(bandnum):
+                b=ds.GetRasterBand(i+1)
+                bmd=b.GetMetadata()
+                bmd.update(md)
+                b.SetMetadata(bmd)
+                bmds.append(bmd)
+            ds=None
+            return file, bmds
+
+        file1,bmds1=migrate_raster_metadata2band_metadata(file1)
+        file2,bmds2=migrate_raster_metadata2band_metadata(file2)
+        flist=[file1,file2]
+        mdlist=[*bmds1,*bmds2]
+        outds = gdal.BuildVRT("", flist, separate=True)
+        outds = gdal.Translate(outfile, outds)
+        #update the metadata
+
+        for i, md in enumerate(mdlist):
+            outds.GetRasterBand(i+1).SetMetadata(md)
+
+        outds=None
+        return outfile
+
 
     def rename_to_result(self, layerid, srcfile, dstdir):
         dstfile = "%s/result.tif" % (dstdir)
