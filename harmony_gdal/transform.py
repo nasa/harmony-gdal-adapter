@@ -728,7 +728,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         del out_ds
         return outputfile
 
-
     def boxwrs84_boxproj(self, boxwrs84, ref_ds):
         #boxwrs84 is defined from ll to ur, ref_ds is reference dataset
         #return boxprj is also defined as from ll to ur in reference projection
@@ -743,6 +742,26 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         boxproj=[ llxy[0],llxy[1], urxy[0],urxy[1] ]
         return boxproj, projection
 
+
+    def calc_coord_ij(self, gt, x,y ):
+        transform = Affine.from_gdal(*gt)
+        rev_transform=~transform
+        cols, rows =rev_transform*(x,y)
+        return int(cols), int(rows)
+
+    def calc_subset_window(self,ds,box):
+        #box is defined from ll to ur
+        gt=ds.GetGeoTransform()
+        ul_x=box[0]
+        ul_y=box[3]
+        rl_x=box[2]
+        rl_y=box[1]
+        ul_i, ul_j=self.calc_coord_ij(gt, ul_x,ul_y)
+        rl_i, rl_j=self.calc_coord_ij(gt, rl_x,rl_y)
+        cols=rl_i-ul_i
+        rows=rl_j-ul_j
+        ul_x, ul_y = self.calc_ij_coord(gt, ul_i, ul_j)
+        return ul_x,ul_y,ul_i,ul_j,cols,rows
 
     def calc_ij_coord(self, gt, col, row):
         transform = Affine.from_gdal(*gt)
