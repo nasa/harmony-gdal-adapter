@@ -453,9 +453,17 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         file2,bmds2=migrate_raster_metadata2band_metadata(file2)
         flist=[file1,file2]
         mdlist=[*bmds1,*bmds2]
-        outds = gdal.BuildVRT("", flist, separate=True)
-        outds = gdal.Translate(outfile, outds)
+        command = ['gdal_merge.py',
+                   '-o', outfile,
+                   '-of', "GTiff",
+                   '-separate']
+        command.extend(mime_to_options["image/tiff"])
+        command.extend([file1, file2])
+        self.cmd(*command)
+
         #update the metadata
+
+        outds=gdal.Open(outfile)
 
         for i, md in enumerate(mdlist):
             outds.GetRasterBand(i+1).SetMetadata(md)
