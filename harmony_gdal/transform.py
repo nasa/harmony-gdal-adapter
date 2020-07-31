@@ -463,11 +463,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         #update the metadata
 
-        outds=gdal.Open(outfile)
+        outds=gdal.Open(outfile, gdal.GA_Update)
 
         for i, md in enumerate(mdlist):
             outds.GetRasterBand(i+1).SetMetadata(md)
-
+        
+        outds.FlushCache()
         outds=None
         return outfile
 
