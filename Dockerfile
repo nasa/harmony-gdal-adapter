@@ -1,7 +1,11 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 FROM osgeo/gdal:ubuntu-full-latest
 =======
 From osgeo/gdal:ubuntu-full-latest
+>>>>>>> dev
+=======
+FROM osgeo/gdal:ubuntu-full-latest
 >>>>>>> dev
 
 RUN ln -sf /usr/bin/python3 /usr/bin/python && apt-get update && apt-get install -y python3-pip && pip3 install boto3
