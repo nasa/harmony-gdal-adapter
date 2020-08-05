@@ -1,0 +1,99 @@
+#cd to harmoy-gdal home directory
+~/projects/work/harmony-curr/harmony-gdal
+
+#enter into har-gdal-env
+conda activate har-gdal-env
+
+#define env for hamony-gdal
+source ./localenv.bash
+
+#run ../harmony/bin/run-localstack
+../harmony/bin/run-localstack
+
+#run harmony-gdal in debug mode
+
+#edit harmony_gdal/__mian__.py, add import pdb; pdb.set_trace()
+
+#for GFRN dataset (netCDF)
+python3 -m harmony_gdal --harmony-action invoke --harmony-input "$(cat example/gfrn-operation.json)" 
+
+#for UAVSAR Pauli dataset (GEOTIFF)
+python3 -m harmony_gdal --harmony-action invoke --harmony-input "$(cat example/uvasar-C1207038647-ASF-operation.json)"
+
+#modify code in transform.py function get_variables(self, filename)
+#make sure for geotiff file, if it does not include descriptions, directly use Bands as variables.
+
+#rebuild the harmony/gdal (in harmony-gdal directory)
+
+bin/build-image
+
+#rerun the harmony (in harmony-curr/harmony)
+#
+cd harmony-curr/harmony
+
+bin/run-localstack
+
+npm run start-dev
+
+#found request.urlopen(url) in host work, but in docker not work.
+#ask Andrew, he says contianer DNS setting is wrong.
+#compare docker /etc/resolv.conf with host /etc/resolv.conf, they are different.
+#if I mannulay edit docker /etc/resolv.conf to be equals to host /etc/resolv.conf, 
+#curl https://datapool-test.asf.alaska.edu/PAULI/UA/dCoiba_32701_10017_012_100206_L090_CX_01_pauli.tif works.
+#solution:
+
+#run with --network host, in this case, docker /etc/resolv.conf copys host /run/systemd/resolve/resolv.conf
+#
+
+#Check localhost,
+ls  /etc/resolv.conf links, #it links to /run/systemd/resolve/ stub-resolv.conf. 
+
+mv  /run/systemd/resolve/resolv.conf to /run/systemd/resolve/resolv.conf.orig
+
+cp /run/systemd/resolve/stub-resolv.conf to /run/systemd/resolve/resolv.conf
+
+sudo chown systemd-resolve:systemd-resolve resolv.conf
+
+#docker run -rm -t --network host ------
+
+#modify app>models>services>local-docker-service.js
+#/*add --network host into docerParms, jz, ASF, 2020-06-15 */
+#    let dockerParams = ['run', '--rm', '-t','--network','host'];
+#    /*let dockerParams = ['run', '--rm', '-t']; */ 
+
+works. but when reset computer, the host /run/systemd/resolve/resolv.conf changes. The container /etc/resolv.conf also changes, curl can not access UAVSAR API anymore.
+
+
+#create a usr network, use this user network, container will use host's DNS resolver (dnsmasq).
+#
+docker network create harmony
+
+docker run -rm -t --network harmony harmony/gdal
+
+works!
+
+create docker network harmony at startup script
+
+edit ~/.bashrc
+
+docker network create harmony
+
+
+2020-06-18
+
+delete none none docker iamges
+
+docker images  |grep "<none>                                                       <none>" |grep "2 weeks ago" |awk '{print $3}' |xargs docker rmi
+
+
+2020-06-24
+
+install rasterio
+
+$ sudo add-apt-repository ppa:ubuntugis/ppa
+$ sudo apt-get update
+$ sudo apt-get install python-numpy gdal-bin libgdal-dev
+$ pip install rasterio
+
+
+

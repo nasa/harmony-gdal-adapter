@@ -10,10 +10,17 @@ import argparse
 import logging
 import harmony
 
+#from .transform import HarmonyAdapter
+
 from .transform import HarmonyAdapter
 
 #run in the debug mode
 
+<<<<<<< HEAD
+=======
+#import pdb; pdb.set_trace()
+
+>>>>>>> dev
 def main():
     """
     Parses command line arguments and invokes the appropriate method to respond to them
@@ -32,4 +39,5 @@ def main():
         parser.error("Only --harmony CLIs are supported")
 
 if __name__ == "__main__":
+
     main()
