@@ -209,7 +209,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         for variable in granule.variables:
 
             band = None
-                                    # For non-geotiffs, we reference variables by appending a file path
+            # For non-geotiffs, we reference variables by appending a file path
             layer_format = self.read_layer_format(
                         granule.collection,
                         granule.local_filename,
@@ -220,7 +220,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
             layer_id = granule.id + '__' + variable.name
             
-            #convert a subdataset from the nc fileinto a geotif file
+            #convert the subdataset in the nc file into the geotif file
             filename=self.nc2tiff(layer_id,filename,output_dir)
 
             layer_id, filename, output_dir = self.combin_transfer(
@@ -322,8 +322,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             command.extend([filename, dstfile])
             self.cmd(*command)
             return dstfile
-        return filename
-
+        else:
+            return filename
 
     def varsubset(self, layerid, srcfile, dstfile, band=None):
         if band:
@@ -383,9 +383,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
     def resize(self, layerid, srcfile, dstdir):
         command = ['gdal_translate']
-
         fmt = self.message.format
-
         normalized_layerid = layerid.replace('/', '_')
         dstfile = "%s/%s__resized.tif" % (dstdir, normalized_layerid)
 
@@ -395,29 +393,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             command.extend(["-outsize", str(width), str(height)])
 
         command.extend([srcfile, dstfile])
-
         self.cmd(*command)
-        return dstfile
-
-    def add_to_result_orig(self, layerid, srcfile, dstdir):
-        tmpfile = "%s/tmp-result.tif" % (dstdir)
-        dstfile = "%s/result.tif" % (dstdir)
-
-        command = ['gdal_merge.py',
-                   '-o', tmpfile,
-                   '-of', "GTiff",
-                   '-separate']
-        command.extend(mime_to_options["image/tiff"])
-
-        if not os.path.exists(dstfile):
-            self.cmd('cp', srcfile, dstfile)
-            return dstfile
-
-        command.extend([dstfile, srcfile])
-
-        self.cmd(*command)
-        self.cmd('mv', tmpfile, dstfile)
-
         return dstfile
 
     def add_to_result(self, layerid, srcfile, dstdir):
@@ -429,12 +405,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         tmpfile=self.stackwithmetadata(dstfile,srcfile,tmpfile)
         self.cmd('mv', tmpfile, dstfile)
-
         return dstfile
 
-
     def stackwithmetadata(self,file1,file2,outfile):
-        #file1 and file2 are geotiff files
+        #file1 and file2 are geotiff files, there maybe multi-band files,
+        #and two files ma hav differnt number of bands.
+
         def migrate_raster_metadata2band_metadata(file):
             ds=gdal.Open(file, gdal.GA_Update)
             md=ds.GetMetadata()
@@ -461,7 +437,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         command.extend([file1, file2])
         self.cmd(*command)
 
-        #update the metadata
+        #gdal_merge.py does not keep band metadata, update the band metadata explicity.
 
         outds=gdal.Open(outfile, gdal.GA_Update)
 
@@ -546,17 +522,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def is_geotiff(self, filename):
         gdalinfo_lines = self.cmd("gdalinfo", filename)
         return gdalinfo_lines[0] == "Driver: GTiff/GeoTIFF"
-
-    def combin_transfer_rotated(self, layer_id, filenamelist, output_dir, band):
-        #gdal_warp can only process single-band rotated image
-        outfilelist=[]
-        for filename in filenamelist:
-            layer_id, filename, output_dir=self.combin_transfer(self, layer_id, filename, output_dir, band)
-            outfilelist.append(filename)
-        #comabine them into a tiff file
-        outputfile=output_dir+'/rotated.tif'
-        outputfile=self.stacking(outfilelist, outputfile)
-        return layer_id, outputfile, output_dir
 
     def combin_transfer(self, layer_id, filename, output_dir, band):
     
@@ -688,25 +653,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             
         return [ xy[0], xy[1] ], transform 
 
-    def subset_rotated(self, tiffile, outputfile, bbox, band=None):
-        RasterFormat = 'GTiff'
-        raw_file_name = os.path.splitext(os.path.basename(tiffile))[0]
-        [ll_lon, ll_lat,ur_lon, ur_lat]=bbox
-        if band:
-            command = ['gdal_translate']
-            command.extend(['-b', '%s' % (band)])
-            command.extend([tiffile, 'tmp/data/tmpbandfile'])
-            self.cmd(*command)
-            tiffile='tmp/data/tmpbandfile'
-
-        command = ['gdalwarp']
-        command.extend(['-te',ll_lon,ll_lat,ur_lon,ur_lat,'-te_srs', 'EPSG:4326'])
-        command.extend([tiffile, outputfile])
-        self.cmd(*command)
-        return outputfile
-
-
-
     def subset2(self, tiffile, outputfile,bbox, band=None, shapefile=None):
         #bbox is defined from ll to ur
         RasterFormat = 'GTiff'
@@ -723,64 +669,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         self.cmd(*command)
         return outputfile
 
-
-    def subset4(self, tiffile, outputfile, bbox, band=None, shapefile=None):
-
-        #bbox=[min_lon,min_lat, max_lon,max_lat]
-
-        def fillnodata(data, i1,j1, i2,j2, nodata):
-            data1=np.ma.array(data, mask=True, fill_value=nodata)
-            #x direction (xres) corresponds to rows in data array
-            #y direction (yres) corresponds to rows in data array
-            data1.mask[j1:j2,i1:i2]=False
-            data2=data1.filled()
-            return data2
-
-        RasterFormat = 'GTiff'
-        ref_ds=gdal.Open(tiffile)
-        gt=ref_ds.GetGeoTransform()
-        boxproj, proj = boxwrs84_boxproj(bbox, ref_ds)
-        ul_x, ul_y, ul_i, ul_j, subcols, subrows=calc_subset_window(ref_ds,boxproj)
-        lr_i=ul_i+subcols
-        lr_j=ul_j+subrows
-
-        #create a copy of the tiffile
-        driver = gdal.GetDriverByName('GTiff')
-        driver = ref_ds.GetDriver()
-        out_ds = driver.CreateCopy(outputfile, ref_ds, strict=0)
-        cols=out_ds.RasterXSize
-        rows=out_ds.RasterYSize
-        nb=out_ds.RasterCount
-        nodata=out_ds.GetRasterBand(1).GetNoDataValue()
-        datatype=gdal.GetDataTypeName(out_ds.GetRasterBand(1).DataType)
-
-        if datatype =='Byte':
-            nodata=255
-        else:
-            nodata=-1
-        
-        if band:
-            i=band
-            in_band = ref_ds.GetRasterBand(i)
-            in_data = in_band.ReadAsArray( 0, 0, cols, rows)
-            out_data=np.copy(in_data)
-            out_data1=fillnodata(out_data, ul_i, ul_j, lr_i, lr_j, nodata)
-            out_band = out_ds.GetRasterBand(i)
-            out_band.WriteArray(out_data1)
-            out_band.SetNoDataValue(nodata)
-        else:
-            for i in range(1,nb+1):
-                in_band = ref_ds.GetRasterBand(i)
-                in_data = in_band.ReadAsArray( 0, 0, cols, rows)
-                out_data=np.copy(in_data)
-                out_data1=fillnodata(out_data, ul_i, ul_j, lr_i, lr_j, nodata)
-                out_band = out_ds.GetRasterBand(i)
-                out_band.WriteArray(out_data1)
-                out_band.SetNoDataValue(nodata)
-        out_ds.FlushCache() #saves to disk!!
-        del out_ds
-        return outputfile
-
     def boxwrs84_boxproj(self, boxwrs84, ref_ds):
         #boxwrs84 is defined from ll to ur, ref_ds is reference dataset
         #return boxprj is also defined as from ll to ur in reference projection
@@ -794,7 +682,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         urxy=ct(ur_lon, ur_lat)
         boxproj=[ llxy[0],llxy[1], urxy[0],urxy[1] ]
         return boxproj, projection
-
 
     def calc_coord_ij(self, gt, x,y ):
         transform = Affine.from_gdal(*gt)
