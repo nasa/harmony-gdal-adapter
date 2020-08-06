@@ -4,22 +4,18 @@
 #    python3 -m harmony_gdal --harmony-action invoke --harmony-input "$(cat ../harmony/example/service-operation.json)"
 
 import sys
-<<<<<<< HEAD
-=======
 import os
->>>>>>> dev
 import subprocess
 import os
 import urllib.request
 import urllib.parse
 import re
 import boto3
-<<<<<<< HEAD
 
 from harmony import BaseHarmonyAdapter
 
 from osgeo import gdal
-=======
+
 import rasterio
 import zipfile
 import math
@@ -29,7 +25,7 @@ from osgeo import gdal, osr, ogr
 from harmony import BaseHarmonyAdapter
 import pyproj
 import numpy as np
->>>>>>> dev
+
 
 mime_to_gdal = {
     "image/tiff": "GTiff",
