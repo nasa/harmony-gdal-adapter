@@ -14,4 +14,4 @@ phases:
       - docker build -t ${DOCKERHUB_USERNAME}/gdal-subsetter:latest .
   post_build:
     commands:
-      - docker push ${DOCKERHUB_USERNAME}/gdal-subsetter:tagname
+      - docker push ${DOCKERHUB_USERNAME}/gdal-subsetter:latest
