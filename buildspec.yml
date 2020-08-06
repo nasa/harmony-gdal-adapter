@@ -1,8 +1,8 @@
 version: 0.2
 env:
   parameter-store:
-    DOCKERHUB_USERNAME: Codebuild/Dockerhub/Username
-    DOCKERHUB_PASSWORD: Codebuild/Dockerhub/Password
+    DOCKERHUB_USERNAME: /Codebuild/Dockerhub/Username
+    DOCKERHUB_PASSWORD: /Codebuild/Dockerhub/Password
 
 phases:
   pre_build:
