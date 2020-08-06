@@ -1,11 +1,12 @@
 # Temporary output directories
 tmp*
 .DS_Store
-tmp
+tmp/
 config-*.json
 config.json
-deps
-
+deps/
+test/
+venv/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
