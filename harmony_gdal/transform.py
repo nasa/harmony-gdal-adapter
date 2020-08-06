@@ -345,20 +345,23 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             return dstfile
 
         if subset.bbox:
-            #[left, bottom, right, top]=self.get_bbox(srcfile)
             [left, bottom, right, top]=self.get_bbox(srcfile)
             #subset.bbox in srcfile is defined from ll to ur
             subsetbbox=subset.bbox
             bbox = [str(c) for c in subset.bbox]
             [b0,b1], transform = self.lonlat2projcoord(srcfile,subsetbbox[0],subsetbbox[1])
             [b2,b3], transform = self.lonlat2projcoord(srcfile,subsetbbox[2],subsetbbox[3])
-            
+
             if any( x == None for x in [b0,b1,b2,b3] ):
                 dstfile = "%s/%s" % (dstdir, normalized_layerid + '__varsubsetted.tif')
                 dstfile=self.varsubset(layerid, srcfile, dstfile, band)
-                return dstfile
-            dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
-            dstfile=self.subset2(srcfile, dstfile, subsetbbox, band)
+            elif b0<left and b1<bottom and b2>right and b3>top:
+                dstfile = "%s/%s" % (dstdir, normalized_layerid + '__varsubsetted.tif')
+                dstfile=self.varsubset(layerid, srcfile, dstfile, band)
+            else:
+                dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
+                dstfile=self.subset2(srcfile, dstfile, subsetbbox, band)
+
             return dstfile
 
         if subset.shape:
@@ -407,8 +410,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return dstfile
 
     def stackwithmetadata(self,file1,file2,outfile):
-        #file1 and file2 are geotiff files, there maybe multi-band files,
-        #and two files ma hav differnt number of bands.
+        #file1 and file2 are geotiff files, there maybe multi-band files, and two files may inclue differnt number of bands.
 
         def migrate_raster_metadata2band_metadata(file):
             ds=gdal.Open(file, gdal.GA_Update)
