@@ -481,7 +481,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 dstfile = "%s/%s" % (dstdir, normalized_layerid + '__varsubsetted.tif')
                 dstfile=self.varsubset(layerid, srcfile, dstfile, band)
                 return dstfile
-
             dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
             dstfile=self.subset2(srcfile, dstfile, subsetbbox, band)
             return dstfile
