@@ -7,7 +7,6 @@ env:
 phases:
   pre_build:
     commands:
-      - echo ${DOCKERHUB_USERNAME}
       - echo ${DOCKERHUB_PASSWORD} | docker login --username ${DOCKERHUB_USERNAME}  --password-stdin
       - mkdir deps && aws s3 sync s3://asf-harmony-service-lib-py deps
   build:
