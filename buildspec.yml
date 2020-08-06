@@ -1,18 +1,18 @@
 version: 0.2
 env:
-    parameter-store:
-        DOCKERHUB-USERNAME: dockerhub-username
-        DOCKERHUB-PASSWORD: dockerhub-password
+  parameter-store:
+    DOCKERHUB_USERNAME: Codebuild/Dockerhub/Username
+    DOCKERHUB_PASSWORD: Codebuild/Dockerhub/Password
 
 phases:
   pre_build:
     commands:
-      - echo $DOCKERHUB-USERNAME
-      - echo ${DOCKERHUB-PASSWORD} | docker login --username ${DOCKERHUB-USERNAME}  --password-stdin
+      - echo ${DOCKERHUB_USERNAME}
+      - echo ${DOCKERHUB_PASSWORD} | docker login --username ${DOCKERHUB_USERNAME}  --password-stdin
       - mkdir deps && aws s3 sync s3://asf-harmony-service-lib-py deps
   build:
     commands:
-      - docker build -t ${DOCKERHUB-USERNAME}/gdal-subsetter:latest .
+      - docker build -t ${DOCKERHUB_USERNAME}/gdal-subsetter:latest .
   post_build:
     commands:
-      - docker push ${DOCKERHUB-USERNAME}/gdal-subsetter:tagname
+      - docker push ${DOCKERHUB_USERNAME}/gdal-subsetter:tagname
