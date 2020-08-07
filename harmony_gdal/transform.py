@@ -409,6 +409,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         self.cmd('mv', tmpfile, dstfile)
         return dstfile
 
+
     def stackwithmetadata(self,filelist,outfile):
         #filelist is a list of geotiff filenames, there maybe multi-band files, each file may includes differnt number of band.
 
