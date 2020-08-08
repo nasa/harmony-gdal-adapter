@@ -494,16 +494,27 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         dst_ds.SetGeoTransform(geotransform)
         dst_ds.SetProjection(projection)
 
-        
-        for i in rang(bn1):
-            dst_ds.GetRasterBand(i+1).WriteArray(ds.ReadAsArray()[i]   # write file1 bands to the raster
-            dst_ds.GetRasterBand(i+1).SetMetadata(mdlist[i])
+        data1=src_ds1.ReadAsArray()
+        if bn1 > 1:
+            for i in range(bn1):
+                dst_ds.GetRasterBand(i+1).WriteArray(data1[i])
+                #dst_ds.GetRasterBand(i+1).SetMetadata(mdlist[i])
+                dst_ds.GetRasterBand(i+1).SetMetadata(src_ds1.GetRasterBand(i+1).GetMetadata())
+        else:
+            dst_ds.GetRasterBand(1).WriteArray(data1)
+            dst_ds.GetRasterBand(1).SetMetadata(src_ds1.GetRasterBand(1).GetMetadata())
+
+        data2=src_ds2.ReadAsArray()
+        if bn2 > 1:
+            for i in range(bn2):
+                dst_ds.GetRasterBand(bn1+i+1).WriteArray(data2[i])   # write file1 bands to the raster
+                #dst_ds.GetRasterBand(bn1+i+1).SetMetadata(mdlist[bn1+i])
+                dst_ds.GetRasterBand(bn1+i+1).SetMetadata(src_ds2.GetRasterBand(i+1).GetMetadata())
+        else:
+            dst_ds.GetRasterBand(bn1+1).WriteArray(data2)
+            dst_ds.GetRasterBand(bn1+1).SetMetadata(src_ds2.GetRasterBand(1).GetMetadata())
+
             
-        for i in rang(bn2):
-            dst_ds.GetRasterBand(bn1+i+1).WriteArray(ds.ReadAsArray()[i]   # write file1 bands to the raster
-            dst_ds.GetRasterBand(bn1+i+1).SetMetadata(mdlist[bn1+i])
-
-
         dst_ds.FlushCache()                     # write to disk
         dst_ds = None
 
