@@ -405,12 +405,112 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             self.cmd('cp', srcfile, dstfile)
             return dstfile
 
-        tmpfile=self.stackwithmetadata([dstfile,srcfile],tmpfile)
+        #tmpfile=self.stacktwofileswithmetadata(dstfile,srcfile,tmpfile)
+        tmpfile=self.stackwithmetadata2(dstfile,srcfile,tmpfile)
+
         self.cmd('mv', tmpfile, dstfile)
         return dstfile
+    
+    def stacktwofileswithmetadata(self,file1,file2,outfile):
+        #file1 and file2 are geotiff files, there maybe multi-band files,
+        #and two files ma hav differnt number of bands.
+
+        def migrate_raster_metadata2band_metadata(file):
+            ds=gdal.Open(file, gdal.GA_Update)
+            md=ds.GetMetadata()
+            bandnum=ds.RasterCount
+            bmds=[]
+            for i in range(bandnum):
+                b=ds.GetRasterBand(i+1)
+                bmd=b.GetMetadata()
+                bmd.update(md)
+                b.SetMetadata(bmd)
+                bmds.append(bmd)
+
+            ds=None
+            return file, bmds
+
+        file1,bmds1=migrate_raster_metadata2band_metadata(file1)
+        file2,bmds2=migrate_raster_metadata2band_metadata(file2)
+        flist=[file1,file2]
+        mdlist=[*bmds1,*bmds2]
+        command = ['gdal_merge.py',
+                   '-o', outfile,
+                   '-of', "GTiff",
+                   '-separate']
+        command.extend(mime_to_options["image/tiff"])
+        command.extend([file1, file2])
+        self.cmd(*command)
+
+        #gdal_merge.py does not keep band metadata, update the band metadata explicity.
+
+        outds=gdal.Open(outfile, gdal.GA_Update)
+
+        for i, md in enumerate(mdlist):
+            outds.GetRasterBand(i+1).SetMetadata(md)
+
+        outds.FlushCache()
+        outds=None
+
+        return outfile
+
+    def stackwithmetadata2(self,file1,file2,outfile):
+        #file1 and file2 are geotiff files
+        def migrate_raster_metadata2band_metadata(file):
+            src_ds = gdal.Open(file)
+            tmpfile=os.path.splitext(file)[0]+"_tmp.tif"
+
+            driver = gdal.GetDriverByName('GTiff')
+            ds = driver.CreateCopy(tmpfile, src_ds)
+            md=ds.GetMetadata()
+            bandnum=ds.RasterCount
+            bmds=[]
+
+            for i in range(bandnum):
+                b=ds.GetRasterBand(i+1)
+                bmd=b.GetMetadata()
+                bmd.update(md)
+                b.SetMetadata(bmd)
+                bmds.append(bmd)
+
+            ds.FlushCache()
+            ds=None
+            return tmpfile,bandnum,bmds
+
+        file1,bn1,bmds1=migrate_raster_metadata2band_metadata(file1)
+        file2,bn2,bmds2=migrate_raster_metadata2band_metadata(file2)
+        flist=[file1,file2]
+        mdlist=[bmds1,*bmds2]
+        src_ds1 = gdal.Open(file1)
+        src_ds2 = gdal.Open(file2)
+        src_dss=[src_ds1,src_ds2]
+
+        geotransform=src_ds1.GetGeoTransform()
+        projection=src_ds1.GetProjection()
+        cols=src_ds1.RasterXSize
+        rows=src_ds1.RasterYSize
+        bn=bn1+bn2
+        dst_ds = gdal.GetDriverByName('GTiff').Create(outfile, cols, rows, bn, gdal.GDT_Float32)
+        dst_ds.SetGeoTransform(geotransform)
+        dst_ds.SetProjection(projection)
+
+        
+        for i in rang(bn1):
+            dst_ds.GetRasterBand(i+1).WriteArray(ds.ReadAsArray()[i]   # write file1 bands to the raster
+            dst_ds.GetRasterBand(i+1).SetMetadata(mdlist[i])
+            
+        for i in rang(bn2):
+            dst_ds.GetRasterBand(bn1+i+1).WriteArray(ds.ReadAsArray()[i]   # write file1 bands to the raster
+            dst_ds.GetRasterBand(bn1+i+1).SetMetadata(mdlist[bn1+i])
 
 
-    def stackwithmetadata(self,filelist,outfile):
+        dst_ds.FlushCache()                     # write to disk
+        dst_ds = None
+
+        return outfile
+
+
+    def stackmultiplefileswithmetadata(self,filelist,outfile):
         #filelist is a list of geotiff filenames, there maybe multi-band files, each file may includes differnt number of band.
 
         def migrate_raster_metadata2band_metadata(file):
