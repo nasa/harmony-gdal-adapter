@@ -405,54 +405,48 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             self.cmd('cp', srcfile, dstfile)
             return dstfile
 
-        #tmpfile=self.stacktwofileswithmetadata(dstfile,srcfile,tmpfile)
-        tmpfile=self.stackwithmetadata2(dstfile,srcfile,tmpfile)
-
+        tmpfile=self.stack_multi_file_with_metadata([dstfile,srcfile],tmpfile)
+        #tmpfile=self.stackwithmetadata2(dstfile,srcfile,tmpfile)
         self.cmd('mv', tmpfile, dstfile)
         return dstfile
     
-    def stacktwofileswithmetadata(self,file1,file2,outfile):
-        #file1 and file2 are geotiff files, there maybe multi-band files,
-        #and two files ma hav differnt number of bands.
+    def stack_multi_file_with_metadata(self,infilelist,outfile):
+        #infilelist include multiple files, each file does not have the same number of bands, but they have the same peojection  and geogransform.
 
-        def migrate_raster_metadata2band_metadata(file):
-            ds=gdal.Open(file, gdal.GA_Update)
-            md=ds.GetMetadata()
+        collection=[]
+        count=0
+        for id, layer in enumerate(infilelist, start=1):
+
+            ds=gdal.Open(layer)
+            if id==1:
+                proj=ds.GetProjection()
+                geot=ds.GetGeoTransform()
+                cols=ds.RasterXSize
+                rows=ds.RasterYSize
+
             bandnum=ds.RasterCount
-            bmds=[]
-            for i in range(bandnum):
-                b=ds.GetRasterBand(i+1)
-                bmd=b.GetMetadata()
+            md=ds.GetMetadata()
+            for i in range(1,bandnum+1):
+                band=ds.GetRasterBand(i)
+                bmd=band.GetMetadata()
                 bmd.update(md)
-                b.SetMetadata(bmd)
-                bmds.append(bmd)
+                data=band.ReadAsArray()
+                count=count+1
+                collection.append({"band_sn":count,"band_md":bmd, "band_array":data})
 
-            ds=None
-            return file, bmds
+        dst_ds = gdal.GetDriverByName('GTiff').Create(outfile, cols, rows, count, gdal.GDT_Float32)
+        dst_ds.SetProjection(proj)
+        dst_ds.SetGeoTransform(geot)
 
-        file1,bmds1=migrate_raster_metadata2band_metadata(file1)
-        file2,bmds2=migrate_raster_metadata2band_metadata(file2)
-        flist=[file1,file2]
-        mdlist=[*bmds1,*bmds2]
-        command = ['gdal_merge.py',
-                   '-o', outfile,
-                   '-of', "GTiff",
-                   '-separate']
-        command.extend(mime_to_options["image/tiff"])
-        command.extend([file1, file2])
-        self.cmd(*command)
+        for i, band in enumerate(collection):
+            dst_ds.GetRasterBand(i+1).WriteArray(collection[i]["band_array"])
+            dst_ds.GetRasterBand(i+1).SetMetadata(collection[i]["band_md"])
 
-        #gdal_merge.py does not keep band metadata, update the band metadata explicity.
-
-        outds=gdal.Open(outfile, gdal.GA_Update)
-
-        for i, md in enumerate(mdlist):
-            outds.GetRasterBand(i+1).SetMetadata(md)
-
-        outds.FlushCache()
-        outds=None
+        dst_ds.FlushCache()                     # write to disk
+        dst_ds = None
 
         return outfile
+
 
     def stackwithmetadata2(self,file1,file2,outfile):
         #file1 and file2 are geotiff files
@@ -484,7 +478,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         src_ds1 = gdal.Open(file1)
         src_ds2 = gdal.Open(file2)
         src_dss=[src_ds1,src_ds2]
-
         geotransform=src_ds1.GetGeoTransform()
         projection=src_ds1.GetProjection()
         cols=src_ds1.RasterXSize
@@ -514,56 +507,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             dst_ds.GetRasterBand(bn1+1).WriteArray(data2)
             dst_ds.GetRasterBand(bn1+1).SetMetadata(src_ds2.GetRasterBand(1).GetMetadata())
 
-            
         dst_ds.FlushCache()                     # write to disk
         dst_ds = None
-
         return outfile
-
-
-    def stackmultiplefileswithmetadata(self,filelist,outfile):
-        #filelist is a list of geotiff filenames, there maybe multi-band files, each file may includes differnt number of band.
-
-        def migrate_raster_metadata2band_metadata(file):
-            ds=gdal.Open(file, gdal.GA_Update)
-            md=ds.GetMetadata()
-            bandnum=ds.RasterCount
-            bmds=[]
-            for i in range(bandnum):
-                b=ds.GetRasterBand(i+1)
-                bmd=b.GetMetadata()
-                bmd.update(md)
-                b.SetMetadata(bmd)
-                bmds.append(bmd)
-            ds=None
-            return file, bmds
-
-        flist=[]
-        mdlist=[]
-        for filename in filelist:
-            filename,bmds=migrate_raster_metadata2band_metadata(filename)
-            flist.append(filename)
-            mdlist.append(*bmds)
-
-        command = ['gdal_merge.py',
-                   '-o', outfile,
-                   '-of', "GTiff",
-                   '-separate']
-        command.extend(mime_to_options["image/tiff"])
-        command.extend(flist)
-        self.cmd(*command)
-
-        #gdal_merge.py does not keep band metadata, update the band metadata explicity.
-
-        outds=gdal.Open(outfile, gdal.GA_Update)
-
-        for i, md in enumerate(mdlist):
-            outds.GetRasterBand(i+1).SetMetadata(md)
-
-        outds.FlushCache()
-        outds=None
-        return outfile
-
 
     def rename_to_result(self, layerid, srcfile, dstdir):
         dstfile = "%s/result.tif" % (dstdir)
@@ -686,8 +632,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         if filelist_tif:
             tmpfile=output_dir+'/tmpfile'       
             #stack the single-band files into a multiple-band file
-            #tmptif=self.stackwithmetadata(filelist_tif,tmpfile)
-            tmptif=self.stacking(filelist_tif, tmpfile)
+            #tmptif=self.stacking(filelist_tif, tmpfile)
+            tmpfile=self.stack_multi_file_with_metadata(filelist_tif,tmpfile)
 
         tmpnc=None  
 
