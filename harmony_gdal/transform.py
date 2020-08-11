@@ -633,7 +633,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             tmpfile=output_dir+'/tmpfile'       
             #stack the single-band files into a multiple-band file
             #tmptif=self.stacking(filelist_tif, tmpfile)
-            tmpfile=self.stack_multi_file_with_metadata(filelist_tif,tmpfile)
+            tmptif=self.stack_multi_file_with_metadata(filelist_tif,tmpfile)
 
         tmpnc=None  
 
