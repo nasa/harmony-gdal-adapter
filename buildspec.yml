@@ -11,8 +11,8 @@ phases:
       - mkdir deps && aws s3 sync s3://asf-harmony-service-lib-py deps
   build:
     commands:
-      - docker build -t ${DOCKERHUB_USERNAME}/gdal-subsetter:$CODEBUILD_SOURCE_VERSION .
-      - docker tag ${DOCKERHUB_USERNAME}/gdal-subsetter:$CODEBUILD_SOURCE_VERSION ${DOCKERHUB_USERNAME}/gdal-subsetter:latest
+      - docker build -t ${DOCKERHUB_USERNAME}/gdal-subsetter:${CODEBUILD_RESOLVED_SOURCE_VERSION} .
+      - docker tag ${DOCKERHUB_USERNAME}/gdal-subsetter:${CODEBUILD_RESOLVED_SOURCE_VERSION} ${DOCKERHUB_USERNAME}/gdal-subsetter:latest
   post_build:
     commands:
-      - docker push ${DOCKERHUB_USERNAME}/gdal-subsetter:$CODEBUILD_SOURCE_VERSION
+      - docker push ${DOCKERHUB_USERNAME}/gdal-subsetter:${CODEBUILD_RESOLVED_SOURCE_VERSION}
