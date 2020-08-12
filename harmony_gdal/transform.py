@@ -406,7 +406,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             return dstfile
 
         tmpfile=self.stack_multi_file_with_metadata([dstfile,srcfile],tmpfile)
-        #tmpfile=self.stackwithmetadata2(dstfile,srcfile,tmpfile)
         self.cmd('mv', tmpfile, dstfile)
         return dstfile
     
@@ -445,70 +444,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         dst_ds.FlushCache()                     # write to disk
         dst_ds = None
 
-        return outfile
-
-
-    def stackwithmetadata2(self,file1,file2,outfile):
-        #file1 and file2 are geotiff files
-        def migrate_raster_metadata2band_metadata(file):
-            src_ds = gdal.Open(file)
-            tmpfile=os.path.splitext(file)[0]+"_tmp.tif"
-
-            driver = gdal.GetDriverByName('GTiff')
-            ds = driver.CreateCopy(tmpfile, src_ds)
-            md=ds.GetMetadata()
-            bandnum=ds.RasterCount
-            bmds=[]
-
-            for i in range(bandnum):
-                b=ds.GetRasterBand(i+1)
-                bmd=b.GetMetadata()
-                bmd.update(md)
-                b.SetMetadata(bmd)
-                bmds.append(bmd)
-
-            ds.FlushCache()
-            ds=None
-            return tmpfile,bandnum,bmds
-
-        file1,bn1,bmds1=migrate_raster_metadata2band_metadata(file1)
-        file2,bn2,bmds2=migrate_raster_metadata2band_metadata(file2)
-        flist=[file1,file2]
-        mdlist=[bmds1,*bmds2]
-        src_ds1 = gdal.Open(file1)
-        src_ds2 = gdal.Open(file2)
-        src_dss=[src_ds1,src_ds2]
-        geotransform=src_ds1.GetGeoTransform()
-        projection=src_ds1.GetProjection()
-        cols=src_ds1.RasterXSize
-        rows=src_ds1.RasterYSize
-        bn=bn1+bn2
-        dst_ds = gdal.GetDriverByName('GTiff').Create(outfile, cols, rows, bn, gdal.GDT_Float32)
-        dst_ds.SetGeoTransform(geotransform)
-        dst_ds.SetProjection(projection)
-
-        data1=src_ds1.ReadAsArray()
-        if bn1 > 1:
-            for i in range(bn1):
-                dst_ds.GetRasterBand(i+1).WriteArray(data1[i])
-                #dst_ds.GetRasterBand(i+1).SetMetadata(mdlist[i])
-                dst_ds.GetRasterBand(i+1).SetMetadata(src_ds1.GetRasterBand(i+1).GetMetadata())
-        else:
-            dst_ds.GetRasterBand(1).WriteArray(data1)
-            dst_ds.GetRasterBand(1).SetMetadata(src_ds1.GetRasterBand(1).GetMetadata())
-
-        data2=src_ds2.ReadAsArray()
-        if bn2 > 1:
-            for i in range(bn2):
-                dst_ds.GetRasterBand(bn1+i+1).WriteArray(data2[i])   # write file1 bands to the raster
-                #dst_ds.GetRasterBand(bn1+i+1).SetMetadata(mdlist[bn1+i])
-                dst_ds.GetRasterBand(bn1+i+1).SetMetadata(src_ds2.GetRasterBand(i+1).GetMetadata())
-        else:
-            dst_ds.GetRasterBand(bn1+1).WriteArray(data2)
-            dst_ds.GetRasterBand(bn1+1).SetMetadata(src_ds2.GetRasterBand(1).GetMetadata())
-
-        dst_ds.FlushCache()                     # write to disk
-        dst_ds = None
         return outfile
 
     def rename_to_result(self, layerid, srcfile, dstdir):
@@ -634,7 +569,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         if filelist_tif:
             tmpfile=output_dir+'/tmpfile'       
             #stack the single-band files into a multiple-band file
-            #tmptif=self.stacking(filelist_tif, tmpfile)
             tmptif=self.stack_multi_file_with_metadata(filelist_tif,tmpfile)
 
         tmpnc=None  
