@@ -537,7 +537,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def read_layer_format(self, collection, filename, layer_id):
         gdalinfo_lines = self.cmd("gdalinfo", filename)
         layer_line = next(
-            filter((lambda line: line.endswith(":" + layer_id)), gdalinfo_lines), None)
+            filter((lambda line: line.endswith(":/" + layer_id)), gdalinfo_lines), None)
         if layer_line == None:
             print('Invalid Layer:', layer_id)
 
