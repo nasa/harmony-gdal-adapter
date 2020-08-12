@@ -405,54 +405,46 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             self.cmd('cp', srcfile, dstfile)
             return dstfile
 
-        tmpfile=self.stackwithmetadata([dstfile,srcfile],tmpfile)
+        tmpfile=self.stack_multi_file_with_metadata([dstfile,srcfile],tmpfile)
         self.cmd('mv', tmpfile, dstfile)
         return dstfile
+    
+    def stack_multi_file_with_metadata(self,infilelist,outfile):
+        #infilelist include multiple files, each file does not have the same number of bands, but they have the same peojection  and geogransform.
 
+        collection=[]
+        count=0
+        for id, layer in enumerate(infilelist, start=1):
 
-    def stackwithmetadata(self,filelist,outfile):
-        #filelist is a list of geotiff filenames, there maybe multi-band files, each file may includes differnt number of band.
+            ds=gdal.Open(layer)
+            if id==1:
+                proj=ds.GetProjection()
+                geot=ds.GetGeoTransform()
+                cols=ds.RasterXSize
+                rows=ds.RasterYSize
 
-        def migrate_raster_metadata2band_metadata(file):
-            ds=gdal.Open(file, gdal.GA_Update)
-            md=ds.GetMetadata()
             bandnum=ds.RasterCount
-            bmds=[]
-            for i in range(bandnum):
-                b=ds.GetRasterBand(i+1)
-                bmd=b.GetMetadata()
+            md=ds.GetMetadata()
+            for i in range(1,bandnum+1):
+                band=ds.GetRasterBand(i)
+                bmd=band.GetMetadata()
                 bmd.update(md)
-                b.SetMetadata(bmd)
-                bmds.append(bmd)
-            ds=None
-            return file, bmds
+                data=band.ReadAsArray()
+                count=count+1
+                collection.append({"band_sn":count,"band_md":bmd, "band_array":data})
 
-        flist=[]
-        mdlist=[]
-        for filename in filelist:
-            filename,bmds=migrate_raster_metadata2band_metadata(filename)
-            flist.append(filename)
-            mdlist.append(*bmds)
+        dst_ds = gdal.GetDriverByName('GTiff').Create(outfile, cols, rows, count, gdal.GDT_Float32)
+        dst_ds.SetProjection(proj)
+        dst_ds.SetGeoTransform(geot)
 
-        command = ['gdal_merge.py',
-                   '-o', outfile,
-                   '-of', "GTiff",
-                   '-separate']
-        command.extend(mime_to_options["image/tiff"])
-        command.extend(flist)
-        self.cmd(*command)
+        for i, band in enumerate(collection):
+            dst_ds.GetRasterBand(i+1).WriteArray(collection[i]["band_array"])
+            dst_ds.GetRasterBand(i+1).SetMetadata(collection[i]["band_md"])
 
-        #gdal_merge.py does not keep band metadata, update the band metadata explicity.
+        dst_ds.FlushCache()                     # write to disk
+        dst_ds = None
 
-        outds=gdal.Open(outfile, gdal.GA_Update)
-
-        for i, md in enumerate(mdlist):
-            outds.GetRasterBand(i+1).SetMetadata(md)
-
-        outds.FlushCache()
-        outds=None
         return outfile
-
 
     def rename_to_result(self, layerid, srcfile, dstdir):
         dstfile = "%s/result.tif" % (dstdir)
@@ -479,8 +471,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
     def read_layer_format(self, collection, filename, layer_id):
         gdalinfo_lines = self.cmd("gdalinfo", filename)
+
         layer_line = next(
-            filter((lambda line: line.endswith(":" + layer_id)), gdalinfo_lines), None)
+            filter( (lambda line: re.search(":*" + layer_id+"$", line)), gdalinfo_lines), None)
+
         if layer_line == None:
             print('Invalid Layer:', layer_id)
 
@@ -575,8 +569,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         if filelist_tif:
             tmpfile=output_dir+'/tmpfile'       
             #stack the single-band files into a multiple-band file
-            #tmptif=self.stackwithmetadata(filelist_tif,tmpfile)
-            tmptif=self.stacking(filelist_tif, tmpfile)
+            tmptif=self.stack_multi_file_with_metadata(filelist_tif,tmpfile)
 
         tmpnc=None  
 
