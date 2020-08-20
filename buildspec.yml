@@ -20,4 +20,3 @@ phases:
   post_build:
     commands:
       - docker push ${HARMONY_TAG}
-      - docker push ${GIT_HASH_NAME}
