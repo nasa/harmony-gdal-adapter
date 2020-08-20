@@ -1,2 +1,4 @@
 boto3 >= 1.9.0
+rasterio==1.1.5
+geopandas==0.8.0
 #-e git+https://git.earthdata.nasa.gov/scm/harmony/harmony-service-lib-py.git#egg=harmony

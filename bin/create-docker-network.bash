@@ -1,12 +1,12 @@
 #!/bin/bash
 
-rst=$(docker network ls |grep harmony | awk '{print $2}')
+rst=$(docker network ls |grep -w "harmony" | awk '{print $2}')
 
 if [ "$rst" != "harmony" ]
 
 then
 
-   docker network create harmony
+   docker network create harmony --subnet 172.24.24.0/24
 
 fi
 
