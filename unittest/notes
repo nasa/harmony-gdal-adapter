@@ -1,0 +1,54 @@
+unit test the transform.py locally
+
+requrements:
+
+a. connect ASF VPN-full
+
+b. in har-gdal-env environemnt
+
+conda activate har-gdal-env
+
+c. setup network and environment
+
+cd ~/projects/work/harmony-curr/harmony/bin
+
+./create-docker-network.bash
+
+./create_local_env.bash
+
+
+test
+
+input is message_string (json string)
+
+cd ~/projects/work/harmony-curr/gdal-subsetter/unittest
+
+./test_transform.py
+
+
+another way to test in the docker
+
+
+
+How to get message_string?
+
+
+you need start harmony and local-stage-service
+
+cd harmony
+
+bin/run-localstack-only
+
+npm run satrt-dev
+
+
+it is better run test in the docker 
+
+docker ps
+
+docker exec -it container_id bash
+
+inside gdal-subsetter docker
+ 
+python -m pdb get_message.py --harmony-action start --harmony-queue-url  http://0.0.0.0:4566/queue/harmony-gdal-queue --message-file infile
+
