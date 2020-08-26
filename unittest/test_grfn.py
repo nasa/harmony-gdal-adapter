@@ -1,29 +1,32 @@
-#this script does unit test for transform.py
-#input is the meassage
+#This script does unit test for transform.py
+#Input is the meassage
+
 
 import pytest
-import harmony
-from transform import HarmonyAdapter
-from harmony.message import Message
-from argparse import ArgumentParser
+import os
 
 ########################
 #in debug mode
-#import pdb
-#pdb.set_trace()
+import pdb
+pdb.set_trace()
 ########################
 
-@pytest.fixture
-def adapter():
-    message='{"sources":[{"collection":"C1225776654-ASF","variables":[{"id":"V1234600145-ASF","name":"/science/grids/data/connectedComponents","fullPath":"/science/grids/data/connectedComponents"}],"granules":[{"id":"G1234646236-ASF","name":"S1-GUNW-A-R-166-tops-20200313_20200206-014119-34455N_32574N-PP-1749-v2_0_2","bbox":[-116.8219161,32.465775,-113.7630671,34.492821],"temporal":{"start":"2020-03-13T01:41:06.357Z","end":"2020-03-13T01:41:33.312Z"},"url":"https://grfn-test.asf.alaska.edu/door/download/S1-GUNW-A-R-166-tops-20200313_20200206-014119-34455N_32574N-PP-1749-v2_0_2.nc"}]}],"format":{"mime":"image/tiff"},"subset":{},"requestId":"61164a96-b7ef-4099-b8fb-70e24e1989c0","user":"cirrusasf","client":"harmony-local","isSynchronous":true,"stagingLocation":"s3://local-staging-bucket/public/harmony/gdal-subsetter/b1ff5919-0850-4619-99d3-927eddfa2f72/","callback":"http://host.docker.internal:3001/service/61164a96-b7ef-4099-b8fb-70e24e1989c0","version":"0.8.0"}'
-    yield HarmonyAdapter(Message(message))    
-    
+
+#define the input as fixture
+
+messagestr='{"sources":[{"collection":"C1225776654-ASF","variables":[{"id":"V1234600145-ASF","name":"/science/grids/data/connectedComponents","fullPath":"/science/grids/data/connectedComponents"}],"granules":[{"id":"G1234646236-ASF","name":"S1-GUNW-A-R-166-tops-20200313_20200206-014119-34455N_32574N-PP-1749-v2_0_2","bbox":[-116.8219161,32.465775,-113.7630671,34.492821],"temporal":{"start":"2020-03-13T01:41:06.357Z","end":"2020-03-13T01:41:33.312Z"},"url":"https://grfn-test.asf.alaska.edu/door/download/S1-GUNW-A-R-166-tops-20200313_20200206-014119-34455N_32574N-PP-1749-v2_0_2.nc"}]}],"format":{"mime":"image/tiff"},"subset":{},"requestId":"61164a96-b7ef-4099-b8fb-70e24e1989c0","user":"cirrusasf","client":"harmony-local","isSynchronous":true,"stagingLocation":"s3://local-staging-bucket/public/harmony/gdal-subsetter/b1ff5919-0850-4619-99d3-927eddfa2f72/","callback":"http://host.docker.internal:3001/service/61164a96-b7ef-4099-b8fb-70e24e1989c0","version":"0.8.0"}'
 
 #test functions in adapter
 
+
+
+
 def test_gfrn(adapter):
+    #messagestring='{"sources":[{"collection":"C1225776654-ASF","variables":[{"id":"V1234600145-ASF","name":"/science/grids/data/connectedComponents","fullPath":"/science/grids/data/connectedComponents"}],"granules":[{"id":"G1234646236-ASF","name":"S1-GUNW-A-R-166-tops-20200313_20200206-014119-34455N_32574N-PP-1749-v2_0_2","bbox":[-116.8219161,32.465775,-113.7630671,34.492821],"temporal":{"start":"2020-03-13T01:41:06.357Z","end":"2020-03-13T01:41:33.312Z"},"url":"https://grfn-test.asf.alaska.edu/door/download/S1-GUNW-A-R-166-tops-20200313_20200206-014119-34455N_32574N-PP-1749-v2_0_2.nc"}]}],"format":{"mime":"image/tiff"},"subset":{},"requestId":"61164a96-b7ef-4099-b8fb-70e24e1989c0","user":"cirrusasf","client":"harmony-local","isSynchronous":true,"stagingLocation":"s3://local-staging-bucket/public/harmony/gdal-subsetter/b1ff5919-0850-4619-99d3-927eddfa2f72/","callback":"http://host.docker.internal:3001/service/61164a96-b7ef-4099-b8fb-70e24e1989c0","version":"0.8.0"}'
+    adapter = adapter(messagestr)
 
     message = adapter.message
+
     logger = adapter.logger
 
     if message.subset and message.subset.shape:
@@ -50,6 +53,8 @@ def test_gfrn(adapter):
         result = None
         for i, granule in enumerate(granules):
             adapter.download_granules([granule])
+            
+            assert os.path.exists(granule.local_filename)
 
             file_type = adapter.get_filetype(granule.local_filename)
             if file_type == 'tif':
@@ -67,6 +72,9 @@ def test_gfrn(adapter):
             else:
                 logger.exception(e)
                 adapter.completed_with_error('No reconized file foarmat, not process')
+
+            #test the result
+            assert result
 
             if not message.isSynchronous:
                 # Send a single file and reset
