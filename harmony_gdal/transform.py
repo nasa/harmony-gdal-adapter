@@ -422,6 +422,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 geot=ds.GetGeoTransform()
                 cols=ds.RasterXSize
                 rows=ds.RasterYSize
+                band=ds.GetRasterBand(1)
+                gtyp=band.DataType
 
             bandnum=ds.RasterCount
             md=ds.GetMetadata()
@@ -433,7 +435,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 count=count+1
                 collection.append({"band_sn":count,"band_md":bmd, "band_array":data})
 
-        dst_ds = gdal.GetDriverByName('GTiff').Create(outfile, cols, rows, count, gdal.GDT_Float32)
+        dst_ds = gdal.GetDriverByName('GTiff').Create( outfile, cols, rows, count, gtyp )
         dst_ds.SetProjection(proj)
         dst_ds.SetGeoTransform(geot)
 
