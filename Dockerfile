@@ -13,4 +13,4 @@ RUN pip3 install -r requirements.txt
 # docker run --rm -it -e ENV=dev -v $(pwd):/home harmony/gdal --harmony-action invoke --harmony-input "$(cat ../harmony/example/service-operation.json)"
 # Or if also working on harmony-service-lib-py in a peered directory:
 # docker run --rm -it -e ENV=dev -v $(pwd):/home -v $(dirname $(pwd))/harmony-service-lib-py:/home/deps/harmony harmony/gdal --harmony-action invoke --harmony-input "$(cat ../harmony/example/service-operation.json)"
-ENTRYPOINT ["python3", "-m", "harmony_gdal"]
+ENTRYPOINT ["python3", "-m", "gdal_subsetter"]
