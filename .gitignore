@@ -136,5 +136,7 @@ dmypy.json
 /notes
 venv/
 templates/
-unittest/
+testcases/
 .idea/
+unittest/data/
+unittest/dockervenv/

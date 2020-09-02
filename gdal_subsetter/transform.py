@@ -106,9 +106,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             result = None
             for i, granule in enumerate(granules):
                 self.download_granules([granule])
-
                 file_type = self.get_filetype(granule.local_filename)
-                if file_type == 'tif':
+
+                if file_type == None:
+                    continue
+                elif file_type == 'tif':
                     layernames, result = self.process_geotiff(
                             granule,output_dir,layernames,operations,message.isSynchronous
                             )
@@ -509,6 +511,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             return result
 
     def get_filetype(self, filename):
+        if not os.path.exists(filename):
+            return None
 
         file_basenamewithpath, file_extension = os.path.splitext(filename)
         if file_extension in ['.nc']:

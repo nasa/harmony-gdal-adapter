@@ -1,103 +1,93 @@
-#this script does unit test for transform.py
-#input is the meassage
+#This script does unit test for transform.py
+#Input is the meassage
+
 
 import pytest
-import harmony
-from transform import HarmonyAdapter
-from harmony.message import Message
-from argparse import ArgumentParser
-
+import os,sys
+from config import test_adapter
 ########################
 #in debug mode
-import pdb
-pdb.set_trace()
+#import pdb
+#pdb.set_trace()
 ########################
 
-@pytest.fixture
-def adapter():
-    message='{"sources":[{"collection":"C1225776654-ASF","variables":[{"id":"V1234600145-ASF","name":"/science/grids/data/connectedComponents","fullPath":"/science/grids/data/connectedComponents"}],"granules":[{"id":"G1234646236-ASF","name":"S1-GUNW-A-R-166-tops-20200313_20200206-014119-34455N_32574N-PP-1749-v2_0_2","bbox":[-116.8219161,32.465775,-113.7630671,34.492821],"temporal":{"start":"2020-03-13T01:41:06.357Z","end":"2020-03-13T01:41:33.312Z"},"url":"https://grfn-test.asf.alaska.edu/door/download/S1-GUNW-A-R-166-tops-20200313_20200206-014119-34455N_32574N-PP-1749-v2_0_2.nc"}]}],"format":{"mime":"image/tiff"},"subset":{},"requestId":"61164a96-b7ef-4099-b8fb-70e24e1989c0","user":"cirrusasf","client":"harmony-local","isSynchronous":true,"stagingLocation":"s3://local-staging-bucket/public/harmony/gdal-subsetter/b1ff5919-0850-4619-99d3-927eddfa2f72/","callback":"http://host.docker.internal:3001/service/61164a96-b7ef-4099-b8fb-70e24e1989c0","version":"0.8.0"}'
-    yield HarmonyAdapter(Message(message))    
-    
 
-#test functions in adapter
+#get two environment variables: TEST_MESSAGE_FILE, TEST_OUTPUT_DIR
 
-def test_gfrn(adapter):
+message_file = os.getenv("TEST_MESSAGE_FILE")
+
+output_dir = os.getenv("TEST_OUTPUT_DIR")
+
+if not (message_file and output_dir):
+
+    print("need set TEST_MESSAGE_FILE and TEST_OUTPUT_DIR")
+
+    sys.exit(1)
+
+
+with open(message_file) as msg_file:
+    messagestr = msg_file.read().rstrip()
+
+adapter = test_adapter(messagestr).adapter
+
+#two test functions
+
+def test_download_file():
 
     message = adapter.message
-    logger = adapter.logger
 
-    if message.subset and message.subset.shape:
-        logger.warn('Ignoring subset request for user shapefile %s' %
-                        (message.subset.shape.href,))
+    granules = message.granules
 
-    try:
-        # Limit to the first granule.  See note in method documentation
-        granules = message.granules
-        if message.isSynchronous:
-            granules = granules[:1]
+    granules = granules[:1]
 
-        output_dir = "tmp/data"
-        adapter.prepare_output_dir(output_dir)
+    adapter.prepare_output_dir(output_dir)
 
-        layernames = []
+    granule = granules[0]    
 
-        operations = dict(
-            is_variable_subset=True,
-            is_regridded=bool(message.format.crs),
-            is_subsetted=bool(message.subset and message.subset.bbox)
-            )
+    adapter.download_granules( [ granule ] )
 
-        result = None
-        for i, granule in enumerate(granules):
-            adapter.download_granules([granule])
-
-            file_type = adapter.get_filetype(granule.local_filename)
-            if file_type == 'tif':
-                layernames, result = adapter.process_geotiff(
-                            granule,output_dir,layernames,operations,message.isSynchronous
-                            )
-            elif file_type == 'nc':
-                layernames, result = adapter.process_netcdf(
-                            granule,output_dir,layernames,operations,message.isSynchronous
-                            )
-            elif file_type == 'zip':
-                layernames, result = adapter.process_zip(
-                            granule,output_dir,layernames,operations,message.isSynchronous
-                             )
-            else:
-                logger.exception(e)
-                adapter.completed_with_error('No reconized file foarmat, not process')
-
-            if not message.isSynchronous:
-                # Send a single file and reset
-                adapter.update_layernames(result, [v.name for v in granule.variables])
-                result = adapter.reformat(result, output_dir)
-                progress = int(100 * (i + 1) / len(granules))
-                adapter.async_add_local_file_partial_result(result, source_granule=granule, title=granule.id, progress=progress, **operations)
-                adapter.cleanup()
-                adapter.prepare_output_dir(output_dir)
-                layernames = []
-                result = None
+    assert os.path.exists(granule.local_filename)
 
 
+def test_subsetter():
+    
+    message = adapter.message
 
-        if message.isSynchronous:
-            adapter.update_layernames(result, layernames)
-            result = adapter.reformat(result, output_dir)
+    granules = message.granules
 
-            #adapter.completed_with_local_file(
-            #        result, source_granule=granules[-1], **operations)
+    granules = granules[:1]
 
-            print("adapter.completed_with_local_file()")
+    granule  = granules[0]
 
-        else:
-            #adapter.async_completed_successfully()
-            print("adapter.async_completed_successfully()")
+    layernames = []
 
-    except Exception as e:
+    operations = dict(
+        is_variable_subset=True,
+        is_regridded=bool(message.format.crs),
+        is_subsetted=bool(message.subset and message.subset.bbox)
+        )
+
+    result = None
+        
+    file_type = adapter.get_filetype(granule.local_filename)
+
+    if file_type == 'tif':
+        layernames, result = adapter.process_geotiff(
+                granule,output_dir,layernames,operations,message.isSynchronous
+                )
+
+    elif file_type == 'nc':
+        layernames, result = adapter.process_netcdf(
+                granule,output_dir,layernames,operations,message.isSynchronous
+                )
+    elif file_type == 'zip':
+        layernames, result = adapter.process_zip(
+                granule,output_dir,layernames,operations,message.isSynchronous
+                )
+    else:
         logger.exception(e)
-        adapter.completed_with_error('An unexpected error occurred')
+        adapter.completed_with_error('No reconized file foarmat, not process')
 
-    finally:
-        adapter.cleanup()
+    #test the result
+    assert result
 
