@@ -5,7 +5,7 @@
 import pytest
 import os
 import sys
-from config import test_adapter
+from config import test_adapter, get_file_info
 ########################
 #in debug mode
 import pdb
@@ -29,11 +29,19 @@ if not (message_file and output_dir):
 with open(message_file) as msg_file:
     messagestr = msg_file.read().rstrip()
 
-adapter = test_adapter(messagestr).adapter
+test_adapter = test_adapter(messagestr)
 
 #two test functions
 
 def test_download_file():
+    """
+    This function test if the file pointed by url is downloaded successfully to the local space.
+    The url is in the message, which is an attribute in the object adapter. This object is created
+    with message file as a global object before this function is called.
+    at the last of this function, use assert to check if the file is downloaded.
+    """
+
+    adapter =test_adapter.adapter
 
     message = adapter.message
 
@@ -49,9 +57,21 @@ def test_download_file():
 
     assert os.path.exists(granule.local_filename)
 
+    if  os.path.exists(granule.local_filename):
+
+        test_adapter.downloaded_file=granule.local_filename
+
+        test_adapter.downloaded_success=True
+
 
 def test_subsetter():
-    
+    """
+    This function test the subset process. It use the functions in the global object adapter to
+    do the subset process. At the end of this function, uase assert to check if the subsetted file exist.
+    """
+
+    adapter =test_adapter.adapter
+
     message = adapter.message
 
     granules = message.granules
@@ -92,3 +112,80 @@ def test_subsetter():
     #test the result
     assert result
 
+    if result:
+  
+        test_adapter.subsetted_file=result
+
+        test_adapter.subsetted_success=True
+
+
+def test_subset_result():
+    """
+    This function verifies if the subsetted file experiences required process defined by message.
+    """
+    adapter=test_adapter.adapter
+
+    message = adapter.message
+
+    granules = message.granules
+
+    granules = granules[:1]
+
+    granule  = granules[0]
+
+    if not (test_adapter.downloaded_success and test_adapter.subsetted_success):
+
+        assert False
+
+    downloaded_file = test_adapter.downloaded_file
+    
+    subsetted_file = test_adapter.subsetted_file
+
+    info_subsetted = get_file_info(subsetted_file)
+
+    file_type = adapter.get_filetype(downloaded_file)
+
+    if file_type == 'zip':
+
+        [tiffile, ncfile]=adapter.pack_zipfile(downloaded_file, output_dir)
+        
+        if tiffile:
+
+            info_downloaded = get_file_info(tiffile)
+
+        if ncfile:
+
+            layer_id = granule.id + '__' + variable.name
+
+            tiffile=adapter.nc2tiff(layer_id, ncfile, output_dir)
+            
+            info_downloaded = get_file_info(tiffile)
+
+
+    elif file_type == "nc":
+
+        layer_id = granule.id + '__' + variable.name
+
+        tifffile=adapter.nc2tiff(layer_id, downloaded_file, output_dir)
+
+        info_downloaded = get_file_info(tifffile)
+
+    elif file_type == "tif":
+
+        info_downloaded = get_file_info(downloaded_file)
+
+    else:
+
+        print("downloaded file has unknown format")
+
+        assert False
+
+    
+
+    print(message)
+
+    if message.crs == None:
+
+
+
+    
