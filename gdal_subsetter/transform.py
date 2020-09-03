@@ -511,8 +511,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             return result
 
     def get_filetype(self, filename):
-        if not os.path.exists(filename):
+        if filename == None:
             return None
+        else:
+            if not os.path.exists(filename):
+                return None
 
         file_basenamewithpath, file_extension = os.path.splitext(filename)
         if file_extension in ['.nc']:

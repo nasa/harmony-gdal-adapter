@@ -3,12 +3,13 @@
 
 
 import pytest
-import os,sys
+import os
+import sys
 from config import test_adapter
 ########################
 #in debug mode
-#import pdb
-#pdb.set_trace()
+import pdb
+pdb.set_trace()
 ########################
 
 
