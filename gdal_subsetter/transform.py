@@ -20,6 +20,7 @@ from osgeo import gdal, osr, ogr
 from harmony import BaseHarmonyAdapter
 import pyproj
 import numpy as np
+import glob
 
 mime_to_gdal = {
     "image/tiff": "GTiff",
@@ -593,20 +594,19 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def get_file_from_unzipfiles(self, extract_dir, filetype,variables=None):
         
         #check if there are geotiff files
+
+        filelist=[]
     
         lstfile=extract_dir +'/list.txt'
 
-        command=['ls',
-                extract_dir+'/*.'+filetype,
-                '>',
-                lstfile
-                ] 
+        tmpexp = extract_dir+'/*.'+filetype
 
-        cmdline=' '.join(map(str, command))
+        tmplst=glob.glob(tmpexp)
 
-        os.system(cmdline)
-
-        filelist=None
+        if tmplst:
+            with open(lstfile, 'w') as f:
+                for listitem in tmplst:
+                    f.write('%s\n' % listitem)
 
         if os.path.isfile(lstfile) and os.path.getsize(lstfile) > 0:
 
@@ -626,7 +626,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     if m:
                         ch_filelist.append(m.string)
 
-                filelist=ch_filelist 
+                filelist=ch_filelist
+            
+
+        if os.path.exists(lstfile):
+            os.system('rm -f '+lstfile)
+
         return filelist
     
     def stacking(self, infilelist, outputfile):

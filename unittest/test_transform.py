@@ -1,6 +1,19 @@
-#This script does unit test for transform.py
-#Input is the meassage
+"""
+Description:
+This script does unit test for transform.py. It includes three tests:
+test if download is success, if subset is success, and if subsetted file 
+agrees with downloaded file. This script limits to test the message 
+with only one granule and the tiff format output. 
 
+Paramters:
+meassage_file and output_dir, where message_file is created with get_message_file.py,
+it captures the message pass to the gdal-subsetter by harmony front service.
+output_dir defines the directory where downaloded and subsetted files are stored.
+
+Returns:
+None
+
+"""
 
 import pytest
 import os
@@ -35,10 +48,11 @@ test_adapter = test_adapter(messagestr)
 
 def test_download_file():
     """
-    This function test if the file pointed by url is downloaded successfully to the local space.
-    The url is in the message, which is an attribute in the object adapter. This object is created
-    with message file as a global object before this function is called.
-    at the last of this function, use assert to check if the file is downloaded.
+    This function test if the file pointed by url is downloaded successfully 
+    to the local space. The url is in the message, which is an attribute in 
+    the object adapter. This object is created with message file as a global 
+    object before this function is called. At the last of this function, 
+    use assert to check if the file is downloaded.
     """
 
     adapter =test_adapter.adapter
@@ -66,8 +80,9 @@ def test_download_file():
 
 def test_subsetter():
     """
-    This function test the subset process. It use the functions in the global object adapter to
-    do the subset process. At the end of this function, uase assert to check if the subsetted file exist.
+    This function test the subset process. It use the functions in 
+    the global object adapter to do the subset process. At the end 
+    of this function, use assert to check if the subsetted file exist.
     """
 
     adapter =test_adapter.adapter
@@ -121,7 +136,8 @@ def test_subsetter():
 
 def test_subset_result():
     """
-    This function verifies if the subsetted file experiences required process defined by message.
+    This function verifies if the subsetted file experiences 
+    required process defined by message.
     """
     adapter=test_adapter.adapter
 
@@ -145,6 +161,7 @@ def test_subset_result():
 
     file_type = adapter.get_filetype(downloaded_file)
 
+    
     if file_type == 'zip':
 
         [tiffile, ncfile]=adapter.pack_zipfile(downloaded_file, output_dir)
@@ -180,12 +197,25 @@ def test_subset_result():
 
         assert False
 
-    
-
     print(message)
 
-    if message.crs == None:
+    #test projection
+    if not message.format.crs:        
+        assert info_downloaded['proj_wkt'] == info_subsetted['proj_wkt']
+
+        if message.subset.bbox == None and message.subset.shape == None:
+            assert info_downloaded['gt'] == info_subsetted['gt']
+            assert info_downloaded['xy_size'] == info_subsetted['xy_size']
+            
+    else: 
+        pass
+        #assert message.format.crs == info_subsetted['proj_wkt']
 
 
+    #test number of bands
+    if message.sources[0].variables:
+        assert len(message.sources[0].variables) == info_subsetted['bands']
 
-    
+    else:
+        assert info_downloaded['bands'] == info_subsetted['bands']
+

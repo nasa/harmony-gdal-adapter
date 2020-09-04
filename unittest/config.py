@@ -27,7 +27,8 @@ def get_file_info(infile):
     from osgeo import gdal
     import osr
     ds = gdal.Open(infile)
-    proj = osr.SpatialReference(wkt=ds.GetProjection())
+    proj_wkt=ds.GetProjection()
+    proj = osr.SpatialReference(wkt=proj_wkt)
     gcs = proj.GetAttrValue('GEOGCS',0)
     authority = proj.GetAttrValue('AUTHORITY',0)
     epsg = proj.GetAttrValue('AUTHORITY',1)
@@ -43,7 +44,7 @@ def get_file_info(infile):
     maxy = round(gt[3],2)
     extent = [miny, maxy, minx, maxx]   
     ds = None
-    information={'proj':proj,
+    information={'proj_wkt':proj_wkt,
                  'gcs':gcs,
                  'authority':authority,
                  'epsg':epsg,
