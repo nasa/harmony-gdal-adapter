@@ -242,7 +242,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
     def process_zip(self, granule, output_dir, layernames, operations, isSynchronous):
          
-        [tiffile, ncfile]=self.pack_zipfile(granule.local_filename, output_dir)
+        [tiffile, ncfile]=self.pack_zipfile(granule.local_filename,output_dir)
         
         if tiffile:
 
@@ -595,24 +595,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         
         #check if there are geotiff files
 
-        filelist=[]
-    
-        lstfile=extract_dir +'/list.txt'
-
         tmpexp = extract_dir+'/*.'+filetype
 
-        tmplst=glob.glob(tmpexp)
+        filelist=glob.glob(tmpexp)
 
-        if tmplst:
-            with open(lstfile, 'w') as f:
-                for listitem in tmplst:
-                    f.write('%s\n' % listitem)
-
-        if os.path.isfile(lstfile) and os.path.getsize(lstfile) > 0:
-
-            with open(lstfile) as f:
-                filelist = f.read().splitlines()
-            
+        if filelist:
+    
             ch_filelist=[]
 
             if variables:
@@ -628,10 +616,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
                 filelist=ch_filelist
             
-
-        if os.path.exists(lstfile):
-            os.system('rm -f '+lstfile)
-
         return filelist
     
     def stacking(self, infilelist, outputfile):
