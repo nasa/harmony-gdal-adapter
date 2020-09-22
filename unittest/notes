@@ -22,7 +22,6 @@ cd ~/projects/work/harmony-curr/gdal-subsetter/unittest
 
 ./auto_test.bash message_file output_dir
 
-
 2. run test in the gdal-subsetter docker
 
 bring up the gdal-subsetter container
