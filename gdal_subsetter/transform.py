@@ -132,14 +132,32 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     self.update_layernames(result, [v.name for v in granule.variables])
                     result = self.reformat(result, output_dir)
                     progress = int(100 * (i + 1) / len(granules))
-                    self.async_add_local_file_partial_result(result, source_granule=granule, title=granule.id, progress=progress, **operations)
+                    #need add some info as arguments to make STAC catalog useful
+                    #for aws stage, may need use self.async_add_url_file_partial_result             
+
+                    #self.async_add_local_file_partial_result(result,
+                    #source_granule=granule,
+                    #title=granule.id,
+                    #progress=progress,
+                    #**operations)
+                    
+                    #calcultate temporal and bbox of result (result is a file)
+                    temporal=granule.temporal
+                    bbox=self.get_bbox_lonlat(result)
+
+                    self.async_add_local_file_partial_result(
+                    result,
+                    source_granule=granule,
+                    title=granule.id,
+                    progress=progress,
+                    temporal=temporal,
+                    bbox=bbox,
+                    **operations)
+
                     self.cleanup()
                     self.prepare_output_dir(output_dir)
                     layernames = []
                     result = None
-
-######################################
-
 
             if message.isSynchronous:
                 self.update_layernames(result, layernames)
@@ -410,6 +428,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         tmpfile=self.stack_multi_file_with_metadata([dstfile,srcfile],tmpfile)
         self.cmd('mv', tmpfile, dstfile)
+
         return dstfile
     
     def stack_multi_file_with_metadata(self,infilelist,outfile):
@@ -565,6 +584,35 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         ll_x, ll_y=self.calc_ij_coord(gt, 0, rows)
         return [min(ul_x,ll_x), min(ll_y,lr_y), max(lr_x,ur_x), max(ul_y,ur_y)] 
 
+
+    def get_bbox_lonlat(self, filename):
+        """
+        get the bbox in longitude and latitude of the raster file
+        input:raster file name
+        output:bbox of the raster file
+        """
+        ds=gdal.Open(filename)
+        gt=ds.GetGeoTransform()
+        cols = ds.RasterXSize
+        rows = ds.RasterYSize
+        ul_x, ul_y=self.calc_ij_coord(gt, 0, 0)
+        ur_x, ur_y=self.calc_ij_coord(gt, cols, 0)
+        lr_x, lr_y=self.calc_ij_coord(gt, cols, rows)
+        ll_x, ll_y=self.calc_ij_coord(gt, 0, rows)
+
+        projection = ds.GetProjection()
+        dst = osr.SpatialReference(projection)
+        dstproj4=dst.ExportToProj4()
+        ct2 = pyproj.Proj(dstproj4)
+
+        ul_x2,ul_y2 = ct2(ul_x,ul_y,inverse=True)
+        ur_x2,ur_y2 = ct2(ur_x,ur_y,inverse=True)
+        lr_x2,lr_y2 = ct2(lr_x,lr_y,inverse=True)
+        ll_x2,ll_y2 = ct2(ll_x,ll_y,inverse=True)
+
+        return [min(ul_x2,ll_x2), min(ll_y2,lr_y2), max(lr_x2,ur_x2), max(ul_y2,ur_y2)]
+
+
     def pack_zipfile(self, zipfilename, output_dir, variables=None):
 
         #unzip the file
@@ -650,6 +698,24 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             
         return [ xy[0], xy[1] ], transform 
 
+    def projcoord2lonlat(self, srcfile,x,y):
+        #covert x,y of dataset's projected coord to longitude and latitude
+        dataset=gdal.Open(srcfile)
+        transform=dataset.GetGeoTransform()
+        projection = dataset.GetProjection()
+        dst = osr.SpatialReference(projection)
+        dstproj4=dst.ExportToProj4()
+        ct2 = pyproj.Proj(dstproj4)
+        lon,lat=ct2(x,y, inverse=True)
+        #if math.isinf(xy[0]) or math.isinf(xy[1]):
+        #    xy=[None,None]
+
+        return [ lon, lat ], transform
+
+
+
+
+
     def subset2(self, tiffile, outputfile,bbox, band=None, shapefile=None):
         #bbox is defined from ll to ur
         RasterFormat = 'GTiff'
@@ -679,6 +745,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         urxy=ct(ur_lon, ur_lat)
         boxproj=[ llxy[0],llxy[1], urxy[0],urxy[1] ]
         return boxproj, projection
+
+    
 
     def calc_coord_ij(self, gt, x,y ):
         transform = Affine.from_gdal(*gt)
