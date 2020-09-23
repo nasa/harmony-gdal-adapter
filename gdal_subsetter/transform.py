@@ -367,9 +367,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         if subset.bbox:
             [left, bottom, right, top]=self.get_bbox(srcfile)
-            #subset.bbox in srcfile is defined from ll to ur
+            #subset.bbox is defined as [left/west,low/south,right/east,upper/north]
             subsetbbox=subset.bbox
-            bbox = [str(c) for c in subset.bbox]
+            #bbox = [str(c) for c in subset.bbox]
             [b0,b1], transform = self.lonlat2projcoord(srcfile,subsetbbox[0],subsetbbox[1])
             [b2,b3], transform = self.lonlat2projcoord(srcfile,subsetbbox[2],subsetbbox[3])
 
@@ -377,6 +377,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 dstfile = "%s/%s" % (dstdir, normalized_layerid + '__varsubsetted.tif')
                 dstfile=self.varsubset(layerid, srcfile, dstfile, band)
             elif b0<left and b1<bottom and b2>right and b3>top:
+                #user's input subset totally covers the image bbox, do not do subset
                 dstfile = "%s/%s" % (dstdir, normalized_layerid + '__varsubsetted.tif')
                 dstfile=self.varsubset(layerid, srcfile, dstfile, band)
             else:
@@ -574,6 +575,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return layer_id, filename, output_dir
 
     def get_bbox(self, filename):
+        """
+        input: the geotif file
+        return: bbox[left,low,right,upper] of the file
+        """
         ds=gdal.Open(filename)
         gt=ds.GetGeoTransform()
         cols = ds.RasterXSize
@@ -725,7 +730,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
 
     def subset2(self, tiffile, outputfile,bbox, band=None, shapefile=None):
-        #bbox is defined from ll to ur
+        #bbox is defined [left,low,right,upper]
         RasterFormat = 'GTiff'
         ref_ds=gdal.Open(tiffile)
         gt=ref_ds.GetGeoTransform()
@@ -741,8 +746,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return outputfile
 
     def boxwrs84_boxproj(self, boxwrs84, ref_ds):
-        #boxwrs84 is defined from ll to ur, ref_ds is reference dataset
-        #return boxprj is also defined as from ll to ur in reference projection
+        #boxwrs84 is defined as [left,low,right,upper], ref_ds is reference dataset
+        #return boxprj is also defined as [left,low,right,upper] in reference projection
         projection = ref_ds.GetProjection()
         dst = osr.SpatialReference(projection)
         ll_lon,ll_lat = boxwrs84[0],boxwrs84[1]
@@ -751,7 +756,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         ct = pyproj.Proj(dstproj4)
         llxy=ct(ll_lon, ll_lat)
         urxy=ct(ur_lon, ur_lat)
-        boxproj=[ llxy[0],llxy[1], urxy[0],urxy[1] ]
+        boxproj=[ llxy[0], llxy[1], urxy[0],urxy[1] ]
         return boxproj, projection
 
     
@@ -763,7 +768,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return int(cols), int(rows)
 
     def calc_subset_window(self,ds,box):
-        #box is defined from ll to ur
+        #box is defined as [left,low,right,upper]
         gt=ds.GetGeoTransform()
         ul_x=box[0]
         ul_y=box[3]
@@ -771,8 +776,17 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         rl_y=box[1]
         ul_i, ul_j=self.calc_coord_ij(gt, ul_x,ul_y)
         rl_i, rl_j=self.calc_coord_ij(gt, rl_x,rl_y)
+        #get the intersection between box and image in row, col coordinator    
+        cols_img = ds.RasterXSize
+        rows_img = ds.RasterYSize
+        ul_i=max(0, ul_i)
+        ul_j=max(0, ul_j)
+        rl_i=min(cols_img, rl_i)
+        rl_j=min(rows_img, rl_j)
+
         cols=rl_i-ul_i
         rows=rl_j-ul_j
+
         ul_x, ul_y = self.calc_ij_coord(gt, ul_i, ul_j)
         return ul_x,ul_y,ul_i,ul_j,cols,rows
 
