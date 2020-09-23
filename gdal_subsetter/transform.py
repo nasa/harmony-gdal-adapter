@@ -609,9 +609,17 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         ur_x2,ur_y2 = ct2(ur_x,ur_y,inverse=True)
         lr_x2,lr_y2 = ct2(lr_x,lr_y,inverse=True)
         ll_x2,ll_y2 = ct2(ll_x,ll_y,inverse=True)
+        lon_left=min(ul_x2,ll_x2)
+        lat_low=min(ll_y2,lr_y2)
+        lon_right=max(lr_x2,ur_x2)
+        lat_high=max(ul_y2,ur_y2)
+        lon_left = float("{:.2f}".format(lon_left))
+        lat_low = float("{:.2f}".format(lat_low))
+        lon_right = float("{:.2f}".format(lon_right))
+        lat_high = float("{:.2f}".format(lat_high))
 
-        return [min(ul_x2,ll_x2), min(ll_y2,lr_y2), max(lr_x2,ur_x2), max(ul_y2,ur_y2)]
-
+        #return [min(ul_x2,ll_x2), min(ll_y2,lr_y2), max(lr_x2,ur_x2), max(ul_y2,ur_y2)]
+        return [ lon_left, lat_low, lon_right, lat_high]
 
     def pack_zipfile(self, zipfilename, output_dir, variables=None):
 
