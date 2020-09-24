@@ -83,6 +83,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         logger = self.logger
         message = self.message
 
+        #force calls backend service in asynchronous mode, for test purpose
+        message.isSynchronous=False
+
         if message.subset and message.subset.shape:
             logger.warn('Ignoring subset request for user shapefile %s' %
                         (message.subset.shape.href,))
@@ -618,10 +621,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         lat_low=min(ll_y2,lr_y2)
         lon_right=max(lr_x2,ur_x2)
         lat_high=max(ul_y2,ur_y2)
-        lon_left = float("{:.2f}".format(lon_left))
-        lat_low = float("{:.2f}".format(lat_low))
-        lon_right = float("{:.2f}".format(lon_right))
-        lat_high = float("{:.2f}".format(lat_high))
+        lon_left = float("{:.3f}".format(lon_left))
+        lat_low = float("{:.3f}".format(lat_low))
+        lon_right = float("{:.3f}".format(lon_right))
+        lat_high = float("{:.3f}".format(lat_high))
 
         #return [min(ul_x2,ll_x2), min(ll_y2,lr_y2), max(lr_x2,ur_x2), max(ul_y2,ur_y2)]
         return [ lon_left, lat_low, lon_right, lat_high]
