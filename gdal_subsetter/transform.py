@@ -130,6 +130,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     logger.exception(e)
                     self.completed_with_error('No reconized file foarmat, not process')
 
+                
                 if not message.isSynchronous:
                     # Send a single file and reset
                     self.update_layernames(result, [v.name for v in granule.variables])
@@ -137,15 +138,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     progress = int(100 * (i + 1) / len(granules))
                     #need add some info as arguments to make STAC catalog useful
                     #for aws stage, may need use self.async_add_url_file_partial_result             
-
-                    #self.async_add_local_file_partial_result(result,
-                    #source_granule=granule,
-                    #title=granule.id,
-                    #progress=progress,
-                    #**operations)
-                    
+    
                     #calcultate temporal and bbox of result (result is a file)
                     temporal=granule.temporal
+                    #update metadata with bbox and extent in lon/lat coordinates
                     bbox=self.get_bbox_lonlat(result)
 
                     self.async_add_local_file_partial_result(
@@ -165,6 +161,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             if message.isSynchronous:
                 self.update_layernames(result, layernames)
                 result = self.reformat(result, output_dir)
+                #update metadata with bbox and extent in lon/lat coordinates
+                bbox=self.get_bbox_lonlat(result)
                 self.completed_with_local_file(
                     result, source_granule=granules[-1], **operations)
             else:
@@ -595,11 +593,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
     def get_bbox_lonlat(self, filename):
         """
-        get the bbox in longitude and latitude of the raster file
+        get the bbox in longitude and latitude of the raster file, and update the bbox and extent for the file, and return bbox. 
         input:raster file name
         output:bbox of the raster file
         """
-        ds=gdal.Open(filename)
+        ds=gdal.Open(filename, gdal.GA_Update)
         gt=ds.GetGeoTransform()
         cols = ds.RasterXSize
         rows = ds.RasterYSize
@@ -617,17 +615,33 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         ur_x2,ur_y2 = ct2(ur_x,ur_y,inverse=True)
         lr_x2,lr_y2 = ct2(lr_x,lr_y,inverse=True)
         ll_x2,ll_y2 = ct2(ll_x,ll_y,inverse=True)
+
+        ul_x2=float( "{:.7f}".format(ul_x2) )
+        ul_y2=float( "{:.7f}".format(ul_y2) )
+
+        ur_x2=float( "{:.7f}".format(ur_x2) )
+        ur_y2=float( "{:.7f}".format(ur_y2) )
+        
+        lr_x2=float( "{:.7f}".format(lr_x2) )
+        lr_y2=float( "{:.7f}".format(lr_y2) )
+
+        ll_x2=float( "{:.7f}".format(ll_x2) )
+        ll_y2=float( "{:.7f}".format(ll_y2) )
+        
         lon_left=min(ul_x2,ll_x2)
         lat_low=min(ll_y2,lr_y2)
         lon_right=max(lr_x2,ur_x2)
         lat_high=max(ul_y2,ur_y2)
-        lon_left = float("{:.3f}".format(lon_left))
-        lat_low = float("{:.3f}".format(lat_low))
-        lon_right = float("{:.3f}".format(lon_right))
-        lat_high = float("{:.3f}".format(lat_high))
 
-        #return [min(ul_x2,ll_x2), min(ll_y2,lr_y2), max(lr_x2,ur_x2), max(ul_y2,ur_y2)]
-        return [ lon_left, lat_low, lon_right, lat_high]
+        #write bbox and extent in lon/lat unit to the metadata of the filename
+        md=ds.GetMetadata()
+        bbox=[ lon_left, lat_low, lon_right, lat_high]
+        extent={'ul':[ul_x2,ul_y2],'ll':[ll_x2,ll_y2], 'ur':[ur_x2,ur_y2],'lr':[lr_x2,lr_y2]}
+        md['bbox']=str(bbox)
+        md['extent']=str(extent)
+        ds.SetMetadata(md)
+        ds=None
+        return bbox
 
     def pack_zipfile(self, zipfilename, output_dir, variables=None):
 
