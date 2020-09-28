@@ -132,18 +132,18 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
                 
                 if not message.isSynchronous:
-                    # Send a single file and reset
-                    self.update_layernames(result, [v.name for v in granule.variables])
-                    result = self.reformat(result, output_dir)
-                    progress = int(100 * (i + 1) / len(granules))
-                    #need add some info as arguments to make STAC catalog useful
-                    #for aws stage, may need use self.async_add_url_file_partial_result             
-    
+
                     #calcultate temporal and bbox of result (result is a file)
                     temporal=granule.temporal
                     #update metadata with bbox and extent in lon/lat coordinates
                     bbox=self.get_bbox_lonlat(result)
 
+                    #Send a single file and reset
+                    self.update_layernames(result, [v.name for v in granule.variables])
+                    result = self.reformat(result, output_dir)
+                    progress = int(100 * (i + 1) / len(granules))
+
+                    #output temporal and bbox to harmony front service
                     self.async_add_local_file_partial_result(
                     result,
                     source_granule=granule,
