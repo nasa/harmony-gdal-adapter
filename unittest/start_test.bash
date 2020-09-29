@@ -1,0 +1,1 @@
+docker run -it --network host -v /home/tstern/project/gdal-subsetter:/home -v /home/tstern/project/harmony-service-lib-py/harmony:/usr/lib/harmony-service-lib-py/harmony harmony/gdal-subsetter --harmony-action start --harmony-queue-url http://0.0.0.0:4566/queue/harmony-gdal-xxxxx
