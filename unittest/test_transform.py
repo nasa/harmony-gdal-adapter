@@ -3,7 +3,7 @@ Description:
 This script does unit test for transform.py. It includes three tests:
 test if download is success, if subset is success, and if subsetted file 
 agrees with downloaded file. This script limits to test the message 
-with only one granule and the tiff format output. 
+with the first variable and the first granule and the tiff format output. 
 
 Paramters:
 meassage_file and output_dir, where message_file is created with get_message_file.py,
@@ -14,15 +14,15 @@ Returns:
 None
 
 """
-
+import argparse
 import pytest
 import os
 import sys
 from config import test_adapter, get_file_info
 ########################
 #in debug mode
-import pdb
-pdb.set_trace()
+#import pdb
+#pdb.set_trace()
 ########################
 
 
@@ -38,11 +38,37 @@ if not (message_file and output_dir):
 
     sys.exit(1)
 
+output_dir=output_dir.rstrip(r"/")
 
 with open(message_file) as msg_file:
+
     messagestr = msg_file.read().rstrip()
 
 test_adapter = test_adapter(messagestr)
+
+#function
+
+def compare_files(message, downloaded_file,subsetted_file):
+
+    info_downloaded=get_file_info(downloaded_file)
+    info_subsetted=get_file_info(subsetted_file)
+    #test reprojection
+    if not message.format.crs:
+        assert info_downloaded['proj_wkt'] == info_subsetted['proj_wkt']
+    #test spatial subset
+    if message.subset.bbox == None and message.subset.shape == None:
+        assert info_downloaded['gt'] == info_subsetted['gt']
+        assert info_downloaded['xy_size'] == info_subsetted['xy_size']
+    else:
+        pass
+    #test number of bands
+    if message.sources[0].variables:
+        variables=message.sources[0].variables
+        assert len(variables) == info_subsetted['bands']
+    else:
+        assert info_downloaded['bands'] == info_subsetted['bands']
+
+
 
 #two test functions
 
@@ -59,13 +85,9 @@ def test_download_file():
 
     message = adapter.message
 
-    granules = message.granules
-
-    granules = granules[:1]
+    granule = message.granules[0]
 
     adapter.prepare_output_dir(output_dir)
-
-    granule = granules[0]    
 
     adapter.download_granules( [ granule ] )
 
@@ -89,11 +111,7 @@ def test_subsetter():
 
     message = adapter.message
 
-    granules = message.granules
-
-    granules = granules[:1]
-
-    granule  = granules[0]
+    granule = message.granules[0]
 
     layernames = []
 
@@ -143,24 +161,36 @@ def test_subset_result():
 
     message = adapter.message
 
-    granules = message.granules
+    granule = message.granules[0]
 
-    granules = granules[:1]
+    if message.sources[0].variables:
+        
+        variables=message.sources[0].variables
 
-    granule  = granules[0]
+    else:
+
+        variables=None
+ 
+    #check if the download is success 
 
     if not (test_adapter.downloaded_success and test_adapter.subsetted_success):
 
         assert False
 
+    #compare output file if it is geotiff
+
+
+    if adapter.get_filetype(test_adapter.subsetted_file) != "tif":
+
+        assert True
+
+        return
+
     downloaded_file = test_adapter.downloaded_file
     
     subsetted_file = test_adapter.subsetted_file
 
-    info_subsetted = get_file_info(subsetted_file)
-
     file_type = adapter.get_filetype(downloaded_file)
-
     
     if file_type == 'zip':
 
@@ -168,28 +198,52 @@ def test_subset_result():
         
         if tiffile:
 
-            info_downloaded = get_file_info(tiffile)
+            compare_files(message, tifffile,subsetted_file)
 
         if ncfile:
 
-            layer_id = granule.id + '__' + variable.name
+            for variable in variables:
 
-            tiffile=adapter.nc2tiff(layer_id, ncfile, output_dir)
-            
-            info_downloaded = get_file_info(tiffile)
+                layer_format = adapter.read_layer_format(
+                        granule.collection,
+                        granule.local_filename,
+                        variable.name
+                        )
+
+                filename = layer_format.format(
+                        granule.local_filename)
+
+                layer_id = granule.id + '__' + variable.name
+
+                tifffile=adapter.nc2tiff(layer_id, filename, output_dir)
+
+                compare_files(message, tifffile,subsetted_file)
+
 
 
     elif file_type == "nc":
 
-        layer_id = granule.id + '__' + variable.name
+        for variable in variables:
 
-        tifffile=adapter.nc2tiff(layer_id, downloaded_file, output_dir)
+            layer_format = adapter.read_layer_format(
+                        granule.collection,
+                        granule.local_filename,
+                        variable.name
+                        )
 
-        info_downloaded = get_file_info(tifffile)
+            filename = layer_format.format(
+                        granule.local_filename)
+
+            layer_id = granule.id + '__' + variable.name
+            
+            tifffile=adapter.nc2tiff(layer_id, filename, output_dir)
+
+            compare_files(message, tifffile,subsetted_file)
+
 
     elif file_type == "tif":
-
-        info_downloaded = get_file_info(downloaded_file)
+      
+        compare_files(message, downloaded_file,subsetted_file)
 
     else:
 
@@ -197,25 +251,4 @@ def test_subset_result():
 
         assert False
 
-    print(message)
-
-    #test projection
-    if not message.format.crs:        
-        assert info_downloaded['proj_wkt'] == info_subsetted['proj_wkt']
-
-        if message.subset.bbox == None and message.subset.shape == None:
-            assert info_downloaded['gt'] == info_subsetted['gt']
-            assert info_downloaded['xy_size'] == info_subsetted['xy_size']
-            
-    else: 
-        pass
-        #assert message.format.crs == info_subsetted['proj_wkt']
-
-
-    #test number of bands
-    if message.sources[0].variables:
-        assert len(message.sources[0].variables) == info_subsetted['bands']
-
-    else:
-        assert info_downloaded['bands'] == info_subsetted['bands']
 
