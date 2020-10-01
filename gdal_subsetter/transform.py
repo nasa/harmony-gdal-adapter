@@ -20,6 +20,7 @@ from osgeo import gdal, osr, ogr
 from harmony import BaseHarmonyAdapter
 import pyproj
 import numpy as np
+import glob
 
 mime_to_gdal = {
     "image/tiff": "GTiff",
@@ -82,6 +83,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         logger = self.logger
         message = self.message
 
+        #force calls backend service in asynchronous mode, for test purpose
+        message.isSynchronous=False
+
         if message.subset and message.subset.shape:
             logger.warn('Ignoring subset request for user shapefile %s' %
                         (message.subset.shape.href,))
@@ -106,9 +110,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             result = None
             for i, granule in enumerate(granules):
                 self.download_granules([granule])
-
                 file_type = self.get_filetype(granule.local_filename)
-                if file_type == 'tif':
+
+                if file_type == None:
+                    continue
+                elif file_type == 'tif':
                     layernames, result = self.process_geotiff(
                             granule,output_dir,layernames,operations,message.isSynchronous
                             )
@@ -124,22 +130,38 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     logger.exception(e)
                     self.completed_with_error('No reconized file foarmat, not process')
 
+                
                 if not message.isSynchronous:
-                    # Send a single file and reset
+                    #Send a single file and reset
                     self.update_layernames(result, [v.name for v in granule.variables])
+
+                    #calcultate temporal and bbox of result (result is a file)
+                    temporal=granule.temporal
+                    #update metadata with bbox and extent in lon/lat coordinates
+                    bbox=self.get_bbox_lonlat(result)
+
                     result = self.reformat(result, output_dir)
                     progress = int(100 * (i + 1) / len(granules))
-                    self.async_add_local_file_partial_result(result, source_granule=granule, title=granule.id, progress=progress, **operations)
+
+                    #output temporal and bbox to harmony front service
+                    self.async_add_local_file_partial_result(
+                    result,
+                    source_granule=granule,
+                    title=granule.id,
+                    progress=progress,
+                    temporal=temporal,
+                    bbox=bbox,
+                    **operations)
+
                     self.cleanup()
                     self.prepare_output_dir(output_dir)
                     layernames = []
                     result = None
 
-######################################
-
-
             if message.isSynchronous:
                 self.update_layernames(result, layernames)
+                #update metadata with bbox and extent in lon/lat coordinates
+                bbox=self.get_bbox_lonlat(result)
                 result = self.reformat(result, output_dir)
                 self.completed_with_local_file(
                     result, source_granule=granules[-1], **operations)
@@ -239,7 +261,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
     def process_zip(self, granule, output_dir, layernames, operations, isSynchronous):
          
-        [tiffile, ncfile]=self.pack_zipfile(granule.local_filename, output_dir)
+        [tiffile, ncfile]=self.pack_zipfile(granule.local_filename,output_dir)
         
         if tiffile:
 
@@ -346,9 +368,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         if subset.bbox:
             [left, bottom, right, top]=self.get_bbox(srcfile)
-            #subset.bbox in srcfile is defined from ll to ur
+            #subset.bbox is defined as [left/west,low/south,right/east,upper/north]
             subsetbbox=subset.bbox
-            bbox = [str(c) for c in subset.bbox]
+            #bbox = [str(c) for c in subset.bbox]
             [b0,b1], transform = self.lonlat2projcoord(srcfile,subsetbbox[0],subsetbbox[1])
             [b2,b3], transform = self.lonlat2projcoord(srcfile,subsetbbox[2],subsetbbox[3])
 
@@ -356,6 +378,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 dstfile = "%s/%s" % (dstdir, normalized_layerid + '__varsubsetted.tif')
                 dstfile=self.varsubset(layerid, srcfile, dstfile, band)
             elif b0<left and b1<bottom and b2>right and b3>top:
+                #user's input subset totally covers the image bbox, do not do subset
                 dstfile = "%s/%s" % (dstdir, normalized_layerid + '__varsubsetted.tif')
                 dstfile=self.varsubset(layerid, srcfile, dstfile, band)
             else:
@@ -407,6 +430,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         tmpfile=self.stack_multi_file_with_metadata([dstfile,srcfile],tmpfile)
         self.cmd('mv', tmpfile, dstfile)
+
         return dstfile
     
     def stack_multi_file_with_metadata(self,infilelist,outfile):
@@ -422,6 +446,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 geot=ds.GetGeoTransform()
                 cols=ds.RasterXSize
                 rows=ds.RasterYSize
+                band=ds.GetRasterBand(1)
+                gtyp=band.DataType
 
             bandnum=ds.RasterCount
             md=ds.GetMetadata()
@@ -433,7 +459,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 count=count+1
                 collection.append({"band_sn":count,"band_md":bmd, "band_array":data})
 
-        dst_ds = gdal.GetDriverByName('GTiff').Create(outfile, cols, rows, count, gdal.GDT_Float32)
+        dst_ds = gdal.GetDriverByName('GTiff').Create( outfile, cols, rows, count, gtyp )
         dst_ds.SetProjection(proj)
         dst_ds.SetGeoTransform(geot)
 
@@ -507,6 +533,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             return result
 
     def get_filetype(self, filename):
+        if filename == None:
+            return None
+        else:
+            if not os.path.exists(filename):
+                return None
 
         file_basenamewithpath, file_extension = os.path.splitext(filename)
         if file_extension in ['.nc']:
@@ -545,6 +576,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return layer_id, filename, output_dir
 
     def get_bbox(self, filename):
+        """
+        input: the geotif file
+        return: bbox[left,low,right,upper] of the file
+        """
         ds=gdal.Open(filename)
         gt=ds.GetGeoTransform()
         cols = ds.RasterXSize
@@ -554,6 +589,59 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         lr_x, lr_y=self.calc_ij_coord(gt, cols, rows)
         ll_x, ll_y=self.calc_ij_coord(gt, 0, rows)
         return [min(ul_x,ll_x), min(ll_y,lr_y), max(lr_x,ur_x), max(ul_y,ur_y)] 
+
+
+    def get_bbox_lonlat(self, filename):
+        """
+        get the bbox in longitude and latitude of the raster file, and update the bbox and extent for the file, and return bbox. 
+        input:raster file name
+        output:bbox of the raster file
+        """
+        ds=gdal.Open(filename, gdal.GA_Update)
+        gt=ds.GetGeoTransform()
+        cols = ds.RasterXSize
+        rows = ds.RasterYSize
+        ul_x, ul_y=self.calc_ij_coord(gt, 0, 0)
+        ur_x, ur_y=self.calc_ij_coord(gt, cols, 0)
+        lr_x, lr_y=self.calc_ij_coord(gt, cols, rows)
+        ll_x, ll_y=self.calc_ij_coord(gt, 0, rows)
+
+        projection = ds.GetProjection()
+        dst = osr.SpatialReference(projection)
+        dstproj4=dst.ExportToProj4()
+        ct2 = pyproj.Proj(dstproj4)
+
+        ul_x2,ul_y2 = ct2(ul_x,ul_y,inverse=True)
+        ur_x2,ur_y2 = ct2(ur_x,ur_y,inverse=True)
+        lr_x2,lr_y2 = ct2(lr_x,lr_y,inverse=True)
+        ll_x2,ll_y2 = ct2(ll_x,ll_y,inverse=True)
+
+        ul_x2=float( "{:.7f}".format(ul_x2) )
+        ul_y2=float( "{:.7f}".format(ul_y2) )
+
+        ur_x2=float( "{:.7f}".format(ur_x2) )
+        ur_y2=float( "{:.7f}".format(ur_y2) )
+        
+        lr_x2=float( "{:.7f}".format(lr_x2) )
+        lr_y2=float( "{:.7f}".format(lr_y2) )
+
+        ll_x2=float( "{:.7f}".format(ll_x2) )
+        ll_y2=float( "{:.7f}".format(ll_y2) )
+        
+        lon_left=min(ul_x2,ll_x2)
+        lat_low=min(ll_y2,lr_y2)
+        lon_right=max(lr_x2,ur_x2)
+        lat_high=max(ul_y2,ur_y2)
+
+        #write bbox and extent in lon/lat unit to the metadata of the filename
+        md=ds.GetMetadata()
+        bbox=[ lon_left, lat_low, lon_right, lat_high]
+        extent={'ul':[ul_x2,ul_y2],'ll':[ll_x2,ll_y2], 'ur':[ur_x2,ur_y2],'lr':[lr_x2,lr_y2]}
+        md['bbox']=str(bbox)
+        md['extent']=str(extent)
+        ds.SetMetadata(md)
+        ds=None
+        return bbox
 
     def pack_zipfile(self, zipfilename, output_dir, variables=None):
 
@@ -584,26 +672,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def get_file_from_unzipfiles(self, extract_dir, filetype,variables=None):
         
         #check if there are geotiff files
+
+        tmpexp = extract_dir+'/*.'+filetype
+
+        filelist=glob.glob(tmpexp)
+
+        if filelist:
     
-        lstfile=extract_dir +'/list.txt'
-
-        command=['ls',
-                extract_dir+'/*.'+filetype,
-                '>',
-                lstfile
-                ] 
-
-        cmdline=' '.join(map(str, command))
-
-        os.system(cmdline)
-
-        filelist=None
-
-        if os.path.isfile(lstfile) and os.path.getsize(lstfile) > 0:
-
-            with open(lstfile) as f:
-                filelist = f.read().splitlines()
-            
             ch_filelist=[]
 
             if variables:
@@ -617,7 +692,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     if m:
                         ch_filelist.append(m.string)
 
-                filelist=ch_filelist 
+                filelist=ch_filelist
+            
         return filelist
     
     def stacking(self, infilelist, outputfile):
@@ -652,8 +728,26 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             
         return [ xy[0], xy[1] ], transform 
 
+    def projcoord2lonlat(self, srcfile,x,y):
+        #covert x,y of dataset's projected coord to longitude and latitude
+        dataset=gdal.Open(srcfile)
+        transform=dataset.GetGeoTransform()
+        projection = dataset.GetProjection()
+        dst = osr.SpatialReference(projection)
+        dstproj4=dst.ExportToProj4()
+        ct2 = pyproj.Proj(dstproj4)
+        lon,lat=ct2(x,y, inverse=True)
+        #if math.isinf(xy[0]) or math.isinf(xy[1]):
+        #    xy=[None,None]
+
+        return [ lon, lat ], transform
+
+
+
+
+
     def subset2(self, tiffile, outputfile,bbox, band=None, shapefile=None):
-        #bbox is defined from ll to ur
+        #bbox is defined [left,low,right,upper]
         RasterFormat = 'GTiff'
         ref_ds=gdal.Open(tiffile)
         gt=ref_ds.GetGeoTransform()
@@ -669,8 +763,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return outputfile
 
     def boxwrs84_boxproj(self, boxwrs84, ref_ds):
-        #boxwrs84 is defined from ll to ur, ref_ds is reference dataset
-        #return boxprj is also defined as from ll to ur in reference projection
+        #boxwrs84 is defined as [left,low,right,upper], ref_ds is reference dataset
+        #return boxprj is also defined as [left,low,right,upper] in reference projection
         projection = ref_ds.GetProjection()
         dst = osr.SpatialReference(projection)
         ll_lon,ll_lat = boxwrs84[0],boxwrs84[1]
@@ -679,8 +773,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         ct = pyproj.Proj(dstproj4)
         llxy=ct(ll_lon, ll_lat)
         urxy=ct(ur_lon, ur_lat)
-        boxproj=[ llxy[0],llxy[1], urxy[0],urxy[1] ]
+        boxproj=[ llxy[0], llxy[1], urxy[0],urxy[1] ]
         return boxproj, projection
+
+    
 
     def calc_coord_ij(self, gt, x,y ):
         transform = Affine.from_gdal(*gt)
@@ -689,7 +785,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return int(cols), int(rows)
 
     def calc_subset_window(self,ds,box):
-        #box is defined from ll to ur
+        #box is defined as [left,low,right,upper]
         gt=ds.GetGeoTransform()
         ul_x=box[0]
         ul_y=box[3]
@@ -697,8 +793,17 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         rl_y=box[1]
         ul_i, ul_j=self.calc_coord_ij(gt, ul_x,ul_y)
         rl_i, rl_j=self.calc_coord_ij(gt, rl_x,rl_y)
+        #get the intersection between box and image in row, col coordinator    
+        cols_img = ds.RasterXSize
+        rows_img = ds.RasterYSize
+        ul_i=max(0, ul_i)
+        ul_j=max(0, ul_j)
+        rl_i=min(cols_img, rl_i)
+        rl_j=min(rows_img, rl_j)
+
         cols=rl_i-ul_i
         rows=rl_j-ul_j
+
         ul_x, ul_y = self.calc_ij_coord(gt, ul_i, ul_j)
         return ul_x,ul_y,ul_i,ul_j,cols,rows
 
