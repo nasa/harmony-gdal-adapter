@@ -80,4 +80,3 @@ cd unittest
 ./auto_test.bash data/messages/message1 data/results/grfn-results/data
 
 
-

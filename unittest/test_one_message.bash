@@ -44,7 +44,9 @@ export TEST_OUTPUT_DIR=${output_dir}
 
 echo `env|grep TEST`
 
-pytest -v test_transform.py
+#pytest -v test_transform.py
+
+coverage run -m pytest -v test_transform.py
 
 exit 0
 

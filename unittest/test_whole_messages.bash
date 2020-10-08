@@ -10,8 +10,6 @@ output_dir=data/results
 
 find ./data/messages -type f -name "*.msg" | xargs realpath > flist
 
-exit 0
-
 while read line
 
 do 
