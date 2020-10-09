@@ -39,7 +39,7 @@ def test_grfn_status(harmony_url_config):
     path_flag = 'grfn'
     
     if harmony_url_config.env_flag == 'prod':
-        granule_id = 'G1921126677-ASF'
+        granule_id = 'G1944514838-ASF'
     else:
         granule_id = 'G1235283005-ASF'
     
