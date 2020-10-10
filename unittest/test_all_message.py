@@ -115,14 +115,15 @@ def subsetter(newadapter,output_dir):
                 granule,output_dir,layernames,operations,message.isSynchronous
                 )
     else:
-        logger.exception(e)
+        adapter.logger.exception(e)
         adapter.completed_with_error('No reconized file foarmat, not process')
     #test the result
-    assert result
+    newadapter.subsetted_file=None
+    newadapter.subsetted_success=False
     if result:
         newadapter.subsetted_file=result
         newadapter.subsetted_success=True
-
+    assert result
 
 def subset_result(newadapter,output_dir):
     """
