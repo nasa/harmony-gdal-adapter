@@ -25,28 +25,39 @@ from config import test_adapter, get_file_info
 #pdb.set_trace()
 ########################
 
+"""
+#define futures
 
-#get two environment variables: TEST_MESSAGE_FILE, TEST_OUTPUT_DIR
+@pytest.fixture
+def message_file():
+    messagefile="/home/unittest/data/messages/gfrn/G1234646236-ASF.msg"
+    return messagefile
 
-message_file = os.getenv("TEST_MESSAGE_FILE")
 
-output_dir = os.getenv("TEST_OUTPUT_DIR")
+@pytest.fixture
+def output_dir():
+    outputdir="/home/unittest/data/results"
+    return outputdir
+"""
+#general function called by test_funtion
 
-if not (message_file and output_dir):
+def newadapter(message_file, output_dir):
 
-    print("need set TEST_MESSAGE_FILE and TEST_OUTPUT_DIR")
+    #get two environment variables: TEST_MESSAGE_FILE, TEST_OUTPUT_DIR
+    #message_file = os.getenv("TEST_MESSAGE_FILE")
+    #output_dir = os.getenv("TEST_OUTPUT_DIR")
 
-    sys.exit(1)
+    if not os.path.isfile(message_file):
+    
+        return None
 
-output_dir=output_dir.rstrip(r"/")
+    output_dir=output_dir.rstrip(r"/")
 
-with open(message_file) as msg_file:
+    with open(message_file) as msg_file:
 
-    messagestr = msg_file.read().rstrip()
+        messagestr = msg_file.read().rstrip()
 
-test_adapter = test_adapter(messagestr)
-
-#function
+    return test_adapter(messagestr)
 
 def compare_files(message, downloaded_file,subsetted_file):
 
@@ -69,10 +80,7 @@ def compare_files(message, downloaded_file,subsetted_file):
         assert info_downloaded['bands'] == info_subsetted['bands']
 
 
-
-#two test functions
-
-def test_download_file():
+def download_file(newadapter,output_dir):
     """
     This function test if the file pointed by url is downloaded successfully 
     to the local space. The url is in the message, which is an attribute in 
@@ -81,7 +89,7 @@ def test_download_file():
     use assert to check if the file is downloaded.
     """
 
-    adapter =test_adapter.adapter
+    adapter =newadapter.adapter
 
     message = adapter.message
 
@@ -95,19 +103,19 @@ def test_download_file():
 
     if  os.path.exists(granule.local_filename):
 
-        test_adapter.downloaded_file=granule.local_filename
+        newadapter.downloaded_file=granule.local_filename
 
-        test_adapter.downloaded_success=True
+        newadapter.downloaded_success=True
 
 
-def test_subsetter():
+def subsetter(newadapter,output_dir):
     """
     This function test the subset process. It use the functions in 
     the global object adapter to do the subset process. At the end 
     of this function, use assert to check if the subsetted file exist.
     """
 
-    adapter =test_adapter.adapter
+    adapter =newadapter.adapter
 
     message = adapter.message
 
@@ -147,17 +155,17 @@ def test_subsetter():
 
     if result:
   
-        test_adapter.subsetted_file=result
+        newadapter.subsetted_file=result
 
-        test_adapter.subsetted_success=True
+        newadapter.subsetted_success=True
 
 
-def test_subset_result():
+def subset_result(newadapter,output_dir):
     """
     This function verifies if the subsetted file experiences 
     required process defined by message.
     """
-    adapter=test_adapter.adapter
+    adapter=newadapter.adapter
 
     message = adapter.message
 
@@ -173,22 +181,21 @@ def test_subset_result():
  
     #check if the download is success 
 
-    if not (test_adapter.downloaded_success and test_adapter.subsetted_success):
+    if not (newadapter.downloaded_success and newadapter.subsetted_success):
 
         assert False
 
     #compare output file if it is geotiff
 
-
-    if adapter.get_filetype(test_adapter.subsetted_file) != "tif":
+    if adapter.get_filetype(newadapter.subsetted_file) != "tif":
 
         assert True
 
         return
 
-    downloaded_file = test_adapter.downloaded_file
+    downloaded_file = newadapter.downloaded_file
     
-    subsetted_file = test_adapter.subsetted_file
+    subsetted_file = newadapter.subsetted_file
 
     file_type = adapter.get_filetype(downloaded_file)
     
@@ -252,3 +259,34 @@ def test_subset_result():
         assert False
 
 
+def test_one_message(message_file, output_dir):
+
+    adapter_obj = newadapter(message_file, output_dir)
+    
+    assert adapter_obj
+
+    download_file(adapter_obj,output_dir)
+
+    subsetter(adapter_obj,output_dir)
+
+    subset_result(adapter_obj,output_dir)
+
+
+"""
+
+if __name__ == "__main__":
+
+
+    #get two environment variables: TEST_MESSAGE_FILE, TEST_OUTPUT_DIR
+    #message_file = os.getenv("TEST_MESSAGE_FILE")
+    #output_dir = os.getenv("TEST_OUTPUT_DIR")
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--message-file', required=True)
+    parser.add_argument('--output-dir', required=True)
+    args = parser.parse_args()
+    
+    message_file = args.message_file
+    output_dir = args.output_dir
+    test_one_message(message_file,output_dir)
+"""
