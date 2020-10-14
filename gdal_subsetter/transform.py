@@ -438,9 +438,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         collection=[]
         count=0
-        for id, layer in enumerate(infilelist, start=1):
+        ds_description=[]
 
+        for id, layer in enumerate(infilelist, start=1):
             ds=gdal.Open(layer)
+            filestr=os.path.splitext(os.path.basename(layer))[0]
+            filename=ds.GetDescription()
+            filestr=os.path.splitext(os.path.basename(filename))[0]
             if id==1:
                 proj=ds.GetProjection()
                 geot=ds.GetGeoTransform()
@@ -457,16 +461,20 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 bmd.update(md)
                 data=band.ReadAsArray()
                 count=count+1
+                band_name="Band"+str(count)+":"+filestr+"-"+str(i)
+                tmp_bmd={"bandname":band_name}
+                bmd.update(tmp_bmd)
+                ds_description.append(band_name)
                 collection.append({"band_sn":count,"band_md":bmd, "band_array":data})
 
         dst_ds = gdal.GetDriverByName('GTiff').Create( outfile, cols, rows, count, gtyp )
         dst_ds.SetProjection(proj)
         dst_ds.SetGeoTransform(geot)
-
+        dst_ds.SetMetadata({"Band Info": " ".join(ds_description)})
         for i, band in enumerate(collection):
             dst_ds.GetRasterBand(i+1).WriteArray(collection[i]["band_array"])
             dst_ds.GetRasterBand(i+1).SetMetadata(collection[i]["band_md"])
-
+        
         dst_ds.FlushCache()                     # write to disk
         dst_ds = None
 
@@ -675,7 +683,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         tmpexp = extract_dir+'/*.'+filetype
 
-        filelist=glob.glob(tmpexp)
+        filelist=sorted(glob.glob(tmpexp))
 
         if filelist:
     
@@ -696,22 +704,18 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             
         return filelist
     
-    def stacking(self, infilelist, outputfile):
-
-        # Read metadata of first file
-        with rasterio.open(infilelist[0]) as src0:
-            meta = src0.meta
-
-        # Update meta to reflect the number of layers
-        meta.update(count = len(infilelist))
-
-        # Read each layer and write it to stack
-        with rasterio.open(outputfile, 'w', **meta) as dst:
-            for id, layer in enumerate(infilelist, start=1):
-                with rasterio.open(layer) as src1:
-                    dst.write_band(id, src1.read(1))
-
-        return outputfile
+    #def stacking(self, infilelist, outputfile):
+    #    # Read metadata of first file
+    #    with rasterio.open(infilelist[0]) as src0:
+    #        meta = src0.meta
+    #    # Update meta to reflect the number of layers
+    #    meta.update(count = len(infilelist))
+    #    # Read each layer and write it to stack
+    #    with rasterio.open(outputfile, 'w', **meta) as dst:
+    #        for id, layer in enumerate(infilelist, start=1):
+    #            with rasterio.open(layer) as src1:
+    #                dst.write_band(id, src1.read(1))
+    #    return outputfile
 
 
     def lonlat2projcoord(self,srcfile,lon,lat):
