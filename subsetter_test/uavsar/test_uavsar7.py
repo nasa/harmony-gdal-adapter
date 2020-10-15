@@ -14,7 +14,7 @@ def info():
                  'authority': 'EPSG',
                  'proj_epsg': 'NA',
                  'gcs_epsg': '4326',
-                 'subset': [28.9, 29.0, -89.1, -89.0],
+                 'subset': [28.85, 29.02, -88.95, -88.8],
                  'bands': 3,
                  'variables': ['Band1', 'Band2', 'Band3', 'NA']
                  }
@@ -39,13 +39,13 @@ def test_uavsar_status(harmony_url_config):
     path_flag = 'uavsar'
 
     if harmony_url_config.env_flag == 'prod':
-        granule_id = 'G1233284337-ASF'
+        granule_id = 'G1366852113-ASF'
     else:
-        granule_id = 'G1366852105-ASF'
+        granule_id = 'G1233284377-ASF'
 
-    harmony_url = base + uavsar_id + '/ogc-api-coverages/1.0.0/collections/all/coverage/rangeset?subset=lat(28.9:29.0)&subset=lon(-89.1:-89)&format=image%2Ftiff&granuleID=' + granule_id
+    harmony_url = base + uavsar_id + '/ogc-api-coverages/1.0.0/collections/all/coverage/rangeset?subset=lat(28.85:29.02)&subset=lon(-88.95:-88.8)&format=image%2Ftiff&granuleID=' + granule_id
     global outfile
-    outfile = harmony_url_config.env_flag + '_uavsar_query8.tiff'
+    outfile = harmony_url_config.env_flag + '_uavsar_query7.tiff'
     get_data_and_status = harmony_requests.harmony_requests(harmony_url, path_flag, outfile)
     assert get_data_and_status == 200
 
@@ -54,7 +54,7 @@ def test_uavsar_status(harmony_url_config):
 def test_uavsar_existing_data(harmony_url_config):
     path = './uavsar/uavsar_products/'
     global outfile
-    outfile = harmony_url_config.env_flag + '_uavsar_query8.tiff'
+    outfile = harmony_url_config.env_flag + '_uavsar_query7.tiff'
     assert os.path.exists(path+outfile) == True
 
 @mark.uavsar

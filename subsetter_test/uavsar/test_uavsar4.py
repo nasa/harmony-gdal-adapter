@@ -14,7 +14,7 @@ def info():
                  'authority': 'EPSG',
                  'proj_epsg': 'NA',
                  'gcs_epsg': '4326',
-                 'subset': [40.045, 40.05, -123.6, -123.4],
+                 'subset': [40.05, 40.06, -123.39, -123.34],
                  'bands': 2,
                  'variables': ['Band1', 'Band2', 'NA', 'NA']
                  }
@@ -43,7 +43,7 @@ def test_uavsar_status(harmony_url_config):
     else:
         granule_id = 'G1233284371-ASF'
 
-    harmony_url = base + uavsar_id + '/ogc-api-coverages/1.0.0/collections/Band1%2CBand2/coverage/rangeset?subset=lat(40.045:40.05)&subset=lon(-123.6:-123.4)&format=image%2Ftiff&granuleID=' + granule_id
+    harmony_url = base + uavsar_id + '/ogc-api-coverages/1.0.0/collections/Band1%2CBand2/coverage/rangeset?subset=lat(40.05:40.06)&subset=lon(-123.39:-123.34)&format=image%2Ftiff&granuleID=' + granule_id
     global outfile
     outfile = harmony_url_config.env_flag + '_uavsar_query4.tiff'
     get_data_and_status = harmony_requests.harmony_requests(harmony_url, path_flag, outfile)
