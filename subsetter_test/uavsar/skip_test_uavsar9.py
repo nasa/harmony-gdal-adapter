@@ -39,9 +39,9 @@ def test_uavsar_status(harmony_url_config):
     path_flag = 'uavsar'
 
     if harmony_url_config.env_flag == 'prod':
-        granule_id = 'G1233284337-ASF'
-    else:
         granule_id = 'G1366852105-ASF'
+    else:
+        granule_id = 'G1233284337-ASF'
 
     harmony_url = base + uavsar_id + '/ogc-api-coverages/1.0.0/collections/all/coverage/rangeset?subset=lat(28.85:29.02)&subset=lon(-88.95:-88.8)&format=image%2Ftiff&granuleID=' + granule_id
     global outfile
