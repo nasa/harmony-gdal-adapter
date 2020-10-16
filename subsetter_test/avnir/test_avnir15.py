@@ -19,7 +19,7 @@ def test_avnir_status(harmony_url_config):
         granule_id = 'G1236469528-ASF'
 
 
-    harmony_url = base + avnir_id + '/ogc-api-coverages/1.0.0/collections/Band1%2CBand2/coverage/rangeset?subset=lat(-.05:0.25)&subset=lon(-51.0:-50.75)&format=image%2Fgif&granuleID=' + granule_id
+    harmony_url = base + avnir_id + '/ogc-api-coverages/1.0.0/collections/Band1/coverage/rangeset?subset=lat(-.05:0.25)&subset=lon(-51.0:-50.75)&format=image%2Fgif&granuleID=' + granule_id
     global outfile
     outfile = harmony_url_config.env_flag + '_avnir_query15'
     get_data_and_status = harmony_requests.harmony_requests(harmony_url, path_flag, outfile)
