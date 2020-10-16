@@ -11,14 +11,14 @@ def info():
     global expected
     global product
     expected = {'cs': 'Projected',
-                'proj_cs':'WGS 84 / UTM zone  1N',
+                'proj_cs':'WGS 84 / UTM zone 1N',
                 'gcs': 'WGS 84',
                 'authority': 'EPSG',
                 'proj_epsg': '32601',
                 'gcs_epsg': '4326',
-                'subset': [66.5, 66.75, -179.85, 179.75],
-                'bands': 4,
-                'variables': ['Band1', 'Band2', 'Band3', 'Band4']
+                'subset': [66.5, 66.75, 179.75, -179.85],
+                'bands': 2,
+                'variables': ['Band1', 'Band2', 'NA', 'NA']
                 }
     product_info = get_avnir_info.get_avnir_info(outfile)
     product = {'GDAL_CS': product_info.get('gdal_cs'),
@@ -45,7 +45,7 @@ def test_avnir_status(harmony_url_config):
         granule_id = 'G1236469523-ASF'
 
 
-    harmony_url = base + avnir_id + '/ogc-api-coverages/1.0.0/collections/Band1%2CBand2/coverage/rangeset?subset=lat(66.5:66.75)&subset=lon(-179.85:179.75)&format=image%2Ftiff&granuleID=' + granule_id
+    harmony_url = base + avnir_id + '/ogc-api-coverages/1.0.0/collections/Band1%2CBand2/coverage/rangeset?subset=lat(66.5:66.75)&subset=lon(179.75:-179.85)&format=image%2Ftiff&granuleID=' + granule_id
     global outfile
     outfile = harmony_url_config.env_flag + '_avnir_query3.tiff'
     get_data_and_status = harmony_requests.harmony_requests(harmony_url, path_flag, outfile)
