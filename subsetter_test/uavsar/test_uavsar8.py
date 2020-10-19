@@ -1,27 +1,25 @@
-import get_avnir_info
+import get_uavsar_info
 import harmony_requests
 import pytest
 from pytest import mark
 import os.path
 
-#Temporal search should only return one file in this temporal range  
-
 @pytest.fixture()
 def info():
     global expected
     global product
-    expected =  {'cs': 'Projected',
-                 'proj_cs':'WGS 84 / UTM zone 17N',
+    expected =  {'cs': 'Geographic',
+                 'proj_cs':'NA',
                  'gcs': 'WGS 84',
                  'authority': 'EPSG',
-                 'proj_epsg': '32617',
+                 'proj_epsg': 'NA',
                  'gcs_epsg': '4326',
-                 'subset': [-26.1, -26.0, 18.4, 18.6],
-                 'bands': 4,
-                 'variables': ['Band1', 'Band2', 'Band3', 'Band4']
+                 'subset': [28.9, 29.0, -89.1, -89.0],
+                 'bands': 3,
+                 'variables': ['Band1', 'Band2', 'Band3', 'NA']
                  }
 
-    product_info = get_avnir_info.get_avnir_info(outfile)
+    product_info = get_uavsar_info.get_uavsar_info(outfile)
     product = {'GDAL_CS': product_info.get('gdal_cs'),
                'GDAL_PROJ_CS': product_info.get('gdal_proj_cs'),
                'GDAL_GCS': product_info.get('gdal_gcs'),
@@ -33,68 +31,73 @@ def info():
                'GDAL_VARIABLES': product_info.get('gdal_variables')
                }
 
-@mark.avnir
+@mark.uavsar    
 @mark.status
-def test_avnir_status(harmony_url_config):
+def test_uavsar_status(harmony_url_config):
     base = harmony_url_config.base_url
-    avnir_id = harmony_url_config.avnir_id
-    path_flag = 'avnir'
+    uavsar_id = harmony_url_config.uavsar_id
+    path_flag = 'uavsar'
 
-    harmony_url = base + avnir_id + '/ogc-api-coverages/1.0.0/collections/all/coverage/rangeset?subset=lat(-26.1:-26.0)&subset=lon(18.4:18.6)&format=image%2Ftiff&subset=time(%222008-11-30T08%3A59%3A23Z%22%3A%222008-11-30T08%3A59%3A36Z%22)'
+    if harmony_url_config.env_flag == 'prod':
+        granule_id = 'G1366852105-ASF'
+    else:
+        granule_id = 'G1233284337-ASF'
+
+    harmony_url = base + uavsar_id + '/ogc-api-coverages/1.0.0/collections/all/coverage/rangeset?subset=lat(28.9:29.0)&subset=lon(-89.1:-89)&format=image%2Ftiff&granuleID=' + granule_id
     global outfile
-    outfile = harmony_url_config.env_flag + '_avnir_query12.tiff'
+    outfile = harmony_url_config.env_flag + '_uavsar_query8.tiff'
     get_data_and_status = harmony_requests.harmony_requests(harmony_url, path_flag, outfile)
     assert get_data_and_status == 200
 
-@mark.avnir
+@mark.uavsar
 @mark.existing_data
-def test_avnir_existing_data(harmony_url_config):
-    path = './avnir/avnir_products/'
+def test_uavsar_existing_data(harmony_url_config):
+    path = './uavsar/uavsar_products/'
     global outfile
-    outfile = harmony_url_config.env_flag + '_avnir_query12.tiff'
+    outfile = harmony_url_config.env_flag + '_uavsar_query8.tiff'
     assert os.path.exists(path+outfile) == True
 
-@mark.avnir
+@mark.uavsar
 @mark.cs
-def test_avnir_cs(info):
+def test_uavsar_cs(info):
     assert product['GDAL_CS'] == expected['cs']
 
-@mark.avnir
+@mark.uavsar
 @mark.projection
-def test_avnir_projection(info):
+def test_uavsar_projection(info):
     assert product['GDAL_PROJ_CS'] == expected['proj_cs']
 
-@mark.avnir
+@mark.uavsar
 @mark.proj_epsg
-def test_avnir_proj_epsg(info):
+def test_uavsar_proj_epsg(info):
     assert product['GDAL_PROJ_EPSG'] == expected['proj_epsg']
 
-@mark.avnir
+@mark.uavsar
 @mark.gcs
-def test_avnir_gcs(info):
+def test_uavsar_gcs(info):
     assert product['GDAL_GCS'] == expected['gcs']
 
-@mark.avnir
+@mark.uavsar
 @mark.gcs_epsg
-def test_avnir_gcs_epsg(info):
+def test_uavsar_gcs_epsg(info):
     assert product['GDAL_GCS_EPSG'] == expected['gcs_epsg']
 
-@mark.avnir
+@mark.uavsar
 @mark.authority
-def test_avnir_authority(info):
+def test_uavsar_authority(info):
     assert product['GDAL_AUTHORITY'] == expected['authority']
 
-@mark.avnir
+@mark.uavsar
 @mark.subset
-def test_avnir_subset(info):
+def test_uavsar_subset(info):
     assert product['GDAL_SUBSET'] == expected['subset']
 
-@mark.avnir
+@mark.uavsar
 @mark.bands
-def test_avnir_bands(info):
+def test_uavsar_bands(info):
     assert product['GDAL_BANDS'] == expected['bands']
 
-#@mark.avnir
+#@mark.uavsar
 #@mark.variables
-#def test_avnir_variables(info):
+#def test_uavsar_variables(info):
 #    assert product['GDAL_VARIABLES'] == expected['variables']

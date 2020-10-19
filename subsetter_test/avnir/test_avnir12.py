@@ -2,8 +2,9 @@ import get_avnir_info
 import harmony_requests
 import pytest
 from pytest import mark
+import os.path
 
-#Southern Hemisphere spatial subset
+#Temporal search should only return one file in this temporal range  
 
 @pytest.fixture()
 def info():
@@ -15,9 +16,9 @@ def info():
                  'authority': 'EPSG',
                  'proj_epsg': '32734',
                  'gcs_epsg': '4326',
-                 'subset': [-26.05, -25.75, 18.25, 18.4],
-                 'bands': 2,
-                 'variables': ['Band2', 'Band4', 'NA', 'NA']
+                 'subset': [-26.1, -26.0, 18.4, 18.6],
+                 'bands': 4,
+                 'variables': ['Band1', 'Band2', 'Band3', 'Band4']
                  }
 
     product_info = get_avnir_info.get_avnir_info(outfile)
@@ -39,15 +40,9 @@ def test_avnir_status(harmony_url_config):
     avnir_id = harmony_url_config.avnir_id
     path_flag = 'avnir'
 
-    if harmony_url_config.env_flag == 'prod':
-        granule_id = 'G1835549401-ASF'
-    else:
-        granule_id = 'G1234864684-ASF'
-
-
-    harmony_url = base + avnir_id + '/ogc-api-coverages/1.0.0/collections/Band2%2CBand4/coverage/rangeset?subset=lat(-26.05:-25.75)&subset=lon(18.25:18.4)&format=image%2Ftiff&granuleID=' + granule_id
+    harmony_url = base + avnir_id + '/ogc-api-coverages/1.0.0/collections/all/coverage/rangeset?subset=lat(-26.1:-26.0)&subset=lon(18.4:18.6)&format=image%2Ftiff&subset=time(%222008-11-30T08%3A59%3A23Z%22%3A%222008-11-30T08%3A59%3A36Z%22)'
     global outfile
-    outfile = harmony_url_config.env_flag + '_avnir_query7.tiff'
+    outfile = harmony_url_config.env_flag + '_avnir_query12.tiff'
     get_data_and_status = harmony_requests.harmony_requests(harmony_url, path_flag, outfile)
     assert get_data_and_status == 200
 
@@ -56,7 +51,7 @@ def test_avnir_status(harmony_url_config):
 def test_avnir_existing_data(harmony_url_config):
     path = './avnir/avnir_products/'
     global outfile
-    outfile = harmony_url_config.env_flag + '_avnir_query7.tiff'
+    outfile = harmony_url_config.env_flag + '_avnir_query12.tiff'
     assert os.path.exists(path+outfile) == True
 
 @mark.avnir
