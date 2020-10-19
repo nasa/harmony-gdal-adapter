@@ -12,7 +12,7 @@ def harmony_requests(harmony_url, path_flag, outfile):
     elif path_flag == 'uavsar':
         path = './uavsar/uavsar_products/'
     elif path_flag == 'avnir':
-        path = './anir/avnir_products/'
+        path = './avnir/avnir_products/'
 
     files = glob.glob(path + '*.tiff')
 
