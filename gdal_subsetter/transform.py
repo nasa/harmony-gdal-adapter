@@ -461,7 +461,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 bmd.update(md)
                 data=band.ReadAsArray()
                 count=count+1
-                band_name="Band"+str(count)+":"+filestr+"-"+str(i)
+                band_name="Band{count}:{filestr}-{i}".format(count=count, filestr=filestr,i=i)
                 tmp_bmd={"bandname":band_name}
                 bmd.update(tmp_bmd)
                 ds_description.append(band_name)
