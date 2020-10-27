@@ -751,12 +751,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
 
     def subset2(self, tiffile, outputfile,bbox, band=None, shapefile=None):
-        #bbox is defined [left,low,right,upper]
+        #bbox is defined [left,low,right,upper] in lon/lat coordinates
         RasterFormat = 'GTiff'
         ref_ds=gdal.Open(tiffile)
         gt=ref_ds.GetGeoTransform()
         boxproj, proj = self.boxwrs84_boxproj(bbox, ref_ds)
-        ul_x, ul_y, ul_i, ul_j, cols, rows=self.calc_subset_window(ref_ds, boxproj)
+        #ul_x, ul_y, ul_i, ul_j, cols, rows=self.calc_subset_window(ref_ds, boxproj)
+        ul_x, ul_y, ul_i, ul_j, cols, rows=self.calc_subset_envelopwindow(ref_ds, boxproj)
         command=['gdal_translate']
         if band:
             command.extend(['-b', '%s' % (band) ])
@@ -789,7 +790,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return int(cols), int(rows)
 
     def calc_subset_window(self,ds,box):
-        #box is defined as [left,low,right,upper]
+        #box is defined as [left,low,right,upper] in projection ccordinates
         gt=ds.GetGeoTransform()
         ul_x=box[0]
         ul_y=box[3]
@@ -809,6 +810,42 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         rows=rl_j-ul_j
 
         ul_x, ul_y = self.calc_ij_coord(gt, ul_i, ul_j)
+        return ul_x,ul_y,ul_i,ul_j,cols,rows
+
+    def calc_subset_envelopwindow(self,ds,box):
+        #box is defined as [left,low,right,upper] in projection coordinates
+        #get 4 conners coordinate valuesin projection coorndinates
+        gt=ds.GetGeoTransform()
+        ul=(box[0],box[3])
+        ur=(box[2],box[3])
+        ll=(box[0],box[1])
+        lr=(box[2],box[1])
+
+        #get i,j coordinates in the array of 4 conners of the box
+        ul_i, ul_j=self.calc_coord_ij(gt, ul[0],ul[1])
+        ur_i, ur_j=self.calc_coord_ij(gt, ur[0],ur[1])
+        ll_i, ll_j=self.calc_coord_ij(gt, ll[0],ll[1])
+        lr_i, lr_j=self.calc_coord_ij(gt, lr[0],lr[1])
+
+        #get the envelop of the box in array coordinates
+        ul_i = min(ul_i, ur_i, ll_i, lr_i)
+        ul_j = min(ul_j, ur_j, ll_j, lr_j)
+        lr_i = max(ul_i, ur_i, ll_i, lr_i)
+        lr_j = max(ul_j, ur_j, ll_j, lr_j)
+
+        #get the intersection between box and image in row, col coordinator
+        cols_img = ds.RasterXSize
+        rows_img = ds.RasterYSize
+        ul_i=max(0, ul_i)
+        ul_j=max(0, ul_j)
+        lr_i=min(cols_img, lr_i)
+        lr_j=min(rows_img, lr_j)
+
+        cols=lr_i-ul_i
+        rows=lr_j-ul_j
+
+        ul_x, ul_y = self.calc_ij_coord(gt, ul_i, ul_j)
+
         return ul_x,ul_y,ul_i,ul_j,cols,rows
 
     def calc_ij_coord(self, gt, col, row):
