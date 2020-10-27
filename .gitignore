@@ -140,3 +140,4 @@ testcases/
 .idea/
 unittest/data/
 unittest/dockervenv/
+unittest/.env_unittest

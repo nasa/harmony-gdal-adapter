@@ -70,3 +70,13 @@ python -m pdb get_message.py --harmony-action start --harmony-queue-url  http://
 
 --message-file is the output_message_file_name
 
+
+run unitest in another way
+
+docker run -it --entrypoint /bin/bash harmony/gdal-subsetter
+
+cd unittest
+
+./auto_test.bash data/messages/message1 data/results/grfn-results/data
+
+

@@ -12,33 +12,41 @@ else
 	output_dir=$2	
 fi
 
+cd /home/unittest
+
+#message_file=data/messages/message1
+
+#output_dir=data/results/grfn-results
+
 cwd=$PWD
+
+echo $cwd
 
 x=$(env | grep EDL)
 
 if [ -z "$x" ]; then
-	cd ..
-	source bin/localenv.bash
+
+	source .env_unittest
+
 	x=$(env | grep EDL)
 	if [ -z "$x" ]; then
 		echo "you need define local environmet"
 		exit 1
 	fi
-	cd $cwd
+
 fi
-	
+
 #This script does the auto test
 
 export TEST_MESSAGE_FILE=${message_file}
 
 export TEST_OUTPUT_DIR=${output_dir}
 
-#get into har-gdal-env environment
+echo `env|grep TEST`
 
-#conda activate har-gdal-env
-#pytest -v test_grfn.py
-#deactivate
-pytest -v test_transform.py
+#pytest -v test_transform.py
+
+coverage run -m pytest -v test_transform.py
 
 exit 0
 
