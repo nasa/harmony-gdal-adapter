@@ -48,7 +48,7 @@ test_adapter = test_adapter(messagestr)
 
 #function
 
-def compare_files(message, downloaded_file,subsetted_file):
+def compare_files(message,downloaded_file,subsetted_file):
 
     info_downloaded=get_file_info(downloaded_file)
     info_subsetted=get_file_info(subsetted_file)
@@ -198,7 +198,7 @@ def test_subset_result():
         
         if tiffile:
 
-            compare_files(message, tifffile,subsetted_file)
+            compare_files(message, tiffile,subsetted_file)
 
         if ncfile:
 
