@@ -1,0 +1,9 @@
+version 1.0.0
+
+version 1.0.1
+
+20201103
+
+version 1.0.2
+
+updated: imporve subset for rotated image. set values as 0 of thoes pixels outside the user's box.
