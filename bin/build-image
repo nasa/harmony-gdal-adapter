@@ -2,7 +2,7 @@
 
 set -e
 
-image="harmony/gdal-subsetter"
+image="asfdataservices/gdal-subsetter"
 tag=${1:-latest}
 
 for dep in harmony-service-lib-py; do

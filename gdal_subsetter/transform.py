@@ -722,7 +722,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         #    xy=[None,None]
         return [ lon, lat ], transform
 
-    def subset2(self, tiffile, outputfile,bbox, band=None, shapefile=None):
+    def subset2(self, tiffile, outputfile, bbox, band=None, shapefile=None):
         #bbox is defined [left,low,right,upper] in lon/lat coordinates
         RasterFormat = 'GTiff'
         ref_ds=gdal.Open(tiffile)
@@ -738,8 +738,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         command.extend( [ '-srcwin', str(ul_i), str(ul_j), str(cols), str(rows) ] )
         command.extend([tiffile, tmpfile])
         self.cmd(*command)
-        #optional, set nodata values to pixels outside the bbox
-        self.mask_with_box(tmpfile, bbox, outputfile)
+
+        #for rotate iamge, you ahve option to to set nodata values to pixels out side the box
+        if gt[2] !=0.0 or gt[4] != 0.0:
+            self.mask_with_box(tmpfile, bbox, outputfile)
+        else:
+            self.cmd(*['mv',tmpfile, outputfile])
+
         return outputfile
 
     def boxwrs84_boxproj(self, boxwrs84, ref_ds):
@@ -876,93 +881,55 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         self.create_shapefile_with_box(boxproj, proj, shapefile)
         return shapefile
 
-    def mask_with_box(self, inputfile, box, outputfile):
+    def rasterize(self, infile, shapefile, outfile):
         """
-        it sets the pixles of the inputfile outside the bbox as a nodata value.
-        inputs:inputfile is geotiff file, bbox=[minx,miny,maxx,maxy] in lon/lat coorninates.
-        return:outputfile is masked geotiff file
+        inputs: infile- geotiff file, shaepfile-mask the rasterfile with this shapefile         outfile - output file name
+        return: outfile
         """
-        #create shapefile with box
-        shapefile=self.box2shapefile(inputfile, box)
-        tmpfilepre=inputfile.split(".")[0]
-        tmpfile="{tmpfilepre}-tmp.tif".format(tmpfilepre=tmpfilepre)
-        #copy inputfile to tmpfile
-        self.cmd(*['cp', '-f', inputfile, tmpfile])
-        #get the infomation of inputfile
-        ds=gdal.Open(inputfile)
+        infile=os.path.abspath(infile)
+        #copy infile to outfile
+        self.cmd(*['cp', '-f', infile, outfile])
+        #get the infomation of outputfile
+        ds=gdal.Open(oufile, GA_Update)
         num=ds.RasterCount
-        tmpfilelst=[]
-        #read shapefile info
+        bands = tuple(range(1,num+1))
+        burns = tuple(np.full(num,0))
+        #get the information of shapefile
         shp=ogr.Open(shapefile)
         ly=shp.GetLayerByIndex(0)
         lyname=ly.GetName()
-        for i in range(num):
-            band_sn=i+1
-            band=ds.GetRasterBand(band_sn)
-            nodata=band.GetNoDataValue()
-            dtyp=gdal.GetDataTypeName(band.DataType)
-            if nodata:
-                burnval=nodata
-            else:
-                if dtyp =='Byte':
-                    burnval=0
-                else:
-                    burnval=0.0
-            #rasterize
-            command=['gdal_rasterize']
-            command.extend(["-b","{band_sn}".format(band_sn=band_sn) ] )
-            #command.extend( ['-i'])
-            command.extend(["-burn", "{burnval}".format(burnval=burnval)] )
-            command.extend(['-l',lyname, shapefile])
-            command.extend([tmpfile])
-            self.cmd(*command)
-
-            #calc
-            command=['gdal_calc.py']
-            command.extend(["-A", "{a}".format(a=inputfile), "--A_band={band_sn}".format(band_sn=band_sn)])
-            command.extend(["-B", "{b}".format(b=tmpfile), "--B_band={band_sn}".format(band_sn=band_sn)])
-            command.extend(['--calc="A-B"'])
-            command.extend(['--overwrite'])
-            tmpbandfile="{tmpfilepre}band{band_sn}.tif".format(tmpfilepre=tmpfilepre, band_sn=band_sn)
-            command.extend(["--outfile={tmpbandfile}".format(tmpbandfile=tmpbandfile)])
-
-            #self.cmd(*command)
-            cmdline=" ".join(command)
-            os.system(cmdline)
-            tmpfilelst.append(tmpbandfile)
-            #copy metadata
-            self.transfer_metadata(tmpfile, band_sn, tmpbandfile, 1)
-
-        #combine tmpbandfile to one outputfile
-        if os.path.exists(outputfile):
-            self.cmd(*['rm','-f',outputfile])
-
-        self.stack_multi_file_with_metadata(tmpfilelst,outputfile)
-
-        return outputfile
-
-    def transfer_metadata(self, infile, inband, outfile, outband):
-        """
-        read out the file metadata and band metadat from infile inband, write these metadata to outfile outband
-        input: infile,  inband - band number in the infile, 1,2,3, etc.
-           outfile, outband -band nuber in outfile 1,2,3, etc.
-        """
+        #rasterize the shapefile according to infile
+        err = gdal.RasterizeLayer(
+            ds,
+            bands,
+            ly,
+            burn_values=burns
+            )
+        #tested options initValues and Inverse, both are not work
+        #options=["ATTRIBUTE={lyname}".format(lyname=lyname)]
+        #need use following way to process the pixels outside the box
+        #update the bands of ds
         in_ds=gdal.Open(infile, GA_ReadOnly)
-        in_md = in_ds.GetMetadata()
-        in_b = in_ds.GetRasterBand(inband)
-        in_nodata=in_b.GetNoDataValue()
-        in_bmd =in_b.GetMetadata()
-        out_ds=gdal.Open(outfile, GA_Update)
-        out_md = out_ds.GetMetadata()
-        out_md.update(in_md)
-        out_ds.SetMetadata(out_md)
-        out_b = out_ds.GetRasterBand(outband)
-        out_bmd =out_b.GetMetadata()
-        out_bmd.update(in_bmd)
-        out_b.SetMetadata(out_bmd)
-        if in_nodata:
-            out_b.SetNoDataValue(in_nodata)
+        in_data=in_ds.ReadAsArray()
+        out_data=ds.ReadAsArray()
+        rst_data=in_data-out_data
+        if num == 1:
+            out_band=ds.GetRasterBand(1)
+            out_band.WriteArray(rst_data)
         else:
-            out_b.DeleteNoDataValue()
-        out_ds.FlushCache()                     # write to disk
-        out_ds = None
+            for i in range(1,num+1):
+                out_band=ds.GetRasterBand(i)
+                out_band.WriteArray(rst_data[i-1,:,:])
+        
+        ds.FlushCache()
+        ds, in_ds=None, None
+        
+
+    def mask_with_box(self, inputfile, box, outputfile):
+        """
+        mask the inputfile with box
+        """
+        #create shapefile with box
+        shapefile=self.box2shapefile(inputfile, box)
+        self.rasterize(inputfile, shapefile, outputfile)
+        return outputfile
