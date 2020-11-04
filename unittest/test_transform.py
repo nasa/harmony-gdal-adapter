@@ -21,8 +21,8 @@ import sys
 from config import test_adapter, get_file_info
 ########################
 #in debug mode
-#import pdb
-#pdb.set_trace()
+import pdb
+pdb.set_trace()
 ########################
 
 
