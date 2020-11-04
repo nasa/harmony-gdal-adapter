@@ -890,7 +890,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         #copy infile to outfile
         self.cmd(*['cp', '-f', infile, outfile])
         #get the infomation of outputfile
-        ds=gdal.Open(oufile, GA_Update)
+        ds=gdal.Open(outfile, GA_Update)
         num=ds.RasterCount
         bands = tuple(range(1,num+1))
         burns = tuple(np.full(num,0))
