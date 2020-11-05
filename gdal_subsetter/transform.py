@@ -728,7 +728,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         ref_ds=gdal.Open(tiffile)
         gt=ref_ds.GetGeoTransform()
         boxproj, proj = self.boxwrs84_boxproj(bbox, ref_ds)
-
+        
         tmpfile=outputfile.split(".")[0]+"-tmp.tif"
         #ul_x, ul_y, ul_i, ul_j, cols, rows=self.calc_subset_window(ref_ds, boxproj)
         ul_x, ul_y, ul_i, ul_j, cols, rows=self.calc_subset_envelopwindow(ref_ds, boxproj)
@@ -739,12 +739,14 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         command.extend([tiffile, tmpfile])
         self.cmd(*command)
 
+
         #for rotate iamge, you ahve option to to set nodata values to pixels out side the box
         if gt[2] !=0.0 or gt[4] != 0.0:
-            self.mask_with_box(tmpfile, bbox, outputfile)
+            #create shapefile with box
+            shapefile=self.box2shapefile(tiffile, bbox)
+            self.rasterize(tmpfile, shapefile, outputfile)
         else:
             self.cmd(*['mv',tmpfile, outputfile])
-
         return outputfile
 
     def boxwrs84_boxproj(self, boxwrs84, ref_ds):
@@ -923,13 +925,4 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         
         ds.FlushCache()
         ds, in_ds=None, None
-        
 
-    def mask_with_box(self, inputfile, box, outputfile):
-        """
-        mask the inputfile with box
-        """
-        #create shapefile with box
-        shapefile=self.box2shapefile(inputfile, box)
-        self.rasterize(inputfile, shapefile, outputfile)
-        return outputfile
