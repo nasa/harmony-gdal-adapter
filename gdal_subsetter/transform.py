@@ -69,6 +69,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     for documentation and examples.
     """
 
+    def get_version(self):
+        with open("version.txt") as file_version:
+            version=','.join( file_version.readlines() )
+        return version
+
     def invoke(self):
         """
         Run the service on the message contained in `self.message`.  Fetches data, runs the service,
@@ -339,7 +344,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         else:
             return filename
 
-    def varsubset(self, layerid, srcfile, dstfile, band=None):
+    def varsubset(self, srcfile, dstfile, band=None):
         if band:
             command = ['gdal_translate']
             command.extend(['-b', '%s' % (band) ])
@@ -355,7 +360,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         if subset.bbox==None and subset.shape==None:
             dstfile = "%s/%s" % (dstdir, normalized_layerid + '__varsubsetted.tif')
-            dstfile=self.varsubset(layerid, srcfile, dstfile, band)
+            dstfile=self.varsubset(srcfile, dstfile, band)
             return dstfile
 
         if subset.bbox:
@@ -368,11 +373,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
             if any( x == None for x in [b0,b1,b2,b3] ):
                 dstfile = "%s/%s" % (dstdir, normalized_layerid + '__varsubsetted.tif')
-                dstfile=self.varsubset(layerid, srcfile, dstfile, band)
+                dstfile=self.varsubset(srcfile, dstfile, band)
             elif b0<left and b1<bottom and b2>right and b3>top:
                 #user's input subset totally covers the image bbox, do not do subset
                 dstfile = "%s/%s" % (dstdir, normalized_layerid + '__varsubsetted.tif')
-                dstfile=self.varsubset(layerid, srcfile, dstfile, band)
+                dstfile=self.varsubset(srcfile, dstfile, band)
             else:
                 dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
                 dstfile=self.subset2(srcfile, dstfile, subsetbbox, band)
@@ -380,9 +385,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             return dstfile
 
         if subset.shape:
-            #to be done
+            #need know what the subset.shape is. Is it a file? do we need pre-process like we did for subset.bbox?
             dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
-            self.cmd('cp ', srcfile, dstfile)
+            dstfile=self.subset2(srcfile, dstfile, subset.shape, band)
+            
             return dstfile
 
     def reproject(self, layerid, srcfile, dstdir):
@@ -426,7 +432,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return dstfile
 
     def stack_multi_file_with_metadata(self,infilelist,outfile):
-        #infilelist include multiple files, each file does not have the same number of bands, but they have the same peojection  and geogransform. This function works for rotated image files.
+        #infilelist include multiple files, each file does not have the same number of bands, but they have the same projection and geotransform. This function works for both rotated and non-rotated image files.
 
         collection=[]
         count=0
@@ -479,6 +485,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return dstfile
 
     def reformat(self, srcfile, dstdir):
+        #add gdal_subsettter version info to the file
+        gdal_subsetter_version="gdal_subsetter_version={gdal_subsetter_ver}".format(gdal_subsetter_ver=self.get_version() )
+        command = ['gdal_edit.py',  '-mo', gdal_subsetter_version, srcfile ]
+        self.cmd(*command)
+        
         output_mime = self.message.format.mime
         if output_mime not in mime_to_gdal:
             raise Exception('Unrecognized output format: ' + output_mime)
@@ -486,7 +497,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             return srcfile
 
         dstfile = "%s/translated.%s" % (dstdir, mime_to_extension[output_mime])
-
         command = ['gdal_translate',
                    '-of', mime_to_gdal[output_mime],
                    '-scale',
@@ -722,32 +732,54 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         #    xy=[None,None]
         return [ lon, lat ], transform
 
-    def subset2(self, tiffile, outputfile, bbox, band=None, shapefile=None):
-        #bbox is defined [left,low,right,upper] in lon/lat coordinates
+    def subset2(self, tiffile, outputfile, bbox=None, band=None, shapefile=None):
+        """
+        subset tiffile with bbox or shapefile. bbox ans shapefile are exclusive.
+        inputs:tiffile-geotif file
+               outputfile-subsetted file name
+               bbox is defined [left,low,right,upper] in lon/lat coordinates
+               shapefile is a shapefile directory in which multiple files exist
+        """
+        #covert to absolute path
+        tiffile=os.path.abspath(tiffile)
+        outputfile=os.path.abspath(outputfile)
         RasterFormat = 'GTiff'
         ref_ds=gdal.Open(tiffile)
         gt=ref_ds.GetGeoTransform()
-        boxproj, proj = self.boxwrs84_boxproj(bbox, ref_ds)
-        
-        tmpfile=outputfile.split(".")[0]+"-tmp.tif"
-        #ul_x, ul_y, ul_i, ul_j, cols, rows=self.calc_subset_window(ref_ds, boxproj)
-        ul_x, ul_y, ul_i, ul_j, cols, rows=self.calc_subset_envelopwindow(ref_ds, boxproj)
-        command=['gdal_translate']
-        if band:
-            command.extend(['-b', '%s' % (band) ])
-        command.extend( [ '-srcwin', str(ul_i), str(ul_j), str(cols), str(rows) ] )
-        command.extend([tiffile, tmpfile])
-        self.cmd(*command)
+        tmpfile=os.path.splitext(outputfile)[0]+"-tmp.tif"
+        if bbox:
+            boxproj, proj = self.boxwrs84_boxproj(bbox, ref_ds)
+            ul_x, ul_y, ul_i, ul_j, cols, rows=self.calc_subset_envelopwindow(ref_ds, boxproj)
+            command=['gdal_translate']
+            if band:
+                command.extend(['-b', '%s' % (band) ])
+            command.extend( [ '-srcwin', str(ul_i), str(ul_j), str(cols), str(rows) ] )
+            command.extend([tiffile, tmpfile])
+            self.cmd(*command)
+            if gt[2] !=0.0 or gt[4] != 0.0:
+                #create shapefile with box
+                shapefile=self.box2shapefile(tiffile, bbox)
+                self.rasterize(tmpfile, shapefile, outputfile)
+            else:
+                self.cmd(*['cp', tmpfile, outputfile])                
+            return outputfile
 
-
-        #for rotate iamge, you ahve option to to set nodata values to pixels out side the box
-        if gt[2] !=0.0 or gt[4] != 0.0:
-            #create shapefile with box
-            shapefile=self.box2shapefile(tiffile, bbox)
-            self.rasterize(tmpfile, shapefile, outputfile)
+        elif shapefile:
+            shapefile_out=os.path.dirname(outputfile)+"/tmpshapefile"
+            boxproj, proj, shapefile_out = self.shapefile_boxproj(shapefile, ref_ds, shapefile_out)
+            ul_x, ul_y, ul_i, ul_j, cols, rows=self.calc_subset_envelopwindow(ref_ds, boxproj)
+            command=['gdal_translate']
+            if band:
+                command.extend(['-b', '%s' % (band) ])
+            command.extend( [ '-srcwin', str(ul_i), str(ul_j), str(cols), str(rows) ] )
+            command.extend([tiffile, tmpfile])
+            self.cmd(*command)
+            self.rasterize(tmpfile, shapefile_out, outputfile)
+            return outputfile
         else:
-            self.cmd(*['mv',tmpfile, outputfile])
-        return outputfile
+            self.cmd(*['cp', tiffile, outputfile])
+            return outputfile
+
 
     def boxwrs84_boxproj(self, boxwrs84, ref_ds):
         """
@@ -879,7 +911,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         if os.path.isfile(shapefile) or os.path.isdir(shapefile):
             command=['rm']
             command.extend(['-rf',shapefile])
-            cmd(*command)
+            self.cmd(*command)
         self.create_shapefile_with_box(boxproj, proj, shapefile)
         return shapefile
 
@@ -925,4 +957,23 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         
         ds.FlushCache()
         ds, in_ds=None, None
+
+    def shapefile_boxproj(self, shapefile, ref_ds, outputfile):
+        """
+        calculate the envelop box and projection in the coordinates defined in reffile/
+        inputs: shapefile - used to define the AOI.
+                reffile - the reference geotiff file.
+        returns: boxproj, proj, shapefile
+        """
+        ref_proj=ref_ds.GetProjection()
+        tmp = gpd.GeoDataFrame.from_file(shapefile)
+        tmpproj = tmp.to_crs(ref_proj)
+        tmpproj.to_file(outputfile)
+        shp = ogr.Open(outputfile)
+        lyr=shp.GetLayer()
+        lyrextent=lyr.GetExtent()
+        #Extent[lon_min,lon_max, lat_min,lat_max], boxproj is defined as [lon_min,lat_min, lon_max, lat_max]
+        boxproj=[lyrextent[0], lyrextent[2], lyrextent[1], lyrextent[3]]
+        return boxproj, ref_proj, outputfile
+
 
