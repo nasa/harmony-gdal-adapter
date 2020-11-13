@@ -945,8 +945,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         #get the infomation of outfile
         ds=gdal.Open(outfile, GA_Update)
         num=ds.RasterCount
-        bands = tuple(range(1,num+1))
-        burns = tuple(np.full(num,0))
+        bands = list(range(1,num+1))
+        burns = list(np.full(num,0))
         #get the information of shapefile
         shp=ogr.Open(shapefile)
         ly=shp.GetLayerByIndex(0)
@@ -1059,14 +1059,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             band=ds.GetRasterBand(band_sn)
             nodata=band.GetNoDataValue()
             dtyp=gdal.GetDataTypeName(band.DataType)
-            if nodata:
-                burnval=nodata
+            if dtyp =='Byte':
+                burnval=0
             else:
-                if dtyp =='Byte':
-                    burnval=0
-                else:
-                    burnval=0.0
-
+                burnval=0.0
             #rasterize
             command=['gdal_rasterize']
             command.extend(["-b","{band_sn}".format(band_sn=band_sn) ] )
