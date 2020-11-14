@@ -9,11 +9,7 @@ Runs the harmony_gdal CLI
 import argparse
 import logging
 import harmony
-
 from .transform import HarmonyAdapter
-
-#run in the debug mode
-#import pdb; pdb.set_trace()
 
 def main():
     """

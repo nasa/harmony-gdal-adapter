@@ -1071,7 +1071,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             command.extend(['-l',lyname, shapefile])
             command.extend([tmpfile])
             self.cmd(*command)
-
             #calc
             command=['gdal_calc.py']
             command.extend(["-A", "{a}".format(a=inputfile), "--A_band={band_sn}".format(band_sn=band_sn)])
