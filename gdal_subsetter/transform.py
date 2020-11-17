@@ -760,8 +760,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             if gt[2] !=0.0 or gt[4] != 0.0:
                 #create shapefile with box
                 shapefile=self.box2shapefile(tiffile, bbox)
-                self.rasterize(tmpfile, shapefile, outputfile)
-                #self.mask_via_shapefile(tmpfile, shapefile, outputfile)
+                #self.rasterize(tmpfile, shapefile, outputfile)
+                self.mask_via_shapefile(tmpfile, shapefile, outputfile)
             else:
                 self.cmd(*['cp', tmpfile, outputfile])
             return outputfile
@@ -776,8 +776,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             command.extend( [ '-srcwin', str(ul_i), str(ul_j), str(cols), str(rows) ] )
             command.extend([tiffile, tmpfile])
             self.cmd(*command)
-            self.rasterize(tmpfile, shapefile_out, outputfile)
-            #self.mask_via_shapefile(tmpfile, shapefile, outputfile)
+            #self.rasterize(tmpfile, shapefile_out, outputfile)
+            self.mask_via_shapefile(tmpfile, shapefile, outputfile)
             return outputfile
         else:
             self.cmd(*['cp', tiffile, outputfile])
