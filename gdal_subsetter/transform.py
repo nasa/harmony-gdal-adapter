@@ -109,7 +109,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         try:
             # Get the data file
             asset = next(v for k, v in item.assets.items() if 'data' in (v.roles or []))
-            input_filename = download(asset.href, output_dir, logger=self.logger, access_token=self.message.accessToken)
+            input_filename = download(
+                asset.href,
+                output_dir,
+                logger=self.logger,
+                access_token=self.message.accessToken,
+                cfg=self.config)
 
             basename = os.path.basename(generate_output_filename(asset.href, **operations))
 
@@ -137,7 +142,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
             output_filename = basename + os.path.splitext(filename)[-1]
             mime = message.format.mime
-            url = stage(filename, output_filename, mime, location=message.stagingLocation, logger=logger)
+            url = stage(
+                filename,
+                output_filename,
+                mime,
+                location=message.stagingLocation,
+                logger=logger,
+                cfg=self.config)
 
             # Update the STAC record
             result.assets['data'] = Asset(url, title=output_filename, media_type=mime, roles=['data'])
