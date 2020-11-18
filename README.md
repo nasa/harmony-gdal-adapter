@@ -1,4 +1,6 @@
-# harmony-gdal 
+# harmony-gdal
+
+![](https://data-services-github-badges.s3.amazonaws.com/cov.svg)
 
 A demonstration of a subsetter capability to be used with Harmomy. Deployed on [dockerhub](https://hub.docker.com/repository/docker/asfdataservices/gdal-subsetter/general)
 
