@@ -1,0 +1,19 @@
+version: 0.2
+env:
+  parameter-store:
+    EDL_USERNAME: /Codebuild/EDL/Username
+    EDL_PASSWORD: /Codebuild/EDL/Password
+
+phases:
+  pre_build:
+    commands:
+      - echo ${DOCKERHUB_PASSWORD} | docker login --username ${DOCKERHUB_USERNAME}  --password-stdin
+      - mkdir deps && aws s3 sync s3://asf-harmony-service-lib-py deps
+      - REPO_NAME=${DOCKERHUB_USERNAME}/gdal-subsetter
+      - TAG=${REPO_NAME}:${MATURITY}
+  build:
+    commands:
+      - docker build -t ${TAG} .
+  post_build:
+    commands:
+      - docker push ${TAG}
