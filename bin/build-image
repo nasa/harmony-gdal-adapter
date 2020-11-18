@@ -2,7 +2,7 @@
 
 set -e
 
-image="harmony/gdal-subsetter"
+image="asfdataservices/gdal-subsetter"
 tag=${1:-latest}
 
 for dep in harmony-service-lib-py; do
@@ -12,7 +12,7 @@ for dep in harmony-service-lib-py; do
     cp -R ../$dep deps/
     (cd deps/$dep && make clean)
   else
-    [ ! -d "deps/$dep" ] && git clone https://git.earthdata.nasa.gov/scm/harmony/$dep.git deps/$dep
+    [ ! -d "deps/$dep" ] && git clone https://git.earthdata.nasa.gov/scm/harmony/$dep.git deps/$dep && rm -rf ../deps/harmony-service-lib-py/.git
   fi
 done
 

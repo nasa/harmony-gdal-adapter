@@ -8,7 +8,7 @@ output_dir=data/results
 
 #ls $PWD/data/messages/gfrn/*>flist
 
-find ./data/messages -type f -name "*.msg" | xargs realpath > flist
+find ./data/messages/prod -type f -name "*.msg" | xargs realpath > flist
 
 while read line
 

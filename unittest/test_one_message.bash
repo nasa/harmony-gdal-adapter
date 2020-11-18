@@ -14,9 +14,9 @@ fi
 
 cd /home/unittest
 
-#message_file=data/messages/message1
+#message_file=data/messages/prod/gfrn/G1637364867-ASF.msg
 
-#output_dir=data/results/grfn-results
+#output_dir=data/results
 
 cwd=$PWD
 
