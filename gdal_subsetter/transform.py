@@ -19,6 +19,7 @@ from harmony.util import stage, bbox_to_geometry, download, generate_output_file
 import pyproj
 import numpy as np
 import glob
+import shutil
 
 mime_to_gdal = {
     "image/tiff": "GTiff",
@@ -732,7 +733,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             if gt[2] !=0.0 or gt[4] != 0.0:
                 #create shapefile with box
                 shapefile=self.box2shapefile(tiffile, bbox)
-                self.rasterize(tmpfile, shapefile, outputfile)
+                #self.rasterize(tmpfile, shapefile, outputfile)
+                self.mask_via_shapefile(tmpfile, shapefile, outputfile)
             else:
                 self.cmd(*['cp', tmpfile, outputfile])
             return outputfile
@@ -747,29 +749,38 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             command.extend( [ '-srcwin', str(ul_i), str(ul_j), str(cols), str(rows) ] )
             command.extend([tiffile, tmpfile])
             self.cmd(*command)
-            self.rasterize(tmpfile, shapefile_out, outputfile)
+            #self.rasterize(tmpfile, shapefile_out, outputfile)
+            self.mask_via_shapefile(tmpfile, shapefile, outputfile)
             return outputfile
         else:
             self.cmd(*['cp', tiffile, outputfile])
             return outputfile
 
-
     def boxwrs84_boxproj(self, boxwrs84, ref_ds):
         """
         convert the box define in lon/lat to box in projection coordinates defined in red_ds
-        inputs: boxwrs84, which is defined as [left,low,right,upper], ref_ds is reference dataset
-        returns: boxprj, which is also defined as [left,low,right,upper] in reference projection
-                 projection, which is the projection defined in ref_ds dataset
+        inputs: boxwrs84, which is defined as [left,low,right,upper] in lon/lat,
+                ref_ds is reference dataset
+        returns:boxprj, which is also defined as {"llxy":llxy, "lrxy":lrxy, "urxy":urxy, "ulxy":ulxy},
+                where llxy,lrxy, urxy, and ulxy are coordinate pairs in projection
+                projection, which is the projection of ref_ds
         """
         projection = ref_ds.GetProjection()
         dst = osr.SpatialReference(projection)
+        #get coordinates of four corners of the boxwrs84
         ll_lon,ll_lat = boxwrs84[0],boxwrs84[1]
+        lr_lon,lr_lat = boxwrs84[2],boxwrs84[1]
         ur_lon,ur_lat = boxwrs84[2],boxwrs84[3]
+        ul_lon,ul_lat = boxwrs84[0],boxwrs84[3]
+        #convert all four corners
         dstproj4=dst.ExportToProj4()
         ct = pyproj.Proj(dstproj4)
         llxy=ct(ll_lon, ll_lat)
+        lrxy=ct(lr_lon, lr_lat)
         urxy=ct(ur_lon, ur_lat)
-        boxproj=[ llxy[0], llxy[1], urxy[0],urxy[1] ]
+        ulxy=ct(ul_lon, ul_lat)
+
+        boxproj={"llxy":llxy, "lrxy":lrxy, "urxy":urxy, "ulxy":ulxy}
         return boxproj, projection
 
     def calc_coord_ij(self, gt, x,y ):
@@ -778,36 +789,41 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         cols, rows =rev_transform*(x,y)
         return int(cols), int(rows)
 
-    def calc_subset_window(self,ds,box):
-        #box is defined as [left,low,right,upper] in projection ccordinates
-        gt=ds.GetGeoTransform()
-        ul_x=box[0]
-        ul_y=box[3]
-        rl_x=box[2]
-        rl_y=box[1]
-        ul_i, ul_j=self.calc_coord_ij(gt, ul_x,ul_y)
-        rl_i, rl_j=self.calc_coord_ij(gt, rl_x,rl_y)
-        #get the intersection between box and image in row, col coordinator
-        cols_img = ds.RasterXSize
-        rows_img = ds.RasterYSize
-        ul_i=max(0, ul_i)
-        ul_j=max(0, ul_j)
-        rl_i=min(cols_img, rl_i)
-        rl_j=min(rows_img, rl_j)
-        cols=rl_i-ul_i
-        rows=rl_j-ul_j
-        ul_x, ul_y = self.calc_ij_coord(gt, ul_i, ul_j)
-        return ul_x,ul_y,ul_i,ul_j,cols,rows
+    #def calc_subset_window(self,ds,box):
+    #    #box is defined as [left,low,right,upper] in projection ccordinates
+    #    gt=ds.GetGeoTransform()
+    #    ul_x=box[0]
+    #    ul_y=box[3]
+    #    rl_x=box[2]
+    #    rl_y=box[1]
+    #    ul_i, ul_j=self.calc_coord_ij(gt, ul_x,ul_y)
+    #    rl_i, rl_j=self.calc_coord_ij(gt, rl_x,rl_y)
+    #    #get the intersection between box and image in row, col coordinator
+    #    cols_img = ds.RasterXSize
+    #    rows_img = ds.RasterYSize
+    #    ul_i=max(0, ul_i)
+    #    ul_j=max(0, ul_j)
+    #    rl_i=min(cols_img, rl_i)
+    #    rl_j=min(rows_img, rl_j)
+    #    cols=rl_i-ul_i
+    #    rows=rl_j-ul_j
+    #    ul_x, ul_y = self.calc_ij_coord(gt, ul_i, ul_j)
+    #    return ul_x,ul_y,ul_i,ul_j,cols,rows
 
     def calc_subset_envelopwindow(self,ds,box):
-        #box is defined as [left,low,right,upper] in projection coordinates
-        #get 4 conners coordinate valuesin projection coorndinates
-        gt=ds.GetGeoTransform()
-        ul=(box[0],box[3])
-        ur=(box[2],box[3])
-        ll=(box[0],box[1])
-        lr=(box[2],box[1])
+        """
+        inputs: ds-the reference dataset
+                box which defined as {"llxy":llxy, "lrxy":lrxy, "urxy":urxy, "ulxy":ulxy},
+                where llxy,lrxy, urxy, and ulxy are coordinate pairs in projection
+        returns:ul_x,ul_y,ul_i,ul_j,cols,rows
+        """
+        #get 4 conners coordinate values in projection coorndinates
+        ul=box.get("ulxy")
+        ur=box.get("urxy")
+        ll=box.get("llxy")
+        lr=box.get("lrxy")
         #get i,j coordinates in the array of 4 conners of the box
+        gt=ds.GetGeoTransform()
         ul_i, ul_j=self.calc_coord_ij(gt, ul[0],ul[1])
         ur_i, ur_j=self.calc_coord_ij(gt, ur[0],ur[1])
         ll_i, ll_j=self.calc_coord_ij(gt, ll[0],ll[1])
@@ -834,31 +850,31 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         x,y = transform * (col, row)
         return x,y
 
-    def create_shapefile_with_box(self,box,projection,shapefile):
-        """
-        input: box=[min_lon,min_lat,max_lon,max_lat]
-        projection: box values are based on the projection, lon and lat is EPSG4326
-        output: polygon geometry
-        """
-        minX=box[0]
-        minY=box[1]
-        maxX=box[2]
-        maxY=box[3]
+    def create_shapefile_with_box(self, box, projection, shapefile):
+        #input: box {ll, lr, ur, ul} in projection cordinates, where ll=(ll_lon,ll_lat),lr=(lr_lon,lr_lat), ur=(ur_lon, ur_lat), ul=(ul_lon, ul_lat)
+        #output: polygon geometry
+        llxy=box.get("llxy")
+        lrxy=box.get("lrxy")
+        urxy=box.get("urxy")
+        ulxy=box.get("ulxy")
         ring = ogr.Geometry(ogr.wkbLinearRing)
-        ring.AddPoint(minX, minY)
-        ring.AddPoint(maxX, minY)
-        ring.AddPoint(maxX, maxY)
-        ring.AddPoint(minX, maxY)
-        ring.AddPoint(minX, minY)
+        ring.AddPoint(llxy[0], llxy[1])
+        ring.AddPoint(lrxy[0], lrxy[1])
+        ring.AddPoint(urxy[0], urxy[1])
+        ring.AddPoint(ulxy[0], ulxy[1])
+        ring.AddPoint(llxy[0], llxy[1])
         polygon = ogr.Geometry(ogr.wkbPolygon)
         polygon.AddGeometry(ring)
         # create output file
         outDriver = ogr.GetDriverByName('ESRI Shapefile')
         if os.path.exists(shapefile):
-            os.remove(shapefile)
+            if os.path.isfile(shapefile):
+                os.remove(shapefile)
+            else:
+                shutil.rmtree(shapefile)
         outDataSource = outDriver.CreateDataSource(shapefile)
         outSpatialRef = osr.SpatialReference(projection)
-        outLayer = outDataSource.CreateLayer('box',outSpatialRef, geom_type=ogr.wkbPolygon )
+        outLayer = outDataSource.CreateLayer('boundingbox',outSpatialRef, geom_type=ogr.wkbPolygon )
         featureDefn = outLayer.GetLayerDefn()
         # add new geom to layer
         outFeature = ogr.Feature(featureDefn)
@@ -890,17 +906,20 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
     def rasterize(self, infile, shapefile, outfile):
         """
-        inputs: infile- geotiff file, shaepfile-mask the rasterfile with this shapefile         outfile - output file name
+        inputs: infile- geotiff file
+                shaepfile - mask the rasterfile with this shapefile
+                outfile - output file name
         return: outfile
         """
         infile=os.path.abspath(infile)
-        #copy infile to outfile
+        #tmpfile=infile.split(".")[0]+"-tmp.tif"
+        #copy infile to tmpfile
         self.cmd(*['cp', '-f', infile, outfile])
-        #get the infomation of outputfile
+        #get the infomation of outfile
         ds=gdal.Open(outfile, GA_Update)
         num=ds.RasterCount
-        bands = tuple(range(1,num+1))
-        burns = tuple(np.full(num,0))
+        bands = list(range(1,num+1))
+        burns = list(np.full(num,0))
         #get the information of shapefile
         shp=ogr.Open(shapefile)
         ly=shp.GetLayerByIndex(0)
@@ -912,12 +931,15 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             ly,
             burn_values=burns
             )
+        ds.FlushCache()
+        ds = None
         #tested options initValues and Inverse, both are not work
         #options=["ATTRIBUTE={lyname}".format(lyname=lyname)]
         #need use following way to process the pixels outside the box
         #update the bands of ds
         in_ds=gdal.Open(infile, GA_ReadOnly)
         in_data=in_ds.ReadAsArray()
+        ds=gdal.Open(outfile, GA_Update)
         out_data=ds.ReadAsArray()
         rst_data=in_data-out_data
         if num == 1:
@@ -929,7 +951,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 out_band.WriteArray(rst_data[i-1,:,:])
 
         ds.FlushCache()
-        ds, in_ds=None, None
+        in_ds, ds = None, None
 
     def shapefile_boxproj(self, shapefile, ref_ds, outputfile):
         """
@@ -949,4 +971,100 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         boxproj=[lyrextent[0], lyrextent[2], lyrextent[1], lyrextent[3]]
         return boxproj, ref_proj, outputfile
 
+    def transfer_metadata(self, infile, inband, outfile, outband):
+        """
+        readout the file metadata and band metadat from infile inband, write these metadata to outfile outband
+        input: infile
+               inband - band number in the infile, 1,2,3, etc.
+               outfile
+               outband -band nuber in outfile 1,2,3, etc.
+        """
+        in_ds=gdal.Open(infile, GA_ReadOnly)
+        in_md = in_ds.GetMetadata()
+        in_b = in_ds.GetRasterBand(inband)
+        in_nodata=in_b.GetNoDataValue()
+        in_bmd =in_b.GetMetadata()
 
+        out_ds=gdal.Open(outfile, GA_Update)
+        out_md = out_ds.GetMetadata()
+        out_md.update(in_md)
+
+        out_ds.SetMetadata(out_md)
+
+        out_b = out_ds.GetRasterBand(outband)
+        out_bmd =out_b.GetMetadata()
+        out_bmd.update(in_bmd)
+
+        out_b.SetMetadata(out_bmd)
+
+        if in_nodata:
+            out_b.SetNoDataValue(in_nodata)
+        else:
+            out_b.DeleteNoDataValue()
+
+        out_ds.FlushCache()                     # write to disk
+        out_ds = None
+
+    def mask_via_shapefile(self, inputfile, shapefile, outputfile):
+        """
+:       It sets the pixles of the inputfile outside the bbox as a nodata value.
+        inputs: inputfile is geotiff file
+                bbox-[minx,miny,maxx,maxy] in lon/lat coorninates.
+        return: outputfile is masked geotiff file
+        """
+        #create shapefile with box
+        #shapefile=self.box2shapefile(inputfile, box)
+
+        tmpfilepre=inputfile.split(".")[0]
+        tmpfile="{tmpfilepre}-tmp.tif".format(tmpfilepre=tmpfilepre)
+        #copy inputfile to tmpfile
+        self.cmd(*['cp', '-f', inputfile, tmpfile])
+        #get the infomation of inputfile
+        ds=gdal.Open(inputfile)
+        num=ds.RasterCount
+        tmpfilelst=[]
+        #read shapefile info
+        shp=ogr.Open(shapefile)
+        ly=shp.GetLayerByIndex(0)
+        lyname=ly.GetName()
+        for i in range(num):
+            band_sn=i+1
+            band=ds.GetRasterBand(band_sn)
+            nodata=band.GetNoDataValue()
+            dtyp=gdal.GetDataTypeName(band.DataType)
+            if dtyp =='Byte':
+                burnval=0
+            else:
+                burnval=0.0
+            #rasterize
+            command=['gdal_rasterize']
+            command.extend(["-b","{band_sn}".format(band_sn=band_sn) ] )
+            #command.extend( ['-i'])
+            command.extend(["-burn", "{burnval}".format(burnval=burnval)] )
+            command.extend(['-l',lyname, shapefile])
+            command.extend([tmpfile])
+            self.cmd(*command)
+            #calc
+            command=['gdal_calc.py']
+            command.extend(["-A", "{a}".format(a=inputfile), "--A_band={band_sn}".format(band_sn=band_sn)])
+            command.extend(["-B", "{b}".format(b=tmpfile), "--B_band={band_sn}".format(band_sn=band_sn)])
+            command.extend(['--calc="A-B"'])
+            command.extend(['--overwrite'])
+            tmpbandfile="{tmpfilepre}band{band_sn}.tif".format(tmpfilepre=tmpfilepre, band_sn=band_sn)
+            command.extend(["--outfile={tmpbandfile}".format(tmpbandfile=tmpbandfile)])
+
+            #self.cmd(*command), this does not work
+
+            cmdline=" ".join(command)
+            os.system(cmdline)
+            tmpfilelst.append(tmpbandfile)
+            #copy metadata
+            self.transfer_metadata(tmpfile, band_sn, tmpbandfile, 1)
+
+        #combine tmpbandfile to one outputfile
+        if os.path.exists(outputfile):
+            self.cmd(*['rm','-f',outputfile])
+
+        self.stack_multi_file_with_metadata(tmpfilelst,outputfile)
+
+        return outputfile

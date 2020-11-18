@@ -1,11 +1,10 @@
 # Temporary output directories
 tmp*
 .DS_Store
-tmp/
+tmp
 config-*.json
 config.json
-test/
-venv/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -108,7 +107,7 @@ celerybeat-schedule
 .env
 .venv
 env/
-#venv/  Jzhu, 2020-06-09
+venv/
 ENV/
 env.bak/
 venv.bak/
@@ -130,13 +129,3 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-
-#  local directories and notes
-/notes
-venv/
-templates/
-testcases/
-.idea/
-unittest/data/
-unittest/dockervenv/
-unittest/.env_unittest
