@@ -8,9 +8,13 @@ phases:
   pre_build:
     commands:
       - echo 'installing deps'
+      - pip3 install -r requirements.txt
+      - pip3 install deps/harmony-service-lib-py
   build:
     commands:
       - echo 'running unittests'
+      - cd unittest
+      - coverage run -m pytest -v test_all_message.py
   post_build:
     commands:
       - echo 'update badges'
