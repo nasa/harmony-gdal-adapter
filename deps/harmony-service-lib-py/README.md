@@ -71,32 +71,61 @@ A full example of these two requirements with use of helpers can be found in
 The following environment variables can be used to control the behavior of the
 library and allow easier testing:
 
+REQUIRED:
+
 * `STAGING_BUCKET`: When using helpers to stage service output and pre-sign URLs, this
-  indicates the S3 bucket where data will be staged
+       indicates the S3 bucket where data will be staged
 * `STAGING_PATH`: When using helpers to stage output, this indicates the path within
-  `STAGING_BUCKET` under which data will be staged
-* `AWS_DEFAULT_REGION`: (Default: `"us-west-2"`) The region in which S3 calls will be made
+       `STAGING_BUCKET` under which data will be staged
 * `ENV`: The name of the environment.  If 'dev' or 'test', callbacks to Harmony are
        not made and data is not staged unless also using localstack
+* `OAUTH_UID`, `OAUTH_PASSWORD`: Used to acquire a shared EDL token
+       needed for downloading granules from EDL token-aware data
+       sources. Services using data in S3 do not need to set this.
+
+       NOTE: If `FALLBACK_AUTHN_ENABLED` is set to True (CAUTION!)
+       these credentials will be used to download data *as* the EDL
+       application user. This may cause problems with metrics and can
+       result in users getting data for which they've not approved a
+       EULA.
+* `OAUTH_CLIENT_ID`: The Earthdata application client ID.
+* `OAUTH_HOST`: Set to the correct Earthdata Login URL, depending on
+       where the service is being deployed. This should be the same
+       environment where the `OAUTH_*` credentials are valid. Defaults
+       to UAT.
+* `OAUTH_REDIRECT_URI`: A valid redirect URI for the EDL application.
+* `SHARED_SECRET_KEY`: The 32-byte encryption key shared between Harmony and backend services.
+       This is used to encrypt & decrypt the `accessToken` in the Harmony operation message.
+       In a production environment, this should be injected into the container running the service
+       Docker image. When running the service within Harmony, the Harmony infrastructure will
+       ensure that this environment variable is set with the shared secret key, and the Harmony
+       service library will read and use this key. Therefore, the service developer need not
+       be aware of this variable or its value.
+
+OPTIONAL:
+
+* `APP_NAME`: Defaults to first argument on commandline. Appears in log records.
+* `AWS_DEFAULT_REGION`: (Default: `"us-west-2"`) The region in which S3 calls will be made
 * `USE_LOCALSTACK`: (Development) If 'true' will perform S3 calls against localstack rather
        than AWS
 * `LOCALSTACK_HOST`: (Development) If `USE_LOCALSTACK` `true` and this is set, will
        establish `boto` client connections for S3 & SQS operations using this hostname.
-* `EDL_USERNAME`, `EDL_PASSWORD`: (Better solution on the roadmap)  If using helpers to
-       fetch granules over HTTPS and those granules are behind Earthdata Login, these
-       variables are the credentials that will be used to authenticate to Earthdata Login
-       to fetch the data.  Be sure that the user has accepted any relevant EULAs and
-       has permission to get the data.  Services using data in S3 do not need to set this.
-       A future release will do away with these variables by having the Harmony frontend
-       provide authentication information.
-* `TEXT_LOGGER`: Setting this to true will cause all log messages to use a text string
-       format. By default log messages will be formatted as JSON.
+* `TEXT_LOGGER`: (Default: True) Setting this to true will cause all
+       log messages to use a text string format. By default log
+       messages will be formatted as JSON.
 * `HEALTH_CHECK_PATH`: Set this to the path where the health check file should be stored. This
        file's mtime is set to the current time whenever a successful attempt is made to to read the
        message queue (whether or not a message is retrieved). This file can be used by a container's
        health check command. The container is considered unhealthy if the mtime of the file is old -
-       where 'old' is configurable in the service container. If this variable is not set the path 
+       where 'old' is configurable in the service container. If this variable is not set the path
        defaults to '/tmp/health.txt'.
+
+OPTIONAL -- Use with CAUTION:
+
+* `FALLBACK_AUTHN_ENABLED`: Default: False. Enable the fallback authentication that
+  uses the EDL application credentials. See CAUTION note above.
+* `EDL_USERNAME`: The Earthdata Login username used for fallback authn.
+* `EDL_PASSWORD`: The Earthdata Login password used for fallback authn.
 
 ## Development Setup
 
@@ -108,6 +137,10 @@ Install dependencies:
 
     $ make develop
 
+Run linter against production code:
+
+    $ make lint
+
 Run tests:
 
     $ make test
@@ -118,20 +151,22 @@ Build & publish the package:
 
 ## Releasing
 
-Update the CHANGELOG with a short bulleted description of the changes to be
-built & deployed. Replace `VERSION` and `DATE` with the version being built
-by the Bamboo job and the date on which the build is run.
+Update the CHANGELOG with a short bulleted description of the changes
+to be built & deployed. Replace `DATE` with the date on which the
+feature will be released.
 
-TODO NOTE: There is currently a possible disconnect between the version and 
-date entries in the CHANGELOG and the version generated by Bamboo. We need to
-resolve this so that a release version and date is either set or determined
-in a consistent way, including version tags in git that are pushed to 
-BitBucket.
+NOTE: Currently the service library Python package is versioned
+by the Bamboo build number, and it only increments the patch version
+of the library. Unless the base version of the Bamboo job is updated,
+the resulting Python package version will not follow semantic
+versioning. If a change requires a minor or major version number
+increment, update the Bamboo job which builds the Python package (see
+below) so that the base version of the newly-built package is correct.
 
 New entries to the CHANGELOG should be of the form:
 
 ```
-## [VERSION] - DATE
+## DATE
 
 Changes:
 
@@ -142,4 +177,4 @@ Changes:
 The [Harmony Python Service Library Bamboo Build](https://ci.earthdata.nasa.gov/browse/HARMONY-PSL)
 will be triggered on commits pushed to the
 [BitBucket repo](https://git.earthdata.nasa.gov/projects/HARMONY/repos/harmony-service-lib-py/browse).
-New versions of the Python package artifact will then be pushed to the [Earthdata Nexus Repository](https://ci.earthdata.nasa.gov/browse/HARMONY-PSL). It may then be installed using `pip`.
+New versions of the Python package artifact will then be pushed to the [Earthdata Nexus Repository](https://maven.earthdata.nasa.gov/#browse/browse:python-repo:harmony-service-lib). It may then be installed using `pip`.

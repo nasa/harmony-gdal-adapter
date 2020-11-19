@@ -20,6 +20,9 @@ clean:
 develop:
 	pip install -e .[dev]
 
+lint:
+	flake8 harmony
+
 test:
 	coverage erase
 	coverage run --source harmony setup.py test
