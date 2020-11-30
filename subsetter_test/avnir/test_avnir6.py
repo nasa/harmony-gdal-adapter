@@ -16,7 +16,8 @@ def info():
                  'authority': 'EPSG',
                  'proj_epsg': '32734',
                  'gcs_epsg': '4326',
-                 'subset': [-26.1, -25.8, 18.07, 18.25],
+#modified for mask                 'subset': [-26.1, -25.8, 18.07, 18.25],
+                 'subset': [-26.13, -25.77, 18.07, 18.25],
                  'bands': 2,
                  'xy_size': [75, 30],
                  'variables': ['Band1', 'Band3', 'NA', 'NA']
