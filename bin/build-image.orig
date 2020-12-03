@@ -10,10 +10,9 @@ for dep in harmony-service-lib-py; do
     rm -rf deps/$dep
     mkdir -p deps
     cp -R ../$dep deps/
-    rm -rf deps/$dep/.git
     (cd deps/$dep && make clean)
   else
-    [ ! -d "deps/$dep" ] && git clone https://git.earthdata.nasa.gov/scm/harmony/$dep.git deps/$dep && rm -rf ../deps/harmony-service-lib-py/.git
+    [ ! -d "deps/$dep" ] && git clone https://git.earthdata.nasa.gov/scm/harmony/$dep.git deps/$dep
   fi
 done
 

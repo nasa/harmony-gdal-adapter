@@ -3,26 +3,27 @@
 # If you have harmony in a peer folder with this repo, then you can run the following for an example
 #    python3 -m harmony_gdal --harmony-action invoke --harmony-input "$(cat ../harmony/example/service-operation.json)"
 
-import sys
 import os
 import subprocess
-import os
-import urllib.request
-import urllib.parse
 import re
-import boto3
-import rasterio
+
+#import boto3
+#import rasterio
 import zipfile
 import math
-from math import atan, tan, sqrt
+#from math import atan, tan, sqrt
+from tempfile import mkdtemp
+import shutil
 from affine import Affine
 from osgeo import gdal, osr, ogr
 from osgeo.gdalconst import *
-from harmony import BaseHarmonyAdapter
+from harmony import BaseHarmonyAdapter, util
+from pystac import Asset
+from harmony.util import stage, bbox_to_geometry, download, generate_output_filename
 import pyproj
 import numpy as np
 import glob
-import shutil
+import geopandas as gpd
 
 mime_to_gdal = {
     "image/tiff": "GTiff",
@@ -64,6 +65,7 @@ class ObjectView(object):
         """
         self.__dict__ = d
 
+
 class HarmonyAdapter(BaseHarmonyAdapter):
     """
     See https://git.earthdata.nasa.gov/projects/HARMONY/repos/harmony-service-lib-py/browse
@@ -72,123 +74,122 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
     def get_version(self):
         with open("version.txt") as file_version:
-            version=','.join( file_version.readlines() )
+            version = ','.join(file_version.readlines())
         return version
 
-    def invoke(self):
+        
+    def process_item(self, item, source):
         """
-        Run the service on the message contained in `self.message`.  Fetches data, runs the service,
-        puts the result in a file, calls back to Harmony, and cleans up after itself.
+        Converts an input STAC Item's data into Zarr, returning an output STAC item
 
-        Note: When a synchronous request is made, this only operates on a single granule.  If multiple
-            granules are requested, it subsets the first.  The subsetter is capable of combining
-            multiple granules but will not do so until adequate performance of data access has
-            been established
-            For async requests, it subsets the granules individually and returns them as partial results
+        Parameters
+        ----------
+        item : pystac.Item
+            the item that should be converted
+        source : harmony.message.Source
+            the input source defining the variables, if any, to subset from the item
+
+        Returns
+        -------
+        pystac.Item
+            a STAC item containing the Zarr output
         """
         logger = self.logger
         message = self.message
-
-        #force calls backend service in asynchronous mode, for test purpose
-        message.isSynchronous=False
-
         if message.subset and message.subset.shape:
-            logger.warn('Ignoring subset request for user shapefile %s' %
-                        (message.subset.shape.href,))
+            logger.warn('Ignoring subset request for user shapefile %s' % (message.subset.shape.href,))
 
+        layernames = []
+
+        operations = dict(
+            variable_subset=source.variables,
+            is_regridded=bool(message.format.crs),
+            is_subsetted=bool(message.subset and message.subset.bbox)
+        )
+
+        result = item.clone()
+        result.assets = {}
+
+        # Create a temporary dir for processing we may do
+        output_dir = mkdtemp()
         try:
-            # Limit to the first granule.  See note in method documentation
-            granules = message.granules
-            if message.isSynchronous:
-                granules = granules[:1]
+            # Get the data file
+            asset = next(v for k, v in item.assets.items() if 'data' in (v.roles or []))
+            #20201202, jz, found we can not use new authetication methods for GFRN, UAVSAR, and AVNIR2 in prod
+            #use older authentication mathod, by setting FALLBACK_AUTHN_ENABLED=true in .env file, 
+            #and setting arg access_token=None in following download function.
+            input_filename = download(
+                asset.href,
+                output_dir,
+                logger=self.logger,
+                access_token=self.message.accessToken,
+                cfg=self.config)
 
-            output_dir = "tmp/data"
-            self.prepare_output_dir(output_dir)
+            #input_filename = download(
+            #    asset.href,
+            #    output_dir,
+            #    logger=self.logger,
+            #    access_token=None,
+            #    cfg=self.config)
 
-            layernames = []
+            basename = os.path.basename(generate_output_filename(asset.href, **operations))
 
-            operations = dict(
-                is_variable_subset=True,
-                is_regridded=bool(message.format.crs),
-                is_subsetted=bool(message.subset and message.subset.bbox)
-            )
+            file_type = self.get_filetype(input_filename)
 
-            result = None
-            for i, granule in enumerate(granules):
-                self.download_granules([granule])
-                file_type = self.get_filetype(granule.local_filename)
-
-                if file_type == None:
-                    continue
-                elif file_type == 'tif':
-                    layernames, result = self.process_geotiff(
-                            granule,output_dir,layernames,operations,message.isSynchronous
-                            )
-                elif file_type == 'nc':
-                    layernames, result = self.process_netcdf(
-                            granule,output_dir,layernames,operations,message.isSynchronous
-                            )
-                elif file_type == 'zip':
-                    layernames, result = self.process_zip(
-                            granule,output_dir,layernames,operations,message.isSynchronous
-                             )
-                else:
-                    logger.exception(e)
-                    self.completed_with_error('No reconized file foarmat, not process')
-
-
-                if not message.isSynchronous:
-                    #Send a single file and reset
-                    self.update_layernames(result, [v.name for v in granule.variables])
-
-                    #calcultate temporal and bbox of result (result is a file)
-                    temporal=granule.temporal
-                    #update metadata with bbox and extent in lon/lat coordinates
-                    bbox=self.get_bbox_lonlat(result)
-
-                    result = self.reformat(result, output_dir)
-                    progress = int(100 * (i + 1) / len(granules))
-
-                    #output temporal and bbox to harmony front service
-                    self.async_add_local_file_partial_result(
-                    result,
-                    source_granule=granule,
-                    title=granule.id,
-                    progress=progress,
-                    temporal=temporal,
-                    bbox=bbox,
-                    **operations)
-
-                    self.cleanup()
-                    self.prepare_output_dir(output_dir)
-                    layernames = []
-                    result = None
-
-            if message.isSynchronous:
-                self.update_layernames(result, layernames)
-                #update metadata with bbox and extent in lon/lat coordinates
-                bbox=self.get_bbox_lonlat(result)
-                result = self.reformat(result, output_dir)
-                self.completed_with_local_file(
-                    result, source_granule=granules[-1], **operations)
+            if file_type is None:
+                return item
+            elif file_type == 'tif':
+                layernames, filename = self.process_geotiff(
+                        source, basename, input_filename, output_dir, layernames
+                        )
+            elif file_type == 'nc':
+                layernames, filename = self.process_netcdf(
+                        source, basename, input_filename, output_dir, layernames
+                        )
+            elif file_type == 'zip':
+                layernames, filename = self.process_zip(
+                        source, basename, input_filename, output_dir, layernames
+                        )
             else:
-                self.async_completed_successfully()
+                self.completed_with_error('No recognized file foarmat, not process')
 
-        except Exception as e:
-            logger.exception(e)
-            self.completed_with_error('An unexpected error occurred')
+            #self.update_layernames(filename, [v.name for v in layernames])
+            self.update_layernames(filename, [v for v in layernames])
 
+            # Update metadata with bbox and extent in lon/lat coordinates for the geotiff file
+            # Also update the STAC record
+            result.bbox = self.get_bbox_lonlat(filename)
+            result.geometry = bbox_to_geometry(result.bbox)
+
+            # Filename may change into the format other than geotiff 
+            filename = self.reformat(filename, output_dir)
+            output_filename = basename + os.path.splitext(filename)[-1]
+            mime = message.format.mime
+            url = stage(
+                filename,
+                output_filename,
+                mime,
+                location=message.stagingLocation,
+                logger=logger,
+                cfg=self.config)
+
+            # Update the STAC record
+            result.assets['data'] = Asset(url, title=output_filename, media_type=mime, roles=['data'])
+
+            # Return the STAC record
+            return result
         finally:
-            self.cleanup()
 
-    def process_geotiff(self, granule, output_dir, layernames, operations,isSynchronous):
+            # Clean up any intermediate resources
+            shutil.rmtree(output_dir)
 
-        if not granule.variables:
+    def process_geotiff(self, source, basename, input_filename, output_dir, layernames):
+
+        if not source.variables:
             # process geotiff and all bands
 
-            filename = granule.local_filename
-            #file_base= os.path.basename(filename)
-            layer_id = granule.id + '__all'
+            filename = input_filename
+            layer_id = basename + '__all'
             band = None
             layer_id, filename, output_dir = self.combin_transfer(
                 layer_id, filename, output_dir, band)
@@ -197,21 +198,21 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             layernames.append(layer_id)
         else:
 
-            variables = self.get_variables(granule.local_filename)
+            variables = self.get_variables(input_filename)
 
-            for variable in granule.variables:
+            for variable in source.process('variables'):
 
                 band = None
 
-                index = next( i for i, v in enumerate(
-                        variables) if v.name.lower() == variable.name.lower() )
+                index = next(i for i, v in enumerate(
+                        variables) if v.name.lower() == variable.name.lower())
                 if index is None:
                     return self.completed_with_error('band not found: ' + variable)
                 band = index + 1
 
-                filename = granule.local_filename
-                #file_base= os.path.basename(filename)
-                layer_id = granule.id + '__'  + variable.name
+                filename = input_filename
+                
+                layer_id = basename + '__' + variable.name
 
                 layer_id, filename, output_dir = self.combin_transfer(
                     layer_id, filename, output_dir, band)
@@ -225,28 +226,28 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return layernames, result
 
-    def process_netcdf(self, granule, output_dir, layernames, operations, isSynchronous):
+    def process_netcdf(self, source, basename, input_filename, output_dir, layernames):
 
-        if not granule.variables:
-            variables = self.get_variables(granule.local_filename)
-            granule.variables = variables
+        variables = source.process('variables') or self.get_variables(input_filename)
 
-        for variable in granule.variables:
+        for variable in variables:
 
             band = None
             # For non-geotiffs, we reference variables by appending a file path
             layer_format = self.read_layer_format(
-                        granule.collection,
-                        granule.local_filename,
+                        source.collection,
+                        input_filename,
                         variable.name
                         )
             filename = layer_format.format(
-                        granule.local_filename)
+                        input_filename)
 
-            layer_id = granule.id + '__' + variable.name
+            layer_id = basename + '__' + variable.name
 
-            #convert the subdataset in the nc file into the geotif file
-            filename=self.nc2tiff(layer_id,filename,output_dir)
+
+            # convert the subdataset in the nc file into the geotif file
+
+            filename = self.nc2tiff(layer_id, filename, output_dir)
 
             layer_id, filename, output_dir = self.combin_transfer(
                                     layer_id, filename, output_dir, band)
@@ -260,22 +261,17 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return layernames, result
 
-    def process_zip(self, granule, output_dir, layernames, operations, isSynchronous):
+    def process_zip(self, source, basename, input_filename, output_dir, layernames):
 
-        [tiffile, ncfile]=self.pack_zipfile(granule.local_filename,output_dir)
+        [tiffile, ncfile] = self.pack_zipfile(input_filename, output_dir)
 
         if tiffile:
 
-            granule.local_filename=tiffile
-
-            layernames, result = self.process_geotiff(granule, output_dir, layernames, operations,isSynchronous)
-
+            layernames, result = self.process_geotiff(source, basename, tiffile, output_dir, layernames)
 
         if ncfile:
 
-            granule.local_filename=ncfile
-
-            layernames, result = self.process_netcdf(self, granule, output_dir, layernames, operations, isSynchronous)
+            layernames, result = self.process_netcdf(source, basename, ncfile, output_dir, layernames)
 
         return layernames, result
 
@@ -361,39 +357,60 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         if subset.bbox==None and subset.shape==None:
             dstfile = "%s/%s" % (dstdir, normalized_layerid + '__varsubsetted.tif')
-            dstfile=self.varsubset(srcfile, dstfile, band)
+            dstfile=self.varsubset(srcfile, dstfile, band=band)
             return dstfile
 
         if subset.bbox:
             [left, bottom, right, top]=self.get_bbox(srcfile)
             #subset.bbox is defined as [left/west,low/south,right/east,upper/north]
-            subsetbbox=subset.bbox
+            subsetbbox=subset.process('bbox')
             #bbox = [str(c) for c in subset.bbox]
             [b0,b1], transform = self.lonlat2projcoord(srcfile,subsetbbox[0],subsetbbox[1])
             [b2,b3], transform = self.lonlat2projcoord(srcfile,subsetbbox[2],subsetbbox[3])
 
             if any( x == None for x in [b0,b1,b2,b3] ):
                 dstfile = "%s/%s" % (dstdir, normalized_layerid + '__varsubsetted.tif')
-                dstfile=self.varsubset(srcfile, dstfile, band)
+                dstfile=self.varsubset(srcfile, dstfile, band=band)
             elif b0<left and b1<bottom and b2>right and b3>top:
                 #user's input subset totally covers the image bbox, do not do subset
                 dstfile = "%s/%s" % (dstdir, normalized_layerid + '__varsubsetted.tif')
-                dstfile=self.varsubset(srcfile, dstfile, band)
+                dstfile=self.varsubset(srcfile, dstfile, band=band)
             else:
                 dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
-                dstfile=self.subset2(srcfile, dstfile, subsetbbox, band)
+                dstfile=self.subset2(srcfile, dstfile, bbox=subsetbbox, band=band)
 
             return dstfile
 
         if subset.shape:
             #need know what the subset.shape is. Is it a file? do we need pre-process like we did for subset.bbox?
             dstfile = "%s/%s" % (dstdir, normalized_layerid + '__subsetted.tif')
-            dstfile=self.subset2(srcfile, dstfile, subset.shape, band)
+            #get the shapefile
+            shapefile = self.get_shapefile(subset.shape, dstdir)
+            dstfile=self.subset2(srcfile, dstfile, shapefile=shapefile, band=band)
 
             return dstfile
 
+    def get_shapefile(self, subsetshape, dstdir):
+        """
+        input: subset.shape
+        return: ESRI shapefile (without .zip affix)
+        """
+        href = subsetshape.href
+        filetype = subsetshape.type
+        shapefile = util.download(href, dstdir)
+        #fileprex = shapefile.split(".")[0]
+        fileprex = shapefile
+        if filetype != 'application/shapefile+zip':
+            tmpfile =fileprex+".shp"
+            command=['ogr2ogr','-f','ESRI Shapefile']
+            command.extend( [tmpfile,shapefile] )
+            self.cmd(*command)
+            shapefile = tmpfile
+        return shapefile
+
+
     def reproject(self, layerid, srcfile, dstdir):
-        crs = self.message.format.crs
+        crs = self.message.format.process('crs')
         if not crs:
             return srcfile
         normalized_layerid = layerid.replace('/', '_')
@@ -412,8 +429,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         dstfile = "%s/%s__resized.tif" % (dstdir, normalized_layerid)
 
         if fmt.width or fmt.height:
-            width = fmt.width or 0
-            height = fmt.height or 0
+            width = fmt.process('width') or 0
+            height = fmt.process('height') or 0
             command.extend(["-outsize", str(width), str(height)])
 
         command.extend([srcfile, dstfile])
@@ -491,7 +508,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         command = ['gdal_edit.py',  '-mo', gdal_subsetter_version, srcfile ]
         self.cmd(*command)
 
-        output_mime = self.message.format.mime
+        output_mime = self.message.format.process('mime')
         if output_mime not in mime_to_gdal:
             raise Exception('Unrecognized output format: ' + output_mime)
         if output_mime == "image/tiff":
@@ -757,11 +774,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             command.extend( [ '-srcwin', str(ul_i), str(ul_j), str(cols), str(rows) ] )
             command.extend([tiffile, tmpfile])
             self.cmd(*command)
+            #for rotated image, need extra process
             if gt[2] !=0.0 or gt[4] != 0.0:
-                #create shapefile with box
-                shapefile=self.box2shapefile(tiffile, bbox)
-                #self.rasterize(tmpfile, shapefile, outputfile)
-                self.mask_via_shapefile(tmpfile, shapefile, outputfile)
+                #create shapefile_out with box
+                shapefile_out=self.box2shapefile(tiffile, bbox)
+                #self.rasterize(tmpfile, shapefile_out, outputfile)
+                self.mask_via_shapefile(tmpfile, shapefile_out, outputfile)
             else:
                 self.cmd(*['cp', tmpfile, outputfile])
             return outputfile
@@ -776,9 +794,14 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             command.extend( [ '-srcwin', str(ul_i), str(ul_j), str(cols), str(rows) ] )
             command.extend([tiffile, tmpfile])
             self.cmd(*command)
-            #self.rasterize(tmpfile, shapefile_out, outputfile)
-            self.mask_via_shapefile(tmpfile, shapefile, outputfile)
+            #for rotated image, need extra process
+            if gt[2] !=0.0 or gt[4] != 0.0:
+                #self.rasterize(tmpfile, shapefile_out, outputfile)
+                self.mask_via_shapefile(tmpfile, shapefile_out, outputfile)
+            else:
+                self.cmd(*['cp', tmpfile, outputfile])
             return outputfile
+
         else:
             self.cmd(*['cp', tiffile, outputfile])
             return outputfile
@@ -994,13 +1017,22 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         shp = ogr.Open(outputfile)
         lyr=shp.GetLayer()
         lyrextent=lyr.GetExtent()
-        #Extent[lon_min,lon_max, lat_min,lat_max], boxproj is defined as [lon_min,lat_min, lon_max, lat_max]
-        boxproj=[lyrextent[0], lyrextent[2], lyrextent[1], lyrextent[3]]
+        #Extent[lon_min,lon_max,lat_min,lat_max]
+        #boxproj={"llxy":llxy, "lrxy":lrxy, "urxy":urxy, "ulxy":ulxy}
+        #where llxy,lrxy, urxy, and ulxy are coordinate pairs in projection
+
+        llxy=(lyrextent[0],lyrextent[2])
+        lrxy=(lyrextent[1],lyrextent[2])
+        urxy=(lyrextent[1],lyrextent[3])
+        ulxy=(lyrextent[0],lyrextent[3])
+
+        boxproj={"llxy":llxy, "lrxy":lrxy, "urxy":urxy, "ulxy":ulxy}
+
         return boxproj, ref_proj, outputfile
 
     def transfer_metadata(self, infile, inband, outfile, outband):
         """
-        readout the file metadata and band metadat from infile inband, write these metadata to outfile outband
+        readout the file metadata and band metadata from infile inband, write these metadata to outfile outband
         input: infile
                inband - band number in the infile, 1,2,3, etc.
                outfile

@@ -14,22 +14,20 @@ import re
 import os
 from setuptools import find_packages, setup
 
-DEPENDENCIES = [
-    'setuptools >= 21.0.0',
-    'pytest >= 5.1.2',
-    'boto3 >= 1.9.0',
-    'python-json-logger >= 0.1.11'
-]
-DEV_DEPENDENCIES = [
-    'safety >= 1.8.5',
-    'coverage >= 4.5.4'
-]
+DEPENDENCIES = []
+with open("requirements.txt", "r") as f:
+    DEPENDENCIES = f.read().strip().split('\n')
+
+DEV_DEPENDENCIES = []
+with open("dev-requirements.txt", "r") as f:
+    DEV_DEPENDENCIES = f.read().strip().split('\n')
 
 EXCLUDE_FROM_PACKAGES = ["contrib", "docs", "tests*"]
 CURDIR = os.path.abspath(os.path.dirname(__file__))
 
 with io.open(os.path.join(CURDIR, "README.md"), "r", encoding="utf-8") as f:
     README = f.read()
+
 
 def get_version():
     main_file = os.path.join(CURDIR, "harmony", "__init__.py")
@@ -45,7 +43,8 @@ setup(
     version=get_version(),
     author="Patrick Quinn",
     author_email="patrick@element84.com",
-    description="A library for Python-based Harmony services to parse incoming messages, fetch data, stage data, and call back to Harmony",
+    description=("A library for Python-based Harmony services to parse incoming messages, "
+                 "fetch data, stage data, and call back to Harmony"),
     long_description=README,
     long_description_content_type="text/markdown",
     url="https://git.earthdata.nasa.gov/projects/HARMONY/repos/harmony-service-lib-py/browse",
@@ -53,11 +52,13 @@ setup(
     include_package_data=True,
     keywords=[],
     scripts=[],
-    entry_points={"console_scripts": ["harmony-service-lib=harmony.cli.__main__:main"]},
+    entry_points={
+        "console_scripts": ["harmony-service-lib=harmony.cli.__main__:main"]
+    },
     zip_safe=False,
     install_requires=DEPENDENCIES,
     extras_require={
-        'dev': DEV_DEPENDENCIES # Run `pip install -e .[dev]` to install dev dependencies
+        'dev': DEV_DEPENDENCIES
     },
     test_suite="tests",
     python_requires=">=3.6",
