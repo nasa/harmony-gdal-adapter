@@ -118,19 +118,19 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             #20201202, jz, found we can not use new authetication methods for GFRN, UAVSAR, and AVNIR2 in prod
             #use older authentication mathod, by setting FALLBACK_AUTHN_ENABLED=true in .env file, 
             #and setting arg access_token=None in following download function.
-            input_filename = download(
-                asset.href,
-                output_dir,
-                logger=self.logger,
-                access_token=self.message.accessToken,
-                cfg=self.config)
-
             #input_filename = download(
             #    asset.href,
             #    output_dir,
             #    logger=self.logger,
-            #    access_token=None,
+            #    access_token=self.message.accessToken,
             #    cfg=self.config)
+
+            input_filename = download(
+                asset.href,
+                output_dir,
+                logger=self.logger,
+                access_token=None,
+                cfg=self.config)
 
             basename = os.path.basename(generate_output_filename(asset.href, **operations))
 
