@@ -22,7 +22,8 @@ class test_adapter(HarmonyAdapter):
         self.downloaded_succes=False
         self.subsetted_file=None
         self.subsetted_success=False
-   
+        self.var_basename = None
+
 def get_file_info(infile):
     from osgeo import gdal
     import osr
@@ -42,7 +43,7 @@ def get_file_info(infile):
     miny = round(gt[3] + width*gt[4] + height*gt[5],2)
     maxx = round(gt[0] + width*gt[1] + height*gt[2],2)
     maxy = round(gt[3],2)
-    extent = [miny, maxy, minx, maxx]   
+    extent = [miny, maxy, minx, maxx]
     ds = None
     information={'proj_wkt':proj_wkt,
                  'gcs':gcs,

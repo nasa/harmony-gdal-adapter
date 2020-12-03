@@ -1,9 +1,9 @@
 """
 Description:
 This script does unit test for transform.py. It includes three tests:
-test if download is success, if subset is success, and if subsetted file 
-agrees with downloaded file. This script limits to test the message 
-with the first variable and the first granule and the tiff format output. 
+test if download is success, if subset is success, and if subsetted file
+agrees with downloaded file. This script limits to test the message
+with the first variable and the first granule and the tiff format output.
 
 Paramters:
 meassage_file and output_dir, where message_file is created with get_message_file.py,
@@ -17,6 +17,7 @@ import argparse
 import pytest
 import os
 import sys
+from harmony.util import stage, bbox_to_geometry, download, generate_output_filename
 from config import test_adapter, get_file_info
 ########################
 #in debug mode
@@ -67,155 +68,167 @@ def compare_files(message, downloaded_file,subsetted_file):
 
 def download_file(newadapter,output_dir):
     """
-    This function test if the file pointed by url is downloaded successfully 
-    to the local space. The url is in the message, which is an attribute in 
-    the object adapter. This object is created with message file as a global 
-    object before this function is called. At the last of this function, 
+    This function test if the file pointed by url is downloaded successfully
+    to the local space. The url is in the message, which is an attribute in
+    the object adapter. This object is created with message file as a global
+    object before this function is called. At the last of this function,
     use assert to check if the file is downloaded.
     """
 
-    adapter =newadapter.adapter
+    adapter = newadapter.adapter
     message = adapter.message
     granule = message.granules[0]
-    adapter.prepare_output_dir(output_dir)
-    adapter.download_granules( [ granule ] )
-    assert os.path.exists(granule.local_filename)
-    if  os.path.exists(granule.local_filename):
-        newadapter.downloaded_file=granule.local_filename
-        newadapter.downloaded_success=True
+    input_filename = download(granule.url, output_dir, logger=adapter.logger, access_token=message.accessToken)
 
-def subsetter(newadapter,output_dir):
+    adapter.prepare_output_dir(output_dir)
+    assert os.path.exists(input_filename)
+    if os.path.exists(input_filename):
+        newadapter.downloaded_file = input_filename
+        newadapter.downloaded_success = True
+
+
+def subsetter(newadapter, output_dir):
     """
-    This function test the subset process. It use the functions in 
-    the global object adapter to do the subset process. At the end 
+    This function test the subset process. It use the functions in
+    the global object adapter to do the subset process. At the end
     of this function, use assert to check if the subsetted file exist.
     """
-    adapter =newadapter.adapter
+    adapter = newadapter.adapter
     message = adapter.message
     granule = message.granules[0]
     layernames = []
     operations = dict(
-        is_variable_subset=True,
+        variable_subset=message.sources[0].variables,
         is_regridded=bool(message.format.crs),
         is_subsetted=bool(message.subset and message.subset.bbox)
-        )
+    )
+
     result = None
-    file_type = adapter.get_filetype(granule.local_filename)
+    basename = os.path.basename(generate_output_filename(granule.url, **operations))
+    input_filename = newadapter.downloaded_file
+    file_type = adapter.get_filetype(input_filename)
 
     if file_type == 'tif':
         layernames, result = adapter.process_geotiff(
-                granule,output_dir,layernames,operations,message.isSynchronous
+                message.sources[0], basename, input_filename, output_dir, layernames
                 )
     elif file_type == 'nc':
         layernames, result = adapter.process_netcdf(
-                granule,output_dir,layernames,operations,message.isSynchronous
+                message.sources[0], basename, input_filename, output_dir, layernames
                 )
     elif file_type == 'zip':
         layernames, result = adapter.process_zip(
-                granule,output_dir,layernames,operations,message.isSynchronous
+                message.sources[0], basename, input_filename, output_dir, layernames
                 )
     else:
-        adapter.logger.exception(e)
         adapter.completed_with_error('No reconized file foarmat, not process')
-    #test the result
-    newadapter.subsetted_file=None
-    newadapter.subsetted_success=False
+    # test the result
+    newadapter.subsetted_file = None
+    newadapter.subsetted_success = False
     if result:
-        newadapter.subsetted_file=result
-        newadapter.subsetted_success=True
+        newadapter.subsetted_file = result
+        newadapter.subsetted_success = True
+        newadapter.var_basename = basename
     assert result
 
-def subset_result(newadapter,output_dir):
+
+def subset_result(newadapter, output_dir):
     """
-    This function verifies if the subsetted file experiences 
+    This function verifies if the subsetted file experiences
     required process defined by message.
     """
-    adapter=newadapter.adapter
+    adapter = newadapter.adapter
     message = adapter.message
-    granule = message.granules[0]
-    if message.sources[0].variables:
-        variables=message.sources[0].variables
+    source = message.sources[0]
+    input_filename = adapter.downloaded_file
+    basename = newadapter.var_basename
+
+    # granule = message.granules[0]
+    if source.variables:
+        variables = source.variables
     else:
-        variables=None
-    #check if the download is success 
+        variables = None
+    # check if the download is success
     if not (newadapter.downloaded_success and newadapter.subsetted_success):
         assert False
-    #compare output file if it is geotiff
+    # compare output file if it is geotiff
     if adapter.get_filetype(newadapter.subsetted_file) != "tif":
         assert True
     downloaded_file = newadapter.downloaded_file
     subsetted_file = newadapter.subsetted_file
     file_type = adapter.get_filetype(downloaded_file)
     if file_type == 'zip':
-        [tiffile, ncfile]=adapter.pack_zipfile(downloaded_file, output_dir)
+        [tiffile, ncfile] = adapter.pack_zipfile(downloaded_file, output_dir)
         if tiffile:
-            compare_files(message, tifffile,subsetted_file)
+            compare_files(message, tiffile, subsetted_file)
         if ncfile:
             for variable in variables:
                 layer_format = adapter.read_layer_format(
-                        granule.collection,
-                        granule.local_filename,
+                        source.collection,
+                        input_filename,
                         variable.name
                         )
                 filename = layer_format.format(
-                        granule.local_filename)
-                layer_id = granule.id + '__' + variable.name
-                tifffile=adapter.nc2tiff(layer_id, filename, output_dir)
-                compare_files(message, tifffile,subsetted_file)
+                        input_filename)
+                layer_id = basename + '__' + variable.name
+                tiffile = adapter.nc2tiff(layer_id, filename, output_dir)
+                compare_files(message, tiffile, subsetted_file)
     elif file_type == "nc":
         for variable in variables:
             layer_format = adapter.read_layer_format(
-                        granule.collection,
-                        granule.local_filename,
+                        source.collection,
+                        input_filename,
                         variable.name
                         )
             filename = layer_format.format(
-                        granule.local_filename)
-            layer_id = granule.id + '__' + variable.name
-            tifffile=adapter.nc2tiff(layer_id, filename, output_dir)
-            compare_files(message, tifffile,subsetted_file)
+                        input_filename)
+            layer_id = basename + '__' + variable.name
+            tiffile = adapter.nc2tiff(layer_id, filename, output_dir)
+            compare_files(message, tiffile, subsetted_file)
     elif file_type == "tif":
-        compare_files(message, downloaded_file,subsetted_file)
+        compare_files(message, downloaded_file, subsetted_file)
     else:
         print("downloaded file has unknown format")
         assert False
+
 
 ########entry of the test script##################
 
 if not os.getenv("EDL_USERNAME"):
     with open(".env_unittest") as envfile:
-        test=envfile.read().splitlines()
+        test = envfile.read().splitlines()
 
     res = [i for i in test if "EDL_USERNAME" in i]
-    username=res[0].split("=")[1]
+    username = res[0].split("=")[1]
     os.environ["EDL_USERNAME"] = username
     res = [i for i in test if "EDL_PASSWORD" in i]
-    userpass=res[0].split("=")[1]
+    userpass = res[0].split("=")[1]
     os.environ["EDL_PASSWORD"] = userpass
 
 output_dir = "/home/unittest/data/results"
 message_dir = "/home/unittest/data/messages"
-i=0
-param_names="message_file, output_dir"
-param_list=[]
+i = 0
+param_names = "message_file, output_dir"
+param_list = []
 # r=root, d=directories, f = files
 for r, d, f in os.walk(message_dir):
     for file in f:
         if file.endswith(".msg"):
-            i=i+1
-            message_file = os.path.join(r,file)
+            i = i+1
+            message_file = os.path.join(r, file)
             param_list.append((message_file, output_dir))
-            #print("unit test against message "+str(i)+": " + message_file)
-            
-#dynamically produces the paramters
+            # print("unit test against message "+str(i)+": " + message_file)
+
+
+# dynamically produces the paramters
 
 @pytest.mark.parametrize(param_names, param_list)
 def test_one_message(message_file, output_dir):
     adapter_obj = newadapter(message_file, output_dir)
     assert adapter_obj
-    download_file(adapter_obj,output_dir)
-    subsetter(adapter_obj,output_dir)
-    subset_result(adapter_obj,output_dir)
+    download_file(adapter_obj, output_dir)
+    subsetter(adapter_obj, output_dir)
+    subset_result(adapter_obj, output_dir)
 
 
 """
