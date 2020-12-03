@@ -10,7 +10,7 @@ import argparse
 import logging
 import harmony
 from .transform import HarmonyAdapter
-
+import time
 def main():
     """
     Parses command line arguments and invokes the appropriate method to respond to them
@@ -30,4 +30,6 @@ def main():
 
 if __name__ == "__main__":
 
+    #debug
+    #time.sleep(7200)
     main()

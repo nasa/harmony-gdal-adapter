@@ -1,13 +1,14 @@
 """
-=======
-util.py
-=======
+Utility functions for logging, staging data results for external
+access (S3 pre-signed URL), decrypting data using a shared secret, and
+operating on message queues.
 
-Utility methods, consisting of functions for moving remote data (HTTPS and S3) to be operated
-on locally and for staging data results for external access (S3 pre-signed URL).
+This module relies heavily on environment variables to know
+which endpoints to use and how to authenticate to them as follows:
 
-This module relies (overly?) heavily on environment variables to know which endpoints to use
-and how to authenticate to them as follows:
+Required when receiving an encrypted user access token in the message (Always!):
+    SHARED_SECRET_KEY:  The 32-byte shared encryption / decryption key to decrypt
+                        the access token in the Harmony operation.
 
 Required when reading from or staging to S3:
     AWS_DEFAULT_REGION: The AWS region in which the S3 client is operating (default: "us-west-2")
@@ -16,85 +17,209 @@ Required when staging to S3 and not using the Harmony-provided stagingLocation p
     STAGING_BUCKET: The bucket where staged files should be placed
     STAGING_PATH: The base path under which staged files should be placed
 
-Recommended when using HTTPS, allowing Earthdata Login auth.  Prints a warning if not supplied:
-    EDL_USERNAME: The username to be passed to Earthdata Login when challenged
-    EDL_PASSWORD: The password to be passed to Earthdata Login when challenged
+Required when using HTTPS, allowing Earthdata Login auth:
+    OAUTH_HOST:     The Earthdata Login (EDL) environment to connect to
+    OAUTH_CLIENT_ID:    The EDL application client id used to acquire an EDL shared access token
+    OAUTH_UID:          The EDL application UID used to acquire an EDL shared access token
+    OAUTH_PASSWORD:     The EDL application password used to acquire an EDL shared access token
+    OAUTH_REDIRECT_URI: A valid redirect URI for the EDL application (NOTE: the redirect URI is
+                        not followed or used; it does need to be in the app's redirect URI list)
+
+Optional, if support is needed for downloading data from an endpoint that is not
+EDL-share-token aware:
+
+    FALLBACK_AUTHN_ENABLED: Whether to try downloading with the EDL_* credentials.
+    EDL_USERNAME:           An valid EDL user entity username.
+    EDL_PASSWORD:           The password belonging to EDL_USERNAME.
 
 Optional when reading from or staging to S3:
-    USE_LOCALSTACK: 'true' if the S3 client should connect to a LocalStack instance instead of Amazon S3 (for testing)
+    USE_LOCALSTACK:  'true' if the S3 client should connect to a LocalStack instance instead of
+                     Amazon S3 (for testing)
+    LOCALSTACK_HOST: The hostname of the Localstack to connect to if `USE_LOCALSTACK`.
+    BACKEND_HOST:    The hostname of the Harmony backend. Deprecated / unused by this package.
+
+Optional:
+    APP_NAME:          A name for the service that will appear in log entries.
+    ENV:               The application environment. One of: dev, test. Used for local development.
+    TEXT_LOGGER:       Whether to log in plaintext or JSON. Default: True (plaintext).
+    HEALTH_CHECK_PATH: The filesystem path that should be `touch`ed to indicate the service is
+                       alive.
 """
 
-import sys
-import boto3
-import hashlib
-import logging
+from base64 import b64decode
+from collections import namedtuple
 from datetime import datetime
-from pythonjsonlogger import jsonlogger
-from http.cookiejar import CookieJar
+from functools import lru_cache
+import logging
 from pathlib import Path
-from urllib import request
 from os import environ, path
+import sys
+from urllib import parse
 
-class CanceledException(Exception):
-    """Class for throwing an exception indicating a Harmony request has been canceled"""
-    pass
+from pythonjsonlogger import jsonlogger
+from nacl.secret import SecretBox
 
-def get_env(name):
+from harmony import aws
+from harmony import io
+
+
+DEFAULT_SHARED_SECRET_KEY = '_THIS_IS_MY_32_CHARS_SECRET_KEY_'
+
+
+class HarmonyException(Exception):
+    """Base class for Harmony exceptions.
+
+    Attributes
+    ----------
+    message : string
+        Explanation of the error
+    category : string
+        Classification of the type of harmony error
     """
-    Returns the environment variable with the given name, or None if none exists.  Removes quotes
-    around values if they exist
+
+    def __init__(self, message, category='Service'):
+        self.message = message
+        self.category = category
+
+
+class CanceledException(HarmonyException):
+    """Class for throwing an exception indicating a Harmony request has been canceled"""
+
+    def __init__(self, message=None):
+        super().__init__(message, 'Canceled')
+
+
+class ForbiddenException(HarmonyException):
+    """Class for throwing an exception indicating download failed due to not being able to access the data"""
+
+    def __init__(self, message=None):
+        super().__init__(message, 'Forbidden')
+
+
+Config = namedtuple(
+    'Config', [
+        'app_name',
+        'oauth_host',
+        'oauth_client_id',
+        'oauth_uid',
+        'oauth_password',
+        'oauth_redirect_uri',
+        'fallback_authn_enabled',
+        'edl_username',
+        'edl_password',
+        'use_localstack',
+        'backend_host',
+        'localstack_host',
+        'aws_default_region',
+        'staging_path',
+        'staging_bucket',
+        'env',
+        'text_logger',
+        'health_check_path',
+        'shared_secret_key',
+    ])
+
+
+def _validated_config(config):
+    """Validates that the given Config has values for all required
+    variables and returns it if so. Raises an Exception if invalid.
+    """
+    required = [
+        'shared_secret_key',
+        'oauth_client_id',
+        'oauth_uid',
+        'oauth_password',
+        'oauth_redirect_uri',
+        'staging_path',
+        'staging_bucket'
+    ]
+
+    unset = [var.upper() for var in required if getattr(config, var) is None]
+
+    # Conditionally required
+    if config.fallback_authn_enabled and getattr(config, 'edl_username') is None:
+        unset.append("EDL_USERNAME")
+    if config.fallback_authn_enabled and getattr(config, 'edl_password') is None:
+        unset.append("EDL_PASSWORD")
+
+    if len(unset) > 0:
+        msg = f"Required environment variables are not set: {', '.join(unset)}"
+        raise Exception(msg)
+
+    # Warnings
+    if config.shared_secret_key == DEFAULT_SHARED_SECRET_KEY:
+        logging.warning("The SHARED_SECRET_KEY has not been set. Currently set to its default (unsecure) value.")
+
+    logging.info(config)
+
+    return config
+
+
+@lru_cache(maxsize=None)
+def config(validate=True):
+    """
+    Returns the Config object with all parameters set to values that were set in the
+    process' environment (as environment variables), or to their default values if not
+    set.
 
     Parameters
     ----------
-    name : string
-        The name of the value to retrieve
+    validate : bool
+        Whether to validate the config before returning it. Useful to disable when
+        running unit tests.
 
     Returns
     -------
-    value : string
-        The environment value or None if none exists
+    harmony.util.Config
+        The configuration values for this runtime environment.
     """
-    value = environ.get(name)
-    if value is None:
-        return value
-    if value.startswith('"') and value.endswith('"'):
-        return value[1:-1].replace('\\"', '"')
-    return value
+    def str_envvar(name: str, default: str) -> str:
+        value = environ.get(name, default)
+        return value.strip('\"') if value is not None else None
 
-def _use_localstack():
-    """True when when running locally; influences how URLs are structured
-    and how S3 is accessed.
-    """
-    return get_env('USE_LOCALSTACK') == 'true'
+    def bool_envvar(name: str, default: bool) -> bool:
+        value = environ.get(name)
+        return str.lower(value) == 'true' if value is not None else default
 
-def _backend_host():
-    return get_env('BACKEND_HOST') or 'localhost'
+    oauth_redirect_uri = str_envvar('OAUTH_REDIRECT_URI', None)
+    if oauth_redirect_uri is not None:
+        oauth_redirect_uri = parse.quote(oauth_redirect_uri)
+    backend_host = str_envvar('BACKEND_HOST', 'localhost')
+    localstack_host = str_envvar('LOCALSTACK_HOST', backend_host)
 
-def _localstack_host():
-    return get_env('LOCALSTACK_HOST') or _backend_host()
+    config = Config(
+        app_name=str_envvar('APP_NAME', sys.argv[0]),
+        oauth_host=str_envvar('OAUTH_HOST', 'https://uat.urs.earthdata.nasa.gov'),
+        oauth_client_id=str_envvar('OAUTH_CLIENT_ID', None),
+        oauth_uid=str_envvar('OAUTH_UID', None),
+        oauth_password=str_envvar('OAUTH_PASSWORD', None),
+        oauth_redirect_uri=oauth_redirect_uri,
+        fallback_authn_enabled=bool_envvar('FALLBACK_AUTHN_ENABLED', False),
+        edl_username=str_envvar('EDL_USERNAME', None),
+        edl_password=str_envvar('EDL_PASSWORD', None),
+        use_localstack=bool_envvar('USE_LOCALSTACK', False),
+        backend_host=backend_host,
+        localstack_host=localstack_host,
+        aws_default_region=str_envvar('AWS_DEFAULT_REGION', 'us-west-2'),
+        staging_path=str_envvar('STAGING_PATH', None),
+        staging_bucket=str_envvar('STAGING_BUCKET', None),
+        env=str_envvar('ENV', ''),
+        text_logger=bool_envvar('TEXT_LOGGER', False),
+        health_check_path=str_envvar('HEALTH_CHECK_PATH', '/tmp/health.txt'),
+        shared_secret_key=str_envvar('SHARED_SECRET_KEY', DEFAULT_SHARED_SECRET_KEY)
+    )
 
-def _region():
-    return get_env('AWS_DEFAULT_REGION') or 'us-west-2'
-
-def _aws_parameters(use_localstack, localstack_host, region):
-    if use_localstack:
-        return {
-            'endpoint_url': f'http://{localstack_host}:4566',
-            'use_ssl': False,
-            'aws_access_key_id': 'ACCESS_KEY',
-            'aws_secret_access_key': 'SECRET_KEY',
-            'region_name': region
-        }
+    if validate:
+        return _validated_config(config)
     else:
-        return {
-            'region_name': region
-        }
+        return config
 
-REGION = get_env('AWS_DEFAULT_REGION') or 'us-west-2'
 
 class HarmonyJsonFormatter(jsonlogger.JsonFormatter):
+    """A JSON log entry formatter."""
     def add_fields(self, log_record, record, message_dict):
-        super(HarmonyJsonFormatter, self).add_fields(log_record, record, message_dict)
+        super(HarmonyJsonFormatter, self).add_fields(
+            log_record, record, message_dict)
         if not log_record.get('timestamp'):
             now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
             log_record['timestamp'] = now
@@ -103,13 +228,17 @@ class HarmonyJsonFormatter(jsonlogger.JsonFormatter):
         else:
             log_record['level'] = record.levelname
         if not log_record.get('application'):
-            log_record['application'] = get_env('APP_NAME') or sys.argv[0]
+            log_record['application'] = self.app_name
 
-def build_logger():
+
+@lru_cache(maxsize=None)
+def build_logger(config, name=None):
     """
     Builds a logger with appropriate defaults for Harmony
     Parameters
     ----------
+    config : harmony.util.Config
+        The configuration values for this runtime environment.
     name : string
         The name of the logger
 
@@ -120,20 +249,19 @@ def build_logger():
     """
     logger = logging.getLogger()
     syslog = logging.StreamHandler()
-    text_formatter = get_env('TEXT_LOGGER') == 'true'
-    if text_formatter:
-        formatter = logging.Formatter("%(asctime)s [%(levelname)s] [%(name)s.%(funcName)s:%(lineno)d] [%(user)s] %(message)s")
+    if config.text_logger:
+        formatter = logging.Formatter("%(asctime)s [%(levelname)s] [%(name)s.%(funcName)s:%(lineno)d] %(message)s")
     else:
         formatter = HarmonyJsonFormatter()
+        formatter.app_name = config.app_name
     syslog.setFormatter(formatter)
     logger.addHandler(syslog)
     logger.setLevel(logging.INFO)
     logger.propagate = False
     return logger
 
-default_logger=build_logger()
 
-def setup_stdout_log_formatting():
+def setup_stdout_log_formatting(config):
     """
     Updates sys.stdout and sys.stderr to pass messages through the Harmony log formatter.
     """
@@ -157,68 +285,18 @@ def setup_stdout_log_formatting():
             if self.linebuf != '':
                 self.logger.log(self.log_level, self.linebuf.rstrip())
             self.linebuf = ''
-    sys.stdout = StreamToLogger(default_logger, logging.INFO)
-    sys.stderr = StreamToLogger(default_logger, logging.ERROR)
+    sys.stdout = StreamToLogger(build_logger(config), logging.INFO)
+    sys.stderr = StreamToLogger(build_logger(config), logging.ERROR)
 
-def _get_aws_client(service):
-    """
-    Returns a boto3 client for accessing the provided service.  Accesses the service in us-west-2
-    unless "AWS_DEFAULT_REGION" is set.  If the environment variable "USE_LOCALSTACK" is set to "true",
-    it will return a client that will access a LocalStack instance instead of AWS.
 
-    Parameters
-    ----------
-    service : string
-        The AWS service name for which to construct a client, e.g. "s3" or "sqs"
-
-    Returns
-    -------
-    s3_client : boto3.*.Client
-        A client appropriate for accessing the provided service
-    """
-    service_params = _aws_parameters(_use_localstack(), _localstack_host(), _region())
-    return boto3.client(service, **service_params)
-
-def _setup_networking(logger=default_logger):
-    """
-    Sets up HTTP(S) cookies and basic auth so that HTTP calls using urllib.request will
-    use Earthdata Login (EDL) auth as appropriate.  Will allow Earthdata login auth only if
-    the following environment variables are set and will print a warning if they are not:
-
-    EDL_USERNAME: The username to be passed to Earthdata Login when challenged
-    EDL_PASSWORD: The password to be passed to Earthdata Login when challenged
-
-    Returns
-    -------
-    None
-    """
-    try:
-        manager = request.HTTPPasswordMgrWithDefaultRealm()
-        edl_endpoints = ['https://sit.urs.earthdata.nasa.gov', 'https://uat.urs.earthdata.nasa.gov', 'https://urs.earthdata.nasa.gov']
-        for endpoint in edl_endpoints:
-            manager.add_password(None, endpoint, get_env('EDL_USERNAME'), get_env('EDL_PASSWORD'))
-        auth = request.HTTPBasicAuthHandler(manager)
-
-        jar = CookieJar()
-        processor = request.HTTPCookieProcessor(jar)
-        opener = request.build_opener(auth, processor)
-        request.install_opener(opener)
-    except KeyError:
-        logger.warn('Earthdata Login environment variables EDL_USERNAME and EDL_PASSWORD must be set up for authenticated downloads.  Requests will be unauthenticated.')
-
-def download(url, destination_dir, logger=default_logger):
+def download(url, destination_dir, logger=None, access_token=None, data=None, cfg=None):
     """
     Downloads the given URL to the given destination directory, using the basename of the URL
     as the filename in the destination directory.  Supports http://, https:// and s3:// schemes.
     When using the s3:// scheme, will run against us-west-2 unless the "AWS_DEFAULT_REGION"
-    environment variable is set. When using http:// or https:// schemes, expects the following
-    environment variables or will print a warning:
+    environment variable is set.
 
-    EDL_USERNAME: The username to be passed to Earthdata Login when challenged
-    EDL_PASSWORD: The password to be passed to Earthdata Login when challenged
-
-    Note: The EDL environment variables are likely to be replaced by a token passed by the message
-        in the future
+    When using http:// or https:// schemes, the access_token will be used for authentication.
 
     Parameters
     ----------
@@ -226,55 +304,48 @@ def download(url, destination_dir, logger=default_logger):
         The URL to fetch
     destination_dir : string
         The directory in which to place the downloaded file
+    logger : Logger
+        A logger to which the function will write, if provided
+    access_token :
+        The Earthdata Login token of the caller to use for downloads
+    data : dict or Tuple[str, str]
+        Optional parameter for additional data to
+        send to the server when making a HTTP POST request through
+        urllib.get.urlopen. These data will be URL encoded to a query string
+        containing a series of `key=value` pairs, separated by ampersands. If
+        None (the default), urllib.get.urlopen will use the  GET
+        method.
+    cfg : harmony.util.Config
+        The configuration values for this runtime environment.
 
     Returns
     -------
     destination : string
       The filename, including directory, of the downloaded file
     """
+    if cfg is None:
+        cfg = config()
+    if logger is None:
+        logger = build_logger(cfg)
 
-    def download_from_s3(url, destination):
-        bucket = url.split('/')[2]
-        key = '/'.join(url.split('/')[3:])
-        _get_aws_client('s3').download_file(bucket, key, destination)
-        return destination
+    destination_path = io.filename(destination_dir, url)
+    if destination_path.exists():
+        return str(destination_path)
+    destination_path = str(destination_path)
 
-    def download_from_http(url, destination):
-        _setup_networking()
-        # Open the url
-        f = request.urlopen(url)
-        logger.info('Downloading %s', url)
+    source = io.optimized_url(url, cfg.localstack_host)
 
-        with open(destination, 'wb') as local_file:
-            local_file.write(f.read())
+    if aws.is_s3(source):
+        return aws.download_from_s3(cfg, source, destination_path)
 
-        logger.info('Completed %s', url)
-        return destination
+    if io.is_http(source):
+        return io.download_from_http(cfg, source, destination_path, access_token,
+                                     logger, data, HarmonyException, ForbiddenException)
 
-    basename = hashlib.sha256(url.encode('utf-8')).hexdigest()
-    ext = path.basename(url).split('?')[0].split('.')[-1]
-
-    filename = basename + '.' + ext
-    destination = path.join(destination_dir, filename)
-
-    url = url.replace('//localhost', _localstack_host())
-
-    # Allow faster local testing by referencing files directly
-    url = url.replace('file://', '')
-    if not url.startswith('http') and not url.startswith('s3'):
-        return url
-
-    # Don't overwrite, as this can be called many times for a granule
-    if path.exists(destination):
-        return destination
-
-    if url.startswith('s3'):
-        return download_from_s3(url, destination)
-
-    return download_from_http(url, destination)
+    return source
 
 
-def stage(local_filename, remote_filename, mime, logger=default_logger, location=None):
+def stage(local_filename, remote_filename, mime, logger=None, location=None, cfg=None):
     """
     Stages the given local filename, including directory path, to an S3 location with the given
     filename and mime-type
@@ -295,36 +366,25 @@ def stage(local_filename, remote_filename, mime, logger=default_logger, location
         STAGING_PATH must be set in the environment
     logger : logging
         The logger to use
+    cfg : harmony.util.Config
+        The configuration values for this runtime environment.
 
     Returns
     -------
     url : string
         An s3:// URL to the staged file
     """
+    # The implementation of this function has been moved to the
+    # harmony.aws module.
+    if cfg is None:
+        cfg = config()
+    if logger is None:
+        logger = build_logger(cfg)
 
-    if location is None:
-        staging_bucket = get_env('STAGING_BUCKET')
-        staging_path = get_env('STAGING_PATH')
+    return aws.stage(cfg, local_filename, remote_filename, mime, logger, location)
 
-        if staging_path:
-            key = '%s/%s' % (staging_path, remote_filename)
-        else:
-            key = remote_filename
-    else:
-        _, _, staging_bucket, staging_path = location.split('/', 3)
-        key = staging_path + remote_filename
 
-    if get_env('ENV') in ['dev', 'test'] and not _use_localstack():
-        logger.warn("ENV=" + get_env('ENV') + " and not using localstack, so we will not stage " + local_filename + " to " + key)
-        return "http://example.com/" + key
-
-    s3 = _get_aws_client('s3')
-    s3.upload_file(local_filename, staging_bucket, key,
-                ExtraArgs={'ContentType': mime})
-
-    return 's3://%s/%s' % (staging_bucket, key)
-
-def receive_messages(queue_url, visibility_timeout_s=600, logger=default_logger):
+def receive_messages(queue_url, visibility_timeout_s=600, logger=None, cfg=None):
     """
     Generates successive messages from reading the queue.  The caller
     is responsible for deleting or returning each message to the queue
@@ -336,6 +396,8 @@ def receive_messages(queue_url, visibility_timeout_s=600, logger=default_logger)
     visibility_timeout_s : int
         The number of seconds to wait for a received message to be deleted
         before it is returned to the queue
+    cfg : harmony.util.Config
+        The configuration values for this runtime environment.
 
     Yields
     ------
@@ -343,24 +405,18 @@ def receive_messages(queue_url, visibility_timeout_s=600, logger=default_logger)
         A tuple of the receipt handle, used to delete or update messages,
         and the contents of the message
     """
-    sqs = _get_aws_client('sqs')
-    logger.info('Listening on %s' % (queue_url,))
-    while True:
-        receive_params = dict(
-            QueueUrl=queue_url,
-            VisibilityTimeout=visibility_timeout_s,
-            WaitTimeSeconds=20,
-            MaxNumberOfMessages=1
-        )
-        touch_health_check_file()
-        response = sqs.receive_message(**receive_params)
-        messages = response.get('Messages') or []
-        if len(messages) == 1:
-            yield (messages[0]['ReceiptHandle'], messages[0]['Body'])
-        else:
-            logger.info('No messages received.  Retrying.')
+    # The implementation of this function has been moved to the
+    # harmony.aws module.
+    if cfg is None:
+        cfg = config()
+    if logger is None:
+        logger = build_logger(cfg)
 
-def delete_message(queue_url, receipt_handle):
+    touch_health_check_file(cfg.health_check_path)
+    return aws.receive_messages(cfg, queue_url, visibility_timeout_s, logger)
+
+
+def delete_message(queue_url, receipt_handle, cfg=None):
     """
     Deletes the message with the given receipt handle from the provided queue URL,
     indicating successful processing
@@ -371,11 +427,17 @@ def delete_message(queue_url, receipt_handle):
         The queue from which the message originated
     receipt_handle : string
         The receipt handle of the message, as yielded by `receive_messages`
+    cfg : harmony.util.Config
+        The configuration values for this runtime environment.
     """
-    sqs = _get_aws_client('sqs')
-    sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
+    # The implementation of this function has been moved to the
+    # harmony.aws module.
+    if cfg is None:
+        cfg = config()
+    return aws.delete_message(cfg, queue_url, receipt_handle)
 
-def change_message_visibility(queue_url, receipt_handle, visibility_timeout_s):
+
+def change_message_visibility(queue_url, receipt_handle, visibility_timeout_s, cfg=None):
     """
     Updates the message visibility timeout of the message with the given receipt handle
 
@@ -388,17 +450,155 @@ def change_message_visibility(queue_url, receipt_handle, visibility_timeout_s):
     visibility_timeout_s : int
         The number of additional seconds to wait for a received message to be deleted
         before it is returned to the queue
+    cfg : harmony.util.Config
+        The configuration values for this runtime environment.
     """
-    sqs = _get_aws_client('sqs')
-    sqs.change_message_visibility(
-        QueueUrl=queue_url,
-        ReceiptHandle=receipt_handle,
-        VisibilityTimeout=visibility_timeout_s)
+    # The implementation of this function has been moved to the
+    # harmony.aws module.
+    if cfg is None:
+        cfg = config()
+    return aws.change_message_visibility(cfg, queue_url, receipt_handle, visibility_timeout_s)
 
-def touch_health_check_file():
+
+def touch_health_check_file(health_check_path):
     """
-    Updates the mtime of the health check file
+    Updates the mtime of the health check file.
     """
-    healthCheckPath = environ.get('HEALTH_CHECK_PATH', '/tmp/health.txt')
-    # touch the health.txt file to update its timestamp
-    Path(healthCheckPath).touch()
+    Path(health_check_path).touch()
+
+
+def create_decrypter(key=b'_THIS_IS_MY_32_CHARS_SECRET_KEY_'):
+    """Creates a function that will decrypt cyphertext using a shared secret
+    (symmetric) 32-byte key.
+
+    The returned decrypter function has type signature: str -> str.
+    """
+    box = SecretBox(key)
+
+    def decrypter(encrypted_msg_str):
+        """Decrypt encrypted text using the shared secret (symmetric) key
+        in the function's closure."""
+
+        parts = encrypted_msg_str.split(':')
+        nonce = b64decode(parts[0])
+        ciphertext = b64decode(parts[1])
+
+        return box.decrypt(ciphertext, nonce).decode('utf-8')
+
+    return decrypter
+
+
+def nop_decrypter(ciphertext):
+    """An identity decrypter function. A NOP: it returns the ciphertext
+    as-is. Its other responsibility is to have nothing to do with
+    crypto-currency transactions in exactly the same way that it has
+    nothing to do with quantum computing.
+    """
+    return ciphertext
+
+
+def generate_output_filename(filename, ext=None, variable_subset=None, is_regridded=False, is_subsetted=False):
+    """
+    Return an output filename for the given granules according to our naming conventions:
+    {original filename without suffix}(_{single var})?(_regridded)?(_subsetted)?.<ext>
+
+    Parameters
+    ----------
+        granule : message.Granule
+            The source granule for the output file
+        ext: string, optional
+            The destination file extension (default: original extension)
+        variable_subset : string[], optional
+            When variable subsetting, a list of all variables that have been subset
+        is_regridded : bool, optional
+            True if a regridding operation has been performed (default: False)
+        is_subsetted : bool, optional
+            True if a subsetting operation has been performed (default: False)
+
+    Returns
+    -------
+        string
+            The output filename
+    """
+    url = filename
+    # Get everything between the last non-trailing '/' before the query and the first '?'
+    # Do this instead of using a URL parser, because our URLs are not complex in practice and
+    # it is useful to allow relative file paths to work for local testing.
+    original_filename = url.split('?')[0].rstrip('/').split('/')[-1]
+    (original_basename, original_ext) = path.splitext(original_filename)
+    if ext is None:
+        ext = original_ext
+
+    if not ext.startswith('.'):
+        ext = '.' + ext
+
+    suffixes = []
+    if variable_subset and len(variable_subset) == 1:
+        var = variable_subset[0]
+        if hasattr(var, 'name'):
+            var = var.name
+        suffixes.append('_' + var.replace('/', '_'))
+    if is_regridded:
+        suffixes.append('_regridded')
+    if is_subsetted:
+        suffixes.append('_subsetted')
+    suffixes.append(ext)
+
+    result = original_basename
+    # Iterate suffixes in reverse, removing them from the result if they're at the end of the string
+    # This supports the case of chaining where one service regrids and another subsets but we don't
+    # want names to get mangled
+    for suffix in suffixes[::-1]:
+        if result.endswith(suffix):
+            result = result[:-len(suffix)]
+
+    return result + "".join(suffixes)
+
+
+def bbox_to_geometry(bbox):
+    '''
+    Creates a GeoJSON geometry given a GeoJSON BBox, accounting for antimeridian
+
+    Parameters
+    ----------
+    bbox : float[4]
+        the bounding box to create a geometry from
+
+    Returns
+    -------
+    dict
+        a GeoJSON Polygon or MultiPolygon representation of the input bbox
+    '''
+    if not bbox:
+        return None
+    west, south, east, north = bbox[0:4]
+    if west > east:
+        return {
+            'type': 'MultiPolygon',
+            'coordinates': [
+                [[
+                    [-180, south],
+                    [-180, north],
+                    [east, north],
+                    [east, south],
+                    [-180, south]
+                ]],
+                [[
+                    [west, south],
+                    [west, north],
+                    [180, north],
+                    [180, south],
+                    [west, south]
+                ]]
+            ]
+        }
+    return {
+        'type': 'Polygon',
+        'coordinates': [[
+            [west, south],
+            [west, north],
+            [east, north],
+            [east, south],
+            [west, south]
+        ]],
+    }

@@ -10,6 +10,9 @@ from the message JSON.
 
 import hashlib
 import json
+import copy
+from warnings import warn
+
 
 class JsonObject(object):
     """
@@ -39,8 +42,10 @@ class JsonObject(object):
             A dictionary of property name to type for properties that are lists of
             JSONObject classes, by default {}
         """
-        self.data = data or {}
+        self.output_data = data or {}
+        self.data = copy.deepcopy(data) or {}
         self.properties = properties + list(list_properties.keys())
+        self.processed = []
         for prop in properties:
             setattr(self, prop, data.get(prop))
         for prop in list_properties:
@@ -48,6 +53,29 @@ class JsonObject(object):
             items = data.get(prop) or []
             value = [Class(item) for item in items]
             setattr(self, prop, value)
+
+    def process(self, *prop):
+        """
+        Marks the given property as having been processed and returns its value.
+        If multiple properties are passed, returns their values an array
+
+        Parameters
+        ----------
+        prop : string
+            the name of the property having been processed
+
+        Returns
+        -------
+        object
+            the value of the property supplied
+        """
+        result = []
+        for p in prop:
+            self.output_data.pop(p, None)
+            result.append(getattr(self, p))
+        if len(result) == 1:
+            return result[0]
+        return result
 
     def __repr__(self):
         """
@@ -61,11 +89,13 @@ class JsonObject(object):
         try:
             spaces = '    ' * JsonObject.reprdepth
             result += '<' + self.__class__.__name__ + '\n'
-            result += '\n'.join(["%s%s = %s" % (spaces, p, repr(getattr(self, p))) for p in self.properties])
+            result += '\n'.join(["%s%s = %s" % (spaces, p, repr(getattr(self, p)))
+                                 for p in self.properties])
             result += '>'
         finally:
             JsonObject.reprdepth -= 1
         return result
+
 
 class Source(JsonObject):
     """
@@ -81,6 +111,7 @@ class Source(JsonObject):
     granules : list
         A list of Granule objects for the granules which should be operated on
     """
+
     def __init__(self, message_data):
         """
         Constructor
@@ -91,12 +122,14 @@ class Source(JsonObject):
             The Harmony message "sources" item to deserialize
         """
         super().__init__(message_data,
-            properties=['collection'],
-            list_properties={'variables': Variable, 'granules': Granule}
-        )
+                         properties=['collection'],
+                         list_properties={
+                             'variables': Variable, 'granules': Granule}
+                         )
         for granule in self.granules:
             granule.collection = self.collection
             granule.variables = self.variables
+
 
 class Variable(JsonObject):
     """
@@ -105,12 +138,15 @@ class Variable(JsonObject):
     Attributes
     ----------
     id : string
-        The UMM-Var ID of the variable
+        The UMM-Var ID of the variable.
     name : string
-        The UMM-Var short name of the variable, typically identifies layer name found in the science data file
+        The UMM-Var short name of the variable, typically identifies layer name found in the
+        science data file.
     fullPath : string
-         The variable's absolute path within the file, including hierarchy.  Derived from UMM-Var group path combined with name.
+         The variable's absolute path within the file, including hierarchy.  Derived from
+         UMM-Var group path combined with name.
     """
+
     def __init__(self, message_data):
         """
         Constructor
@@ -121,6 +157,7 @@ class Variable(JsonObject):
             The Harmony message "variables" item to deserialize
         """
         super().__init__(message_data, properties=['id', 'name', 'fullPath'])
+
 
 class Granule(JsonObject):
     """
@@ -140,6 +177,7 @@ class Granule(JsonObject):
     temporal: Temporal
         The temporal extent of the granule
     """
+
     def __init__(self, message_data):
         """
         Constructor
@@ -149,12 +187,15 @@ class Granule(JsonObject):
         message_data : dictionary
             The Harmony message "granules" item to deserialize
         """
-        super().__init__(message_data, properties=['id', 'name', 'url', 'bbox', 'temporal'])
+        super().__init__(message_data, properties=[
+            'id', 'name', 'url', 'bbox', 'temporal'])
+        warn('message.Granule is deprecated.  New workflows will use STAC catalogs instead',
+             DeprecationWarning, stacklevel=2)
         self.local_filename = None
         self.collection = None
         self.variables = []
         if self.temporal is not None:
-            self.temporal = Temporal(self.temporal)
+            self.temporal = Temporal(message_data['temporal'])
 
 
 class MinMax(JsonObject):
@@ -168,6 +209,7 @@ class MinMax(JsonObject):
     max: float
         The max value for the attribute
     """
+
     def __init__(self, message_data):
         """
         Constructor
@@ -177,7 +219,8 @@ class MinMax(JsonObject):
         message_data : dictionary
             The Harmony message "format.scaleExtent.[x|y]" object to deserialize
         """
-        super().__init__(message_data, properties=['min','max'])
+        super().__init__(message_data, properties=['min', 'max'])
+
 
 class ScaleExtent(JsonObject):
     """
@@ -190,6 +233,7 @@ class ScaleExtent(JsonObject):
     y: message.MinMax
         The min and max values for the scale extent for the Y dimension
     """
+
     def __init__(self, message_data):
         """
         Constructor
@@ -201,9 +245,10 @@ class ScaleExtent(JsonObject):
         """
         super().__init__(message_data, properties=['x', 'y'])
         if self.x is not None:
-            self.x = MinMax(self.x)
+            self.x = MinMax(message_data['x'])
         if self.y is not None:
-            self.y = MinMax(self.y)
+            self.y = MinMax(message_data['y'])
+
 
 class ScaleSize(JsonObject):
     """
@@ -216,6 +261,7 @@ class ScaleSize(JsonObject):
     y: float
         The scale size for the Y dimension
     """
+
     def __init__(self, message_data):
         """
         Constructor
@@ -226,6 +272,7 @@ class ScaleSize(JsonObject):
             The Harmony message "format.scaleExtent" object to deserialize
         """
         super().__init__(message_data, properties=['x', 'y'])
+
 
 class Format(JsonObject):
     """
@@ -254,6 +301,7 @@ class Format(JsonObject):
     scaleSize: message.ScaleSize
         The scale size in the x and y dimensions
     """
+
     def __init__(self, message_data):
         """
         Constructor
@@ -275,9 +323,10 @@ class Format(JsonObject):
             'scaleSize'
         ])
         if self.scaleExtent is not None:
-            self.scaleExtent = ScaleExtent(self.scaleExtent)
+            self.scaleExtent = ScaleExtent(message_data['scaleExtent'])
         if self.scaleSize is not None:
-            self.scaleSize = ScaleSize(self.scaleSize)
+            self.scaleSize = ScaleSize(message_data['scaleSize'])
+
 
 class RemoteResource(JsonObject):
     """
@@ -290,6 +339,7 @@ class RemoteResource(JsonObject):
     type : string
         The resource's content type
     """
+
     def __init__(self, message_data):
         """
         Constructor
@@ -301,6 +351,7 @@ class RemoteResource(JsonObject):
         """
         super().__init__(message_data, properties=['href', 'type'])
 
+
 class Subset(JsonObject):
     """
     Subsetting parameters as found in a Harmony message's "subset" object
@@ -311,6 +362,7 @@ class Subset(JsonObject):
         A list of 4 floating point values corresponding to [West, South, East, North]
         coordinates
     """
+
     def __init__(self, message_data):
         """
         Constructor
@@ -322,7 +374,8 @@ class Subset(JsonObject):
         """
         super().__init__(message_data, properties=['bbox', 'shape'])
         if self.shape is not None:
-            self.shape = RemoteResource(self.shape)
+            self.shape = RemoteResource(message_data['shape'])
+
 
 class Temporal(JsonObject):
     """
@@ -335,6 +388,7 @@ class Temporal(JsonObject):
     end : string
         An ISO 8601 datetime string for the latest time for temporal subsetting
     """
+
     def __init__(self, message_data=None, start=None, end=None):
         """
         Constructor
@@ -353,6 +407,7 @@ class Temporal(JsonObject):
             self.start = start
         if end is not None:
             self.end = end
+
 
 class Message(JsonObject):
     """
@@ -385,6 +440,9 @@ class Message(JsonObject):
     user : string
         The username of the user requesting the service.  If the message is coming from
         Harmony, services can assume that the provided username has been authenticated
+    accessToken : string
+        The Earthdata Login token for the caller. If present, the token is used as the
+        identity for HTTP downloads.
     client : string
         A string indicating the client accessing the service, usually the harmony
         environment, e.g. "harmony-sit"
@@ -399,38 +457,57 @@ class Message(JsonObject):
     temporal: message.Temporal
         The Harmony message's temporal subsetting parameters
     """
-    def __init__(self, json_str):
+
+    def __init__(self, json_str_or_dict, decrypter=lambda x: x):
         """
         Builds a Message object and all of its child objects by deserializing the
         provided JSON string and performing any necessary version interpretation.
 
         Parameters
         ----------
-        json_str : string
-            The incoming Harmony message string
+        json_str_or_dict : string | Object
+            The incoming Harmony message as a JSON string or dict as parsed by `json.load()`
+        decrypter : function
+            A function that takes an encrypted value and returns it decrypted
         """
-        self.json = json_str
-        super().__init__(json.loads(json_str),
+
+        if isinstance(json_str_or_dict, str):
+            json_obj = json.loads(json_str_or_dict)
+        else:
+            json_obj = copy.deepcopy(json_str_or_dict)
+
+        super().__init__(
+            json_obj,
             properties=[
                 'version',
                 'callback',
                 'stagingLocation',
                 'isSynchronous',
                 'user',
+                'accessToken',
                 'client',
                 'requestId',
                 'format',
                 'subset',
                 'temporal'
-                ],
+            ],
             list_properties={'sources': Source}
         )
+
+        self.decrypter = decrypter
+
         if self.format is not None:
-            self.format = Format(self.format)
+            self.format = Format(json_obj['format'])
         if self.subset is not None:
-            self.subset = Subset(self.subset)
+            self.subset = Subset(json_obj['subset'])
         if self.temporal is not None:
-            self.temporal = Temporal(self.temporal)
+            self.temporal = Temporal(json_obj['temporal'])
+        if self.accessToken is not None:
+            self.accessToken = self.decrypter(self.accessToken)
+
+    @property
+    def json(self):
+        return json.dumps(self.output_data)
 
     def digest(self):
         """

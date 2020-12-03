@@ -78,8 +78,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         with open("version.txt") as file_version:
             version = ','.join(file_version.readlines())
         return version
-    
-    '''    
+
     def invoke(self):
         """
         Run the service on the message contained in `self.message`.  Fetches data, runs the service,
@@ -185,8 +184,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         finally:
             self.cleanup()
-    '''
-    
+
     def process_item(self, item, source):
         """
         Converts an input STAC Item's data into Zarr, returning an output STAC item
@@ -224,21 +222,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         try:
             # Get the data file
             asset = next(v for k, v in item.assets.items() if 'data' in (v.roles or []))
-            #20201202, jz, found we can not use new authetication methods for GFRN, UAVSAR, and AVNIR2 in prod
-            #use older authentication mathod, by setting FALLBACK_AUTHN_ENABLED=true in .env file, 
-            #and setting arg access_token=None in following download function.
-            #input_filename = download(
-            #    asset.href,
-            #    output_dir,
-            #    logger=self.logger,
-            #    access_token=self.message.accessToken,
-            #    cfg=self.config)
-
             input_filename = download(
                 asset.href,
                 output_dir,
                 logger=self.logger,
-                access_token=None,
+                access_token=self.message.accessToken,
                 cfg=self.config)
 
             basename = os.path.basename(generate_output_filename(asset.href, **operations))
@@ -262,16 +250,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             else:
                 self.completed_with_error('No recognized file foarmat, not process')
 
-            #self.update_layernames(filename, [v.name for v in layernames])
-            self.update_layernames(filename, [v for v in layernames])
-
-            # Update metadata with bbox and extent in lon/lat coordinates for the geotiff file
-            # Also update the STAC record
-            result.bbox = self.get_bbox_lonlat(filename)
-            result.geometry = bbox_to_geometry(result.bbox)
-
-            # Filename may change into the format other than geotiff 
+            self.update_layernames(filename, [v.name for v in layernames])
             filename = self.reformat(filename, output_dir)
+
             output_filename = basename + os.path.splitext(filename)[-1]
             mime = message.format.mime
             url = stage(
@@ -284,6 +265,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
             # Update the STAC record
             result.assets['data'] = Asset(url, title=output_filename, media_type=mime, roles=['data'])
+
+            # update metadata with bbox and extent in lon/lat coordinates
+            result.bbox = self.get_bbox_lonlat(filename)
+            result.geometry = bbox_to_geometry(result.bbox)
 
             # Return the STAC record
             return result
@@ -338,8 +323,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def process_netcdf(self, source, basename, input_filename, output_dir, layernames):
 
         variables = source.process('variables') or self.get_variables(input_filename)
-
-        for variable in variables:
+	for variable in variables:
 
             band = None
             # For non-geotiffs, we reference variables by appending a file path
