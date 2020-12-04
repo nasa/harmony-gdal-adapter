@@ -118,19 +118,20 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             #20201202, jz, found we can not use new authetication methods for GFRN, UAVSAR, and AVNIR2 in prod
             #use older authentication mathod, by setting FALLBACK_AUTHN_ENABLED=true in .env file, 
             #and setting arg access_token=None in following download function.
-            #input_filename = download(
-            #    asset.href,
-            #    output_dir,
-            #    logger=self.logger,
-            #    access_token=self.message.accessToken,
-            #    cfg=self.config)
 
             input_filename = download(
                 asset.href,
                 output_dir,
                 logger=self.logger,
-                access_token=None,
+                access_token=self.message.accessToken,
                 cfg=self.config)
+
+            #input_filename = download(
+            #    asset.href,
+            #    output_dir,
+            #    logger=self.logger,
+            #    access_token=None,
+            #    cfg=self.config)
 
             basename = os.path.basename(generate_output_filename(asset.href, **operations))
 
@@ -392,22 +393,25 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
     def get_shapefile(self, subsetshape, dstdir):
         """
-        input: subset.shape
-        return: ESRI shapefile (without .zip affix)
+        input: subset.shape, it is a .geojson file, or a ESRI shapefile .shp file
+        return: ESRI shapefile (without .zip affix), it actualy produce 4 files which
+        consist of ESRI shapefile
         """
         href = subsetshape.href
         filetype = subsetshape.type
         shapefile = util.download(href, dstdir)
-        #fileprex = shapefile.split(".")[0]
         fileprex = shapefile
         if filetype != 'application/shapefile+zip':
             tmpfile =fileprex+".shp"
             command=['ogr2ogr','-f','ESRI Shapefile']
-            command.extend( [tmpfile,shapefile] )
+            command.extend( [tmpfile, shapefile] )
             self.cmd(*command)
             shapefile = tmpfile
+        else:
+            if os.path.isdir(shapefile):
+                os.system('unzip {}'.format(shapefile))
+                
         return shapefile
-
 
     def reproject(self, layerid, srcfile, dstdir):
         crs = self.message.format.process('crs')
