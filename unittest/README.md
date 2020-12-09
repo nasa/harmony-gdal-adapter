@@ -1,19 +1,29 @@
 The unittest does test according to the message json file.
 
 requires:
-1.if you run the container version unittest in local environment, you need connect to ASF VPN-Full.
+1.if you run the container version unittest in a local environment, you need connect to ASF VPN-Full.
 
-2. you need define the EDL_USERNAME and EDL_PASSWORD in the unittest directory
+2. you need define environment variables in the unittest directory
+
+the environment variables are those in the harmony .env file. We provided the env.unittest.example as a template in the ${home directory of unittest}.
+
 cd ${home directory of unittest}
 
-copy env_unittest .env_unittest file, and edit the file, replace edl_username and edl_password in the file
-export EDL_USERNAME=XXXXXXXXXXX
-export EDL_PASSWORD=XXXXXXXXXXX
+cp env.unittest.example .env.unittest
 
+edit .env.unittest with your EDL_username and EDL_password
 
-Two ways to run the test:
+source set_unittestenv.bash
 
-1. run the unittest insider the docker
+3. build the docker iamge asfdataservices/gdal-subsetter on the host
+
+cd gdal-subsetter
+
+bin/build_iamge
+
+4. Two ways to run the test:
+
+a. run the unittest insider the docker
 
 from host 
 
@@ -25,14 +35,12 @@ Insdier the container,
 
 cd /home/unittest
 
-./test_all_message.bash
+./test_whole_message.bash
 
-
-2. run the script in the host
+b. run the script in the host
 
 ./run-unittest.bash
 
-
-
+ 
 
 

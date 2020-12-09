@@ -12,7 +12,7 @@ else
 	output_dir=$2	
 fi
 
-cd /home/unittest
+#cd /home/unittest
 
 #message_file=data/messages/prod/gfrn/G1637364867-ASF.msg
 
@@ -20,13 +20,13 @@ cd /home/unittest
 
 cwd=$PWD
 
-echo $cwd
+#echo $cwd
 
 x=$(env | grep EDL)
 
 if [ -z "$x" ]; then
 
-	source .env_unittest
+	source ./set_unitestenv.bash
 
 	x=$(env | grep EDL)
 	if [ -z "$x" ]; then
@@ -42,7 +42,7 @@ export TEST_MESSAGE_FILE=${message_file}
 
 export TEST_OUTPUT_DIR=${output_dir}
 
-echo `env|grep TEST`
+#echo `env|grep TEST`
 
 #pytest -v test_transform.py
 

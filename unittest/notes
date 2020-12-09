@@ -79,4 +79,11 @@ cd unittest
 
 ./auto_test.bash data/messages/message1 data/results/grfn-results/data
 
+2020-12-08
 
+you need set up the environment before you run the unittest
+
+set_unittest.bash read .env file in the same directory to set up the environment. The key environmet variable are:
+FALLBACK_AUTHN_ENABLED=true
+EDL_USERNAME=XXXXXXXXXXXX
+EDL_PASSWORD=XXXXXXXXXXXX

@@ -28,13 +28,15 @@ import geopandas as gpd
 mime_to_gdal = {
     "image/tiff": "GTiff",
     "image/png": "PNG",
-    "image/gif": "GIF"
+    "image/gif": "GIF",
+    "image/netcdf":"NETCDF"
 }
 
 mime_to_extension = {
     "image/tiff": "tif",
     "image/png": "png",
-    "image/gif": "gif"
+    "image/gif": "gif",
+    "image/netcdf": "nc"
 }
 
 mime_to_options = {
@@ -119,19 +121,19 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             #use older authentication mathod, by setting FALLBACK_AUTHN_ENABLED=true in .env file, 
             #and setting arg access_token=None in following download function.
 
-            input_filename = download(
-                asset.href,
-                output_dir,
-                logger=self.logger,
-                access_token=self.message.accessToken,
-                cfg=self.config)
-
             #input_filename = download(
             #    asset.href,
             #    output_dir,
             #    logger=self.logger,
-            #    access_token=None,
+            #    access_token=self.message.accessToken,
             #    cfg=self.config)
+
+            input_filename = download(
+                asset.href,
+                output_dir,
+                logger=self.logger,
+                access_token=None,
+                cfg=self.config)
 
             basename = os.path.basename(generate_output_filename(asset.href, **operations))
 

@@ -1,11 +1,15 @@
 import pytest
 import sys
+import json
 sys.path.insert(0, "/home/jzhu4/projects/work/harmony-curr/harmony-service-lib-py")
+import logging
 import harmony
+from harmony import BaseHarmonyAdapter
 from transform import HarmonyAdapter
 from harmony.message import Message
 from argparse import ArgumentParser
-
+from harmony.util import (CanceledException, HarmonyException, receive_messages, delete_message,
+                          change_message_visibility, setup_stdout_log_formatting, config, create_decrypter)
 
 #@pytest.fixture
 #def adapter():
@@ -16,13 +20,32 @@ from argparse import ArgumentParser
 #define a class adapter
 
 class test_adapter(HarmonyAdapter):
-    def __init__(self, messagestr):
-        self.adapter = HarmonyAdapter(Message(messagestr))
+    def __init__(self, message_string):
+        cfg = config()
+        setup_stdout_log_formatting(cfg)
+        secret_key = cfg.shared_secret_key
+        decrypter = create_decrypter(bytes(secret_key, 'utf-8'))
+        message_data = json.loads(message_string)
+        self.adapter = HarmonyAdapter(Message(message_data, decrypter))
+        self.adapter.set_config(cfg)
+
         self.downloaded_file=None
         self.downloaded_succes=False
         self.subsetted_file=None
         self.subsetted_success=False
         self.var_basename = None
+
+    def _create_adapter(self, message_string):
+        cfg = config()
+        setup_stdout_log_formatting(cfg)
+        secret_key = cfg.shared_secret_key
+        decrypter = create_decrypter(bytes(secret_key, 'utf-8'))
+        message_data = json.loads(message_string)
+        adapter = BaseHarmonyAdapter(Message(message_data, decrypter))
+        adapter.set_config(cfg)
+        return adapter
+
+
 
 def get_file_info(infile):
     from osgeo import gdal

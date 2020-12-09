@@ -18,11 +18,12 @@ import argparse
 import pytest
 import os
 import sys
+from harmony.util import stage, bbox_to_geometry, download, generate_output_filename
 from config import test_adapter, get_file_info
 ########################
 #in debug mode
-import pdb
-pdb.set_trace()
+#import pdb
+#pdb.set_trace()
 ########################
 
 
@@ -88,8 +89,10 @@ def test_download_file():
     granule = message.granules[0]
 
     adapter.prepare_output_dir(output_dir)
+        
+    url = granule.url
 
-    adapter.download_granules( [ granule ] )
+    granule.local_filename = download(url, output_dir, logger=None, access_token=None, data=None, cfg=None)
 
     assert os.path.exists(granule.local_filename)
 
@@ -110,8 +113,14 @@ def test_subsetter():
     adapter =test_adapter.adapter
 
     message = adapter.message
+    
+    source = message.sources[0]
 
-    granule = message.granules[0]
+    granule = source.granules[0]
+    
+    input_filename = granule.local_filename
+
+    basename = os.path.basename(input_filename)
 
     layernames = []
 
@@ -123,21 +132,21 @@ def test_subsetter():
 
     result = None
         
-    file_type = adapter.get_filetype(granule.local_filename)
+    file_type = adapter.get_filetype(input_filename)
 
     if file_type == 'tif':
         layernames, result = adapter.process_geotiff(
-                granule,output_dir,layernames,operations,message.isSynchronous
-                )
+                        source, basename, input_filename, output_dir, layernames
+                        )
 
     elif file_type == 'nc':
         layernames, result = adapter.process_netcdf(
-                granule,output_dir,layernames,operations,message.isSynchronous
-                )
+                        source, basename, input_filename, output_dir, layernames
+                        )
     elif file_type == 'zip':
         layernames, result = adapter.process_zip(
-                granule,output_dir,layernames,operations,message.isSynchronous
-                )
+                        source, basename, input_filename, output_dir, layernames
+                        )
     else:
         logger.exception(e)
         adapter.completed_with_error('No reconized file foarmat, not process')
