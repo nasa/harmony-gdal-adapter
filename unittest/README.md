@@ -11,7 +11,7 @@ cd ${home directory of unittest}
 
 cp env.unittest.example .env.unittest
 
-edit .env.unittest with your EDL_username and EDL_password
+edit .env.unittest with your EDL_username and EDL_password FALLBACK_AUTHN_ENABLED=true
 
 source set_unittestenv.bash
 
