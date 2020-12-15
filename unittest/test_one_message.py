@@ -1,9 +1,9 @@
 """
 Description:
 This script does unit test for transform.py. It includes three tests:
-test if download is success, if subset is success, and if subsetted file 
-agrees with downloaded file. This script limits to test the message 
-with the first variable and the first granule and the tiff format output. 
+test if download is success, if subset is success, and if subsetted file
+agrees with downloaded file. This script limits to test the message
+with the first variable and the first granule and the tiff format output.
 
 Paramters:
 meassage_file and output_dir, where message_file is created with get_message_file.py,
@@ -48,7 +48,7 @@ def newadapter(message_file, output_dir):
     #output_dir = os.getenv("TEST_OUTPUT_DIR")
 
     if not os.path.isfile(message_file):
-    
+
         return None
 
     output_dir=output_dir.rstrip(r"/")
@@ -82,10 +82,10 @@ def compare_files(message, downloaded_file,subsetted_file):
 
 def download_file(newadapter,output_dir):
     """
-    This function test if the file pointed by url is downloaded successfully 
-    to the local space. The url is in the message, which is an attribute in 
-    the object adapter. This object is created with message file as a global 
-    object before this function is called. At the last of this function, 
+    This function test if the file pointed by url is downloaded successfully
+    to the local space. The url is in the message, which is an attribute in
+    the object adapter. This object is created with message file as a global
+    object before this function is called. At the last of this function,
     use assert to check if the file is downloaded.
     """
 
@@ -110,8 +110,8 @@ def download_file(newadapter,output_dir):
 
 def subsetter(newadapter,output_dir):
     """
-    This function test the subset process. It use the functions in 
-    the global object adapter to do the subset process. At the end 
+    This function test the subset process. It use the functions in
+    the global object adapter to do the subset process. At the end
     of this function, use assert to check if the subsetted file exist.
     """
 
@@ -130,7 +130,7 @@ def subsetter(newadapter,output_dir):
         )
 
     result = None
-        
+
     file_type = adapter.get_filetype(granule.local_filename)
 
     if file_type == 'tif':
@@ -154,7 +154,7 @@ def subsetter(newadapter,output_dir):
     assert result
 
     if result:
-  
+
         newadapter.subsetted_file=result
 
         newadapter.subsetted_success=True
@@ -162,7 +162,7 @@ def subsetter(newadapter,output_dir):
 
 def subset_result(newadapter,output_dir):
     """
-    This function verifies if the subsetted file experiences 
+    This function verifies if the subsetted file experiences
     required process defined by message.
     """
     adapter=newadapter.adapter
@@ -172,14 +172,14 @@ def subset_result(newadapter,output_dir):
     granule = message.granules[0]
 
     if message.sources[0].variables:
-        
+
         variables=message.sources[0].variables
 
     else:
 
         variables=None
- 
-    #check if the download is success 
+
+    #check if the download is success
 
     if not (newadapter.downloaded_success and newadapter.subsetted_success):
 
@@ -194,15 +194,15 @@ def subset_result(newadapter,output_dir):
         return
 
     downloaded_file = newadapter.downloaded_file
-    
+
     subsetted_file = newadapter.subsetted_file
 
     file_type = adapter.get_filetype(downloaded_file)
-    
+
     if file_type == 'zip':
 
         [tiffile, ncfile]=adapter.pack_zipfile(downloaded_file, output_dir)
-        
+
         if tiffile:
 
             compare_files(message, tifffile,subsetted_file)
@@ -242,14 +242,14 @@ def subset_result(newadapter,output_dir):
                         granule.local_filename)
 
             layer_id = granule.id + '__' + variable.name
-            
+
             tifffile=adapter.nc2tiff(layer_id, filename, output_dir)
 
             compare_files(message, tifffile,subsetted_file)
 
 
     elif file_type == "tif":
-      
+
         compare_files(message, downloaded_file,subsetted_file)
 
     else:
@@ -262,7 +262,7 @@ def subset_result(newadapter,output_dir):
 def test_one_message(message_file, output_dir):
 
     adapter_obj = newadapter(message_file, output_dir)
-    
+
     assert adapter_obj
 
     download_file(adapter_obj,output_dir)
@@ -285,7 +285,7 @@ if __name__ == "__main__":
     parser.add_argument('--message-file', required=True)
     parser.add_argument('--output-dir', required=True)
     args = parser.parse_args()
-    
+
     message_file = args.message_file
     output_dir = args.output_dir
     test_one_message(message_file,output_dir)

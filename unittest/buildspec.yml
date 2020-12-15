@@ -9,12 +9,16 @@ phases:
     commands:
       - echo 'installing deps'
       - pip3 install -r requirements.txt
+      - pip3 install -r requirements_dev.txt
       - pip3 install deps/harmony-service-lib-py
   build:
     commands:
       - echo 'running unittests'
       - cd unittest
-      - coverage run -m pytest -v test_all_message.py
+      - cp env.unittest.example .env.unittest
+      - sed -i "s/%{EDL_USERNAME}%/$EDL_USERNAME/g" .env.unittest
+      - sed -i "s/%{EDL_PASSWORD}%/$EDL_PASSWORD/g" .env.unittest
+      - ./test_whole_messages.bash
   post_build:
     commands:
       - echo 'update badges'
