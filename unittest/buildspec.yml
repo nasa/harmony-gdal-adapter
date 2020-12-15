@@ -16,8 +16,8 @@ phases:
       - echo 'running unittests'
       - cd unittest
       - cp env.unittest.example .env.unittest
-      - sed -i "s/%{EDL_USERNAME}%/$EDL_USERNAME/g" .env.unittest
-      - sed -i "s/%{EDL_PASSWORD}%/$EDL_PASSWORD/g" .env.unittest
+      - sed -i "s/{EDL_USERNAME}/$EDL_USERNAME/g" .env.unittest
+      - sed -i "s/{EDL_PASSWORD}/$EDL_PASSWORD/g" .env.unittest
       - . ./.env.unittest
       - ./test_whole_messages.bash
   post_build:
