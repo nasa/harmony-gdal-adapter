@@ -1,7 +1,7 @@
 import pytest
 import sys
 import json
-sys.path.insert(0, "/home/jzhu4/projects/work/harmony-curr/harmony-service-lib-py")
+#sys.path.insert(0, "/home/jzhu4/projects/work/harmony-curr/harmony-service-lib-py")
 import logging
 import harmony
 from harmony import BaseHarmonyAdapter
