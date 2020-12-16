@@ -9,7 +9,7 @@ if [ "$#" -ne 2 ]; then
 	exit 1
 else
 	message_file=$1
-	output_dir=$2	
+	output_dir=$2
 fi
 
 #cd /home/unittest

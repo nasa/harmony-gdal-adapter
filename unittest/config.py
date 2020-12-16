@@ -1,11 +1,16 @@
 import pytest
 import sys
+import os
 import json
-#sys.path.insert(0, "/home/jzhu4/projects/work/harmony-curr/harmony-service-lib-py")
+
+sys.path.append(os.path.dirname(
+    os.path.abspath(__file__)) + '/../gdal_subsetter/'
+)
+from transform import HarmonyAdapter
+
 import logging
 import harmony
 from harmony import BaseHarmonyAdapter
-from transform import HarmonyAdapter
 from harmony.message import Message
 from argparse import ArgumentParser
 from harmony.util import (CanceledException, HarmonyException, receive_messages, delete_message,
