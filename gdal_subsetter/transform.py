@@ -1180,7 +1180,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 msk_ds,
                 bands,
                 ly,
-                burn_values=burns
+                burn_values=burns,
+                options = ["ALL_TOUCHED=TRUE"]
                 )
 
             msk_ds.FlushCache()
