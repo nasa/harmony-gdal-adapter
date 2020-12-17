@@ -16,15 +16,8 @@ from argparse import ArgumentParser
 from harmony.util import (CanceledException, HarmonyException, receive_messages, delete_message,
                           change_message_visibility, setup_stdout_log_formatting, config, create_decrypter)
 
-#@pytest.fixture
-#def adapter():
-#    def _method(message):
-#        return HarmonyAdapter(Message(message))
-#    return _method
 
-#define a class adapter
-
-class test_adapter(HarmonyAdapter):
+class UnittestAdapter(HarmonyAdapter):
     def __init__(self, message_string):
         cfg = config()
         setup_stdout_log_formatting(cfg)
@@ -34,10 +27,10 @@ class test_adapter(HarmonyAdapter):
         self.adapter = HarmonyAdapter(Message(message_data, decrypter))
         self.adapter.set_config(cfg)
 
-        self.downloaded_file=None
-        self.downloaded_succes=False
-        self.subsetted_file=None
-        self.subsetted_success=False
+        self.downloaded_file = None
+        self.downloaded_succes = False
+        self.subsetted_file = None
+        self.subsetted_success = False
         self.var_basename = None
 
     def _create_adapter(self, message_string):
@@ -48,45 +41,46 @@ class test_adapter(HarmonyAdapter):
         message_data = json.loads(message_string)
         adapter = BaseHarmonyAdapter(Message(message_data, decrypter))
         adapter.set_config(cfg)
-        return adapter
 
+        return adapter
 
 
 def get_file_info(infile):
     from osgeo import gdal
     import osr
     ds = gdal.Open(infile)
-    proj_wkt=ds.GetProjection()
+    proj_wkt = ds.GetProjection()
     proj = osr.SpatialReference(wkt=proj_wkt)
-    gcs = proj.GetAttrValue('GEOGCS',0)
-    authority = proj.GetAttrValue('AUTHORITY',0)
-    epsg = proj.GetAttrValue('AUTHORITY',1)
+    gcs = proj.GetAttrValue('GEOGCS', 0)
+    authority = proj.GetAttrValue('AUTHORITY', 0)
+    epsg = proj.GetAttrValue('AUTHORITY', 1)
     width = ds.RasterXSize
     height = ds.RasterYSize
     xy_size = [width, height]
     bands = ds.RasterCount
     meta = ds.GetMetadata()
     gt = ds.GetGeoTransform()
-    minx = round(gt[0],2)
-    miny = round(gt[3] + width*gt[4] + height*gt[5],2)
-    maxx = round(gt[0] + width*gt[1] + height*gt[2],2)
-    maxy = round(gt[3],2)
+    minx = round(gt[0], 2)
+    miny = round(gt[3] + width*gt[4] + height*gt[5], 2)
+    maxx = round(gt[0] + width*gt[1] + height*gt[2], 2)
+    maxy = round(gt[3], 2)
     extent = [miny, maxy, minx, maxx]
     ds = None
-    information={'proj_wkt':proj_wkt,
-                 'gcs':gcs,
-                 'authority':authority,
-                 'epsg':epsg,
-                 'width':width,
-                 'height':height,
-                 'xy_size':[width,height],
-                 'bands':bands,
-                 'meta':meta,
-                 'gt':gt,
-                 'minx':minx,
-                 'miny':miny,
-                 'maxx':maxx,
-                 'maxy':maxy,
-                 'extent':extent
-                 }
-    return information
+
+    return {
+        'proj_wkt': proj_wkt,
+        'gcs': gcs,
+        'authority': authority,
+        'epsg': epsg,
+        'width': width,
+        'height': height,
+        'xy_size': [width, height],
+        'bands': bands,
+        'meta': meta,
+        'gt': gt,
+        'minx': minx,
+        'miny': miny,
+        'maxx': maxx,
+        'maxy': maxy,
+        'extent': extent
+    }
