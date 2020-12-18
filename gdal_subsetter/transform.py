@@ -28,6 +28,8 @@ import geopandas as gpd
 import fiona
 import shapely
 from shapely.geometry import shape, mapping, Point, MultiPoint, LineString, Polygon
+from shapely.ops import cascaded_union
+
 #from argparse import ArgumentParser
 
 mime_to_gdal = {
@@ -132,6 +134,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             #    logger=self.logger,
             #    access_token=self.message.accessToken,
             #    cfg=self.config)
+
+            #cfg = self.config
+            #cfg attributes is not changeable
+            #cfg.fallback_authn_enabled = True
 
             input_filename = download(
                 asset.href,
@@ -398,6 +404,47 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
             return dstfile
 
+    def convert2multipolygon(self, infile, outfile, buf=None):
+        '''
+        convert point or line feature geojson file to multi-polygon feature geojson file
+        input: infile--point or line feature geojson file name
+        return: outfile --multi-polygon feature ESRI shapefile directory name
+        '''
+        if not buf:
+            return infile
+        fd_infile = fiona.open(infile)
+        #proj = pyproj.crs.CRS(fd_infile.crs_wkt)
+        #proj_json = json.loads(proj.to_json())
+        #unit = proj_json['coordinate_system']['axis'][0]['unit']
+        #get feature type of infile
+        featype = fd_infile.schema.get('geometry')
+        #prepare meta for polygon file
+        meta = fd_infile.meta
+        meta['schema']['geometry'] = 'Polygon'
+        meta['schema']['properties'] = {'id':'int'}
+        meta['driver'] = 'GeoJSON'
+        with fiona.open(outfile, 'w', **meta ) as fd_outfile:
+            poly_lst = []
+            for index_point, point in enumerate(fd_infile):
+                pt = shape(point['geometry'])
+                polygon = pt.buffer(buf)
+                poly_lst.append(polygon)
+            #cascade_union
+            polygons = cascaded_union(poly_lst)
+            if polygons.geometryType() =='Polygon':
+                fd_outfile.write({
+                    'geometry': mapping(polygons),
+                    'properties': {'id': 0},
+                    })
+            else:
+                for index_polygon, polygon in enumerate(polygons):
+                    fd_outfile.write({
+                        'geometry': mapping(polygon),
+                        'properties': {'id': index_polygon},
+                        })
+        fd_infile.close()
+        return outfile
+
     def get_shapefile(self, subsetshape, dstdir):
         """
         read the shapefile passing from harmony, it is geojson file, if it is
@@ -413,9 +460,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         fileprex = os.path.splitext(shapefile)[0]
 
         #convert into multi-polygon feature file
-        #tmpfile_geojson = fileprex+"_tmp.geojson"
-        #tmpfile_geojson = self.convert2multipolygon(shapefile, tmpfile_geojson)
-        tmpfile_geojson = shapefile
+        tmpfile_geojson = fileprex+"_tmp.geojson"
+        tmpfile_geojson = self.convert2multipolygon(shapefile, tmpfile_geojson, buf=None)
+
         #convert into ESRI shapefile
         outfile = fileprex+".shp"
         command=['ogr2ogr','-f','ESRI Shapefile']
@@ -596,14 +643,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return gdalinfo_lines[0] == "Driver: GTiff/GeoTIFF"
 
     def combin_transfer(self, layer_id, filename, output_dir, band):
-
         filename = self.subset(
             layer_id,
             filename,
             output_dir,
             band
         )
-
         filename = self.reproject(
             layer_id,
             filename,
@@ -614,7 +659,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             filename,
             output_dir
         )
-
         return layer_id, filename, output_dir
 
     def get_bbox(self, filename):
@@ -809,14 +853,15 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             command.extend([tiffile, tmpfile])
             self.cmd(*command)
             #process points or lines features and for rotated image
-            if "point" in geometryname.lower() or "line" in geometryname.lower():
-                self.mask_via_shapefile2(tmpfile, shapefile_out, outputfile)
-            elif gt[2] !=0.0 or gt[4] != 0.0:
-                    #self.rasterize(tmpfile, shapefile_out, outputfile)
-                self.mask_via_shapefile2(tmpfile, shapefile_out, outputfile)
-            else:
-                self.cmd(*['cp', tmpfile, outputfile])
+            #if "point" in geometryname.lower() or "line" in geometryname.lower():
+            #    self.mask_via_shapefile2(tmpfile, shapefile_out, outputfile)
+            #elif gt[2] !=0.0 or gt[4] != 0.0:
+            #        #self.rasterize(tmpfile, shapefile_out, outputfile)
+            #    self.mask_via_shapefile2(tmpfile, shapefile_out, outputfile)
+            #else:
+            #    self.cmd(*['cp', tmpfile, outputfile])
 
+            self.mask_via_shapefile2(tmpfile, shapefile_out, outputfile)
             return outputfile
 
         else:
@@ -861,7 +906,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         inputs: ds -- the reference dataset
                 box -- which defined as {"llxy":llxy, "lrxy":lrxy, "urxy":urxy, "ulxy":ulxy},
                 where llxy,lrxy, urxy, and ulxy are coordinate pairs in projection
-                delt -- is the change of index in array coordinate
+                delt -- the number of deltax and dletay to extend the subsetting array which
+                represets the box
         returns:ul_x,ul_y,ul_i,ul_j,cols,rows
         """
         #get 4 conners coordinate values in projection coorndinates
@@ -1200,7 +1246,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 no_data_value = out_band.GetNoDataValue()
 
             msk_band = msk_ds.GetRasterBand(band_sn)
-            msk_data = msk_band.ReadAsArray()            
+            msk_data = msk_band.ReadAsArray()
             #msk = msk_data == np.array(0, np_dt)
             msk = msk_data == 0
             out_data[msk] = no_data_value
@@ -1211,74 +1257,3 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         msk_ds = None
 
         return outputfile
-
-    def convert2multipolygon(self, infile, outfile):
-        '''
-        convert point or line feature geojson file to multi-polygon feature geojson file
-        input: infile--point or line feature geojson file name
-        return: outfile --multi-polygon feature ESRI shapefile directory name
-        '''
-        def _lines2polygons(fd_infile, fd_outfile):
-
-            for index_line, row in enumerate(fd_infile):
-                line = shape(row['geometry'])
-                coordinates = []
-
-                if isinstance(line, LineString):
-                    for index, point in enumerate(line.coords):
-                        if index == 0:
-                            first_pt = point
-                        coordinates.append(point)
-
-                    coordinates.append(first_pt)
-                    if len(coordinates) >= 3:
-                        polygon = Polygon(coordinates)
-                        #convert polygon into an exterior polygon
-                        if not polygon.exterior.is_ccw:
-                            polygon = shapely.geometry.polygon.orient(polygon, sign=1.0)
-                        # write the polygon file
-                        fd_outfile.write({
-                            'geometry': mapping(polygon),
-                            'properties': {'id': index_line},
-                        })
-
-        def _points2polygons(fd_infile, fd_outfile):
-            point_lst = []
-            for index_point, point in enumerate(fd_infile):
-                pt = shape(point['geometry'])
-                point_lst.append(pt)
-
-            mp = MultiPoint(point_lst)
-            polygon = mp.convex_hull
-            # convert polygon into an exterior polygon
-            if not polygon.exterior.is_ccw:
-                polygon = shapely.geometry.polygon.orient(polygon, sign=1.0)
-            # output the filepolygon
-            fd_outfile.write({
-                        'geometry': mapping(polygon),
-                        'properties': {'id': 1},
-                        })
-
-
-        fd_infile = fiona.open(infile)
-
-        #get feature type of infile
-        featype = fd_infile.schema.get('geometry')
-
-        #prepare meta for polygon file
-        meta = fd_infile.meta
-        meta['schema']['geometry'] = 'Polygon'
-        meta['schema']['properties'] = {'id':'int'}
-        meta['driver'] = 'GeoJSON'
-
-        with fiona.open(outfile, 'w', **meta ) as fd_outfile:
-            if "point" in featype.lower():
-                _points2polygons(fd_infile, fd_outfile)
-            elif "line" in featype.lower():
-                _lines2polygons(fd_infile, fd_outfile)
-            else:
-                outfile = infile
-
-        fd_infile.close()
-
-        return outfile
