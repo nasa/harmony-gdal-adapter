@@ -29,7 +29,7 @@ import fiona
 import shapely
 from shapely.geometry import shape, mapping, Point, MultiPoint, LineString, Polygon
 from shapely.ops import cascaded_union
-
+import json
 #from argparse import ArgumentParser
 
 mime_to_gdal = {
@@ -138,13 +138,20 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             #cfg = self.config
             #cfg attributes is not changeable
             #cfg.fallback_authn_enabled = True
-
-            input_filename = download(
-                asset.href,
-                output_dir,
-                logger=self.logger,
-                access_token=None,
-                cfg=self.config)
+            if self.config.fallback_authn_enabled:
+                input_filename = download(
+                    asset.href,
+                    output_dir,
+                    logger=self.logger,
+                    access_token=None,
+                    cfg=self.config)
+            else:
+                input_filename = download(
+                    asset.href,
+                    output_dir,
+                    logger=self.logger,
+                    access_token=self.message.accessToken,
+                    cfg=self.config)
 
             basename = os.path.basename(generate_output_filename(asset.href, **operations))
 
@@ -445,6 +452,19 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         fd_infile.close()
         return outfile
 
+    def get_coord_unit(self, geojsonfile):
+        #get unit of the feature in the shapefile
+        try:
+            fd_infile = fiona.open(geojsonfile)
+            proj = pyproj.crs.CRS(fd_infile.crs_wkt)
+            proj_json = json.loads(proj.to_json())
+            unit = proj_json['coordinate_system']['axis'][0]['unit']
+            #fd_infile.close()
+        except:
+            unit=None
+        finally:
+            return unit
+
     def get_shapefile(self, subsetshape, dstdir):
         """
         read the shapefile passing from harmony, it is geojson file, if it is
@@ -457,11 +477,28 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         href = subsetshape.href
         filetype = subsetshape.type
         shapefile = util.download(href, dstdir)
-        fileprex = os.path.splitext(shapefile)[0]
+        #get unit of the feature in the shapefile
+        unit = self.get_coord_unit(shapefile)
 
         #convert into multi-polygon feature file
+        fileprex = os.path.splitext(shapefile)[0]
         tmpfile_geojson = fileprex+"_tmp.geojson"
-        tmpfile_geojson = self.convert2multipolygon(shapefile, tmpfile_geojson, buf=None)
+
+        #check BUFFER environment to get buf from message passed by harmony
+        buffer_string = os.environ.get('BUFFER')
+        if buffer_string:
+            buffer_dic = eval(buffer_string)
+            if unit:
+                if "degree" in unit.lower(): 
+                    buf = buffer_dic["degree"]
+                else:
+                    buf = buffer_dic["meter"]
+            else:
+                buff = None
+        else:
+            buff = None
+        #convert to a new multipolygon file
+        tmpfile_geojson = self.convert2multipolygon(shapefile, tmpfile_geojson, buf=buf)
 
         #convert into ESRI shapefile
         outfile = fileprex+".shp"
