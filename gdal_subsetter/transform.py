@@ -494,9 +494,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 else:
                     buf = buffer_dic["meter"]
             else:
-                buff = None
+                buf = None
         else:
-            buff = None
+            buf = None
         #convert to a new multipolygon file
         tmpfile_geojson = self.convert2multipolygon(shapefile, tmpfile_geojson, buf=buf)
 
