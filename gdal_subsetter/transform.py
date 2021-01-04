@@ -414,8 +414,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def convert2multipolygon(self, infile, outfile, buf=None):
         '''
         convert point or line feature geojson file to multi-polygon feature geojson file
-        input: infile--point or line feature geojson file name
-        return: outfile --multi-polygon feature ESRI shapefile directory name
+        input:  infile - point or line feature geojson file name
+        return: outfile - multi-polygon feature ESRI shapefile directory name
         '''
         if not buf:
             return infile
@@ -848,10 +848,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def subset2(self, tiffile, outputfile, bbox=None, band=None, shapefile=None):
         """
         subset tiffile with bbox or shapefile. bbox ans shapefile are exclusive.
-        inputs:tiffile-geotif file
-               outputfile-subsetted file name
-               bbox is defined [left,low,right,upper] in lon/lat coordinates
-               shapefile is a shapefile directory in which multiple files exist
+        inputs: tiffile-geotif file
+                outputfile-subsetted file name
+                bbox - [left,low,right,upper] in lon/lat coordinates
+                shapefile - a shapefile directory in which multiple files exist
         """
         #covert to absolute path
         tiffile=os.path.abspath(tiffile)
@@ -1094,10 +1094,14 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
     def shapefile_boxproj(self, shapefile, ref_ds, outputfile):
         """
-        calculate the envelop box and projection in the coordinates defined in ref_ds
-        inputs: shapefile - used to define the AOI.
-                ref_ds - dataset associate with the reference geotiff file.
-        returns: boxproj, proj, shapefile
+        convert shapefile and calculate the envelop box in the projection defined in ref_ds
+        inputs:  shapefile - used to define the AOI
+                 ref_ds - dataset associate with the reference geotiff file
+                 outputfile - output shapefile anme
+        returns: boxproj - extent of the outputfile
+                 ref_proj - projection of the ref_ds
+                 outputfile - output shapefile name
+                 geometryname - geometry name of the features in the outputfile
         """
         ref_proj=ref_ds.GetProjection()
         tmp = gpd.GeoDataFrame.from_file(shapefile)
@@ -1112,7 +1116,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         #Extent[lon_min,lon_max,lat_min,lat_max]
         #boxproj={"llxy":llxy, "lrxy":lrxy, "urxy":urxy, "ulxy":ulxy}
         #where llxy,lrxy, urxy, and ulxy are coordinate pairs in projection
-
         llxy=(lyrextent[0],lyrextent[2])
         lrxy=(lyrextent[1],lyrextent[2])
         urxy=(lyrextent[1],lyrextent[3])
