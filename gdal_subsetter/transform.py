@@ -6,7 +6,7 @@
 import os
 import subprocess
 import re
-
+from netCDF4 import Dataset
 #import boto3
 #import rasterio
 import zipfile
@@ -36,14 +36,14 @@ mime_to_gdal = {
     "image/tiff": "GTiff",
     "image/png": "PNG",
     "image/gif": "GIF",
-    "image/netcdf":"NETCDF"
+    "application/x-netcdf4":"NETCDF"
 }
 
 mime_to_extension = {
     "image/tiff": "tif",
     "image/png": "png",
     "image/gif": "gif",
-    "image/netcdf": "nc"
+    "application/x-netcdf4": "nc"
 }
 
 mime_to_options = {
@@ -153,7 +153,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     access_token=self.message.accessToken,
                     cfg=self.config)
 
-            basename = os.path.basename(generate_output_filename(asset.href, **operations))
+            #basename = os.path.basename(generate_output_filename(asset.href, **operations))
+            basename = os.path.splitext(os.path.basename(generate_output_filename(asset.href, **operations)))[0]
 
             file_type = self.get_filetype(input_filename)
 
@@ -588,10 +589,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         for i, band in enumerate(collection):
             dst_ds.GetRasterBand(i+1).WriteArray(collection[i]["band_array"])
             dst_ds.GetRasterBand(i+1).SetMetadata(collection[i]["band_md"])
-
+            
         dst_ds.FlushCache()                     # write to disk
         dst_ds = None
-
         return outfile
 
     def rename_to_result(self, layerid, srcfile, dstdir):
@@ -605,20 +605,20 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         gdal_subsetter_version="gdal_subsetter_version={gdal_subsetter_ver}".format(gdal_subsetter_ver=self.get_version() )
         command = ['gdal_edit.py',  '-mo', gdal_subsetter_version, srcfile ]
         self.cmd(*command)
-
         output_mime = self.message.format.process('mime')
         if output_mime not in mime_to_gdal:
             raise Exception('Unrecognized output format: ' + output_mime)
         if output_mime == "image/tiff":
             return srcfile
-
         dstfile = "%s/translated.%s" % (dstdir, mime_to_extension[output_mime])
-        command = ['gdal_translate',
+        if output_mime == "application/x-netcdf4":
+            dstfile = self.geotiff2netcdf(srcfile, dstfile)
+        else:
+            command = ['gdal_translate',
                    '-of', mime_to_gdal[output_mime],
                    '-scale',
                    srcfile, dstfile]
-        self.cmd(*command)
-
+            self.cmd(*command)
         return dstfile
 
     def read_layer_format(self, collection, filename, layer_id):
@@ -1297,3 +1297,110 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         msk_ds = None
 
         return outputfile
+
+
+
+    def geotiff2netcdf(self, infile, outfile):
+        '''
+        convert geotiff file to netcdf file via gdal_translate 
+        and remove coordinate variables.
+        input: infile - geotiff file name
+        return: outfile - netcdf file name
+        '''
+        # create a temperary netcdf file 
+        tmpfile = os.path.splitext(infile)[0]+"_tmp.nc"
+        command = ['gdal_translate']
+        command.extend(['-of', 'NETCDF' ])
+        command.extend([infile, tmpfile])
+        self.cmd(*command)
+
+        # check coordinate variables and modfiy the metedata in tmpfile
+        # open infile
+        ds_in = gdal.Open(infile)
+        # get crs defined in metadata and geotransform
+        gt =ds_in.GetGeoTransform()
+        md = ds_in.GetMetadata()
+        # open tmpfile for update
+        ds_out = Dataset(tmpfile,'a')
+        # convert metadata to variable atttrs
+        varnames = ds_out.variables.keys()
+        rmvar_lst = []
+        dimkeys = ds_out.dimensions.keys()
+        dimnames = [name for name in dimkeys ]
+        for varname in varnames:        
+            var = ds_out.variables[varname]
+            # delete variable attribute '_FillValue'
+            #if "_FillValue" in var.ncattrs():
+            #    var.delncattr('_FillValue')
+
+            # find the coordinate variables and save the variable names
+            #if varname in dimnames or bool (re.search("coordinate", var.long_name))
+            #    or bool (re.search("longitude", var.long_name))
+            #    or bool (re.search("latitude",  var.long_name)):
+            if varname in dimnames:
+                rmvar_lst.append(varname)
+
+            # add the metedata in geotiff to the related variables 
+            varlst = [ x for x in md if bool(re.search("/{varname}*".format(varname=varname), x))]   
+            for x in varlst:
+                attrname = x.split("#")[-1]
+                if not attrname in var.ncattrs():
+                    if attrname != '_FillValue':
+                        var.setncattr(attrname, md[x])
+
+        ds_in = None
+        ds_out.close()
+
+        # remove coordinate variables defined in rmvar_lst for rotated image
+        if gt[2] != 0 and gt[4] !=0 and rmvar_lst:
+            command = ['ncks']
+            command.extend(['-C', '--overwrite', '-x', '-v'])
+            command.extend([",".join(rmvar_lst)])   
+            command.extend([tmpfile, outfile])
+            self.cmd(*command)
+            return outfile
+        else:
+            command = ['cp']
+            command.extend(['-f'])
+            command.extend([tmpfile, outfile])
+            self.cmd(*command)
+
+        return outfile
+
+
+    def geotiff2netcdf2(self, infile, outfile):
+        '''
+        convert geotiff file to netcdf file via gdal_warp method. This way reprojects the infile
+        if it is rotated image.
+        input: infile - geotiff file name
+        return: outfile - netcdft file name
+        '''
+        # create a temperary netcdf file 
+        #tmpfile = os.path.splitext(infile)[0]+".nc"
+        command = ['gdalwarp']
+        command.extend(['-of', 'NETCDF','-overwrite' ])
+        command.extend([infile, outfile])
+        self.cmd(*command)
+
+        # add the metedata obtained from infile to nc file
+        # open infile
+        ds_in = gdal.Open(infile)
+        # get crs defined in metadata
+        md = ds_in.GetMetadata()
+        # open outfile for update
+        ds_out = Dataset(outfile,'a')
+        # convert metadata to variable atttrs
+        varnames = ds_out.variables.keys()
+
+        for varname in varnames:
+            varlst = [ x for x in md if bool(re.search("/{varname}*".format(varname=varname), x)) ]
+            var = ds_out.variables[varname]
+            for x in varlst:
+                attrname = x.split("#")[-1]
+                if not attrname in var.ncattrs():
+                    if attrname != '_FillValue':
+                        var.setncattr(attrname, md[x])
+
+        ds_in = None
+        ds_out.close()
+        return outfile 

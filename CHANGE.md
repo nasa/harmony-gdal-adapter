@@ -1,3 +1,6 @@
+[version 1.0.7] 2021-01-15
+add the geotiff to netcdf conversion functuionality in the gdal-subsetter. Users may request the harmony to output netcdf file if they provide the parameter &format=application/x-netcdf4 in the request url.
+
 [version 1.0.6]  2020-12-16
 updated: addition of the functionality of subsetting with shapefile. The shapefile can be point,line, and polygon feature shapefiles. It can be in three format: geojsion, ESRI shapefile, and KML file. 
 
