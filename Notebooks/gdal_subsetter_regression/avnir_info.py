@@ -3,6 +3,7 @@ def avnir_info():
     # Query 1
     {
     'q_num':'1',
+    'reference_image':'avnir_query1_reference.tiff',
     'request_url':'Band1%2CBand2/coverage/rangeset?subset=lat(-.05:0.25)&subset=lon(-51.0:-50.75)&format=image%2Ftiff&granuleID=',
     'message':'Subset across the Equator. Variable subset bands 1 & 2',
     'prod_gid':'G1813212660-ASF',
@@ -24,6 +25,7 @@ def avnir_info():
     # Query 2
     {
     'q_num':'2',
+    'reference_image':'avnir_query2_reference.tiff',
     'request_url':'Band3%2CBand4/coverage/rangeset?subset=lat(14.8:14.9)&subset=lon(-0.15:0.15)&format=image%2Ftiff&granuleID=',
     'message':'Subset across prime meridian. Variable subset bands 3 & 4.',
     'prod_gid':'G1817336128-ASF',
@@ -45,6 +47,7 @@ def avnir_info():
     # Query 3
     {
     'q_num':'3',
+    'reference_image':'avnir_query3_reference.tiff',
     'request_url':'Band1%2CBand2/coverage/rangeset?subset=lat(66.5:66.75)&subset=lon(179.75:-179.85)&format=image%2Ftiff&granuleID=',
     'message':'Subset across the anti-meridian. ',
     'prod_gid':'G1835935580-ASF',
@@ -66,6 +69,7 @@ def avnir_info():
     # Query 4
     {
     'q_num':'4',
+    'reference_image':'avnir_query4_reference.tiff',
     'request_url':'Band4/coverage/rangeset?subset=lat(36.9:37.1)&subset=lon(-99.15:-98.85)&format=image%2Ftiff&granuleID=',
     'message':'Northern Hemisphere spatial subset. Variable subset Band4',
     'prod_gid':'G1849288272-ASF',
@@ -87,6 +91,7 @@ def avnir_info():
     # Query 5
     {
     'q_num':'5',
+    'reference_image':'avnir_query5_reference.tiff',
     'request_url':'all/coverage/rangeset?subset=lat(36.95:37.05)&subset=lon(-99.2:-98.9)&format=image%2Ftiff&granuleID=',
     'message':'Northern Hemisphere spatial subset. Variable subset 4 bands using "all".',
     'prod_gid':'G1849288272-ASF',
@@ -108,6 +113,7 @@ def avnir_info():
     # Query 6
     {
     'q_num':'6',
+    'reference_image':'avnir_query6_reference.tiff',
     'request_url':'Band1%2CBand3/coverage/rangeset?subset=lat(-26.1:-25.8)&subset=lon(18.07:18.25)&format=image%2Ftiff&height=30&width=75&granuleID=',
     'message':'Southern Hemisphere spatial subset, variable subset bands 1 & 3 and specify xy_size',
     'prod_gid':'G1835549401-ASF',
@@ -129,6 +135,7 @@ def avnir_info():
     # Query 7
     {
     'q_num':'7',
+    'reference_image':'avnir_query7_reference.tiff',
     'request_url':'Band1%2CBand2%2CBand3%2CBand4/coverage/rangeset?subset=lat(49.65:49.95)&subset=lon(-97.65:-97.35)&format=image%2Ftiff&height=45&width=90&granuleID=',
     'message':'Negative longitude spatial subset, specify xy size and all bands with comma separated list',
     'prod_gid':'G1906378530-ASF',
@@ -150,6 +157,7 @@ def avnir_info():
     # Query 8
     {
     'q_num':'8',
+    'reference_image':'avnir_query8_reference.tiff',
     'request_url':'all/coverage/rangeset?subset=lat(9.2:10.3)&subset=lon(-79.9:-78.9)&format=image%2Ftiff&granuleID=',
     'message':'Spatial subset larger than granule bounding box and "all" variables.',
     'prod_gid':'G1813329318-ASF',
@@ -170,6 +178,7 @@ def avnir_info():
     # Query 9
     {
     'q_num':'9',
+    'reference_image':'avnir_query9_reference.tiff',
     'request_url':'all/coverage/rangeset?subset=lat(-26.1:-26.0)&subset=lon(18.4:18.6)&format=image%2Ftiff&subset=time(%222008-11-30T08%3A59%3A23Z%22%3A%222008-11-30T08%3A59%3A36Z%22)',
     'message':'Temporal search should only return one file in this temporal range. All variables and spatial subset.',
     'prod_gid':'',
