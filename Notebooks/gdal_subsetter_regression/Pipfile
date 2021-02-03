@@ -7,9 +7,10 @@ verify_ssl = true
 
 [packages]
 requests = "*"
-gdal = "==3.0.4"
 pyproj = "*"
 pytest = "*"
+numpy = "*"
+gdal = "==3.0.4"
 
 [requires]
 python_version = "3.8"

@@ -1,5 +1,5 @@
+#def write_testfile(filename, collection, identical, product, expected):
 def write_testfile(filename, collection, product, expected):
-
 
     file = open(filename, "w")
     file.write("import pytest\n")
@@ -23,6 +23,8 @@ def write_testfile(filename, collection, product, expected):
     file.write("    assert "+str(product['gdal_variables'])+" == "+str(expected['variables'])+"\n")
     file.write("def test_" + collection + "_" + expected['q_num'] +"_xy_size():\n")
     file.write("    assert "+str(product['gdal_xy_size'])+" == "+str(expected['xy_size'])+"\n")
+    file.write("def test_" + collection + "_" + expected['q_num'] +"_identical_to_reference_image():\n")
+    file.write("    assert "+"'"+str(identical)+"'"+" == "+"'"+"True"+"'"+"\n")
     file.close()
 
     return

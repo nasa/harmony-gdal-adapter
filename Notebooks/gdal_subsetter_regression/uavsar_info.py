@@ -3,6 +3,7 @@ def uavsar_info():
     # Query 1
     {
     'q_num':'1',
+    'reference_image':'uavsar_query1_reference.tiff',
     'request_url':'Band1/coverage/rangeset?subset=lat(63.7:64.1)&subset=lon(-145.9:-145.7)&format=image%2Ftiff&granuleID=',
     'message':'Variable subset Band1. Spatial subset',
     'prod_gid':'G1422449017-ASF',
@@ -23,6 +24,7 @@ def uavsar_info():
     # Query 2
     {
     'q_num':'2',
+    'reference_image':'uavsar_query2_reference.tiff',
     'request_url':'Band2/coverage/rangeset?subset=lat(63.75:64.1)&subset=lon(-146.07:-145.8)&format=image%2Ftiff&granuleID=',
     'message':'Variable subset Band2. Spatial subset',
     'prod_gid':'G1422449017-ASF',
@@ -43,6 +45,7 @@ def uavsar_info():
     # Query 3
     {
     'q_num':'3',
+    'reference_image':'uavsar_query3_reference.tiff',
     'request_url':'Band3/coverage/rangeset?subset=lat(63.85:64.15)&subset=lon(-145.9:-145.8)&format=image%2Ftiff&granuleID=',
     'message':'Variable subset Band3. Spatial subset',
     'prod_gid':'G1422449017-ASF',
@@ -63,6 +66,7 @@ def uavsar_info():
     # Query 4
     {
     'q_num':'4',
+    'reference_image':'uavsar_query4_reference.tiff',
     'request_url':'Band1%2CBand2/coverage/rangeset?subset=lat(40.05:40.06)&subset=lon(-123.39:-123.34)&format=image%2Ftiff&granuleID=',
     'message':'Variable subset 2 bands (1 & 2). Spatial subset.',
     'prod_gid':'G1366089385-ASF',
@@ -83,6 +87,7 @@ def uavsar_info():
     # Query 5
     {
     'q_num':'5',
+    'reference_image':'uavsar_query5_reference.tiff',
     'request_url':'all/coverage/rangeset?subset=lat(39.95:40.0)&subset=lon(-123.69:-123.59)&format=image%2Ftiff&granuleID=',
     'message':'Variable subset 3 bands using "all". Spatial subset.',
     'prod_gid':'G1366089385-ASF',
@@ -103,6 +108,7 @@ def uavsar_info():
     #Query 6
     {
     'q_num':'6',
+    'reference_image':'uavsar_query6_reference.tiff',
     'request_url':'all/coverage/rangeset?subset=lat(-0.034:0.09)&subset=lon(11.57:11.6)&format=image%2Ftiff&granuleID=',
     'message':'Spatial subset across the equator. All 3 bands',
     'prod_gid':'G1232482059-ASF',
@@ -120,14 +126,15 @@ def uavsar_info():
     'variables': ['Band1', 'Band2', 'Band3', 'NA'],
     'xy_size':[540, 2232]
     },
-    #Query 7
+    # Query 7
     {
     'q_num':'7',
-    'request_url':'all/coverage/rangeset?subset=lat(-40.2:-39.0)&subset=lon(-72.4:-71.5)&format=image%2Ftiff&granuleID=',
-    'message':'Southern hemisphere and subset bbox larger than granule extent. Big download. It might take a while.',
-    'prod_gid':'G1223713114-ASF',
-    'uat_gid':'G1233284356-ASF',
-    'sit_gid':'G1233284356-ASF',
+    'reference_image':'uavsar_query7_reference.tiff',
+    'request_url':'all/coverage/rangeset?subset=lat(61:62)&subset=lon(-139:-137)&format=image%2Ftiff&granuleID=',
+    'message':'Northern hemisphere and subset bbox larger than granule extent.',
+    'prod_gid':'G1402334529-ASF',
+    'uat_gid':'G1233284396-ASF',
+    'sit_gid':'G1233284396-ASF',
     'outfile':'_uavsar_query7.tiff',
     'cs': 'Geographic',
     'proj_cs':'NA',
@@ -135,15 +142,16 @@ def uavsar_info():
     'authority': 'EPSG',
     'proj_epsg': 'NA',
     'gcs_epsg': '4326',
-    'subset': [-40.16, -39.22, -72.17, -71.73],
+    'subset': [61.57, 61.76, -138.36, -137.85],
     'bands': 3,
     'variables': ['Band1', 'Band2', 'Band3', 'NA'],
-    'xy_size':[7805, 16921]
+    'xy_size':[4514, 3477]
     },
-    #Query 8
+    # Query 8
     {
     'q_num':'8',
-    'request_url':'all/coverage/rangeset?subset=lat(-40.05:-39.27)&subset=lon(-72.4:-71.9)&format=image%2Ftiff&granuleID=',
+    'reference_image':'uavsar_query8_reference.tiff',
+    'request_url':'Band2/coverage/rangeset?subset=lat(-40.02:-39.9)&subset=lon(-72.4:-71.98)&format=image%2Ftiff&granuleID=',
     'message':'Spatial subset that extends past west boundary of granule bounding box',
     'prod_gid':'G1223713114-ASF',
     'uat_gid':'G1233284356-ASF',
@@ -155,14 +163,15 @@ def uavsar_info():
     'authority': 'EPSG',
     'proj_epsg': 'NA',
     'gcs_epsg': '4326',
-    'subset': [-40.05, -39.27, -72.17, -71.90],
-    'bands': 3,
-    'variables': ['Band1', 'Band2', 'Band3', 'NA'],
-    'xy_size':[4804, 14039]
+    'subset': [-40.02, -39.9, -72.17, -71.98],
+    'bands': 1,
+    'variables': ['Band2', 'NA', 'NA', 'NA'],
+    'xy_size':[3364, 2159]
     },
     #Query 9
     {
     'q_num':'9',
+    'reference_image':'uavsar_query9_reference.tiff',
     'request_url':'all/coverage/rangeset?subset=time(%222016-11-17T23%3A27%3A00Z%22%3A%222016-11-17T23%3A28%3A00Z%22)&subset=lat(28.9:29.0)&subset=lon(-89.1:-88.9)&format=image%2Ftiff',
     'message':'Temporal subset should only return 1 granule. Spatial subset and all 3 variables',
     'prod_gid':'',
