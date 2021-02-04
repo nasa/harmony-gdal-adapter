@@ -194,7 +194,45 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             shutil.rmtree(output_dir)
 
     def process_geotiff(self, source, basename, input_filename, output_dir, layernames):
-        return formats.geotiff.process()
+        if not source.variables:
+            # process geotiff and all bands
+
+            filename = input_filename
+            layer_id = basename + '__all'
+            band = None
+            layer_id, filename, output_dir = self.combin_transfer(
+                layer_id, filename, output_dir, band)
+            result = self.rename_to_result(
+                layer_id, filename, output_dir)
+            layernames.append(layer_id)
+        else:
+            variables = source.process('variables')
+
+            for variable in variables:
+
+                band = None
+
+                index = next(i for i, v in enumerate(
+                    variables) if v.name.lower() == variable.name.lower())
+                if index is None:
+                    return self.completed_with_error('band not found: ' + variable)
+                band = index + 1
+
+                filename = input_filename
+
+                layer_id = basename + '__' + variable.name
+
+                layer_id, filename, output_dir = self.combin_transfer(
+                    layer_id, filename, output_dir, band)
+
+                result = self.add_to_result(
+                    layer_id,
+                    filename,
+                    output_dir
+                )
+                layernames.append(layer_id)
+
+        return layernames, result
 
     def process_netcdf(self, source, basename, input_filename, output_dir, layernames):
         variables = source.process(
@@ -1458,4 +1496,3 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         ds_out.close()
 
         return outfile
-

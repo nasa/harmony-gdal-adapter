@@ -1,3 +1,5 @@
+[version 1.0.8] 2021-02-03
+modify transform.py to adopt to harmoy with STAC-catalog.
 [version 1.0.7] 2021-01-15
 add the geotiff to netcdf conversion functuionality in the gdal-subsetter. Users may request the harmony to output netcdf file if they provide the parameter &format=application/x-netcdf4 in the request url.
 
