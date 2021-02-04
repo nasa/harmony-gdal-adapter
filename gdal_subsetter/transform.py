@@ -464,7 +464,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             proj = pyproj.crs.CRS(fd_infile.crs_wkt)
             proj_json = json.loads(proj.to_json())
             unit = proj_json['coordinate_system']['axis'][0]['unit']
-        except as Exception:
+        except Exception:
             unit = None
 
         return unit
