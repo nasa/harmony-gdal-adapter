@@ -163,7 +163,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 )
             else:
                 self.completed_with_error(
-                    'No recognized file foarmat, not process')
+                    'No recognized file foarmat, not process'
+                )
 
             self.update_layernames(filename, [v for v in layernames])
 
@@ -293,8 +294,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         """
         ds = gdal.Open(filename)
 
-        for i in range(len(layernames)):
-            ds.GetRasterBand(i + 1).SetDescription(layernames[i])
+        for count, layer_name in enumerate(layernames):
+            ds.GetRasterBand(count + 1).SetDescription(layer_name)
 
         ds = None
 
@@ -463,7 +464,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             proj = pyproj.crs.CRS(fd_infile.crs_wkt)
             proj_json = json.loads(proj.to_json())
             unit = proj_json['coordinate_system']['axis'][0]['unit']
-        except:
+        except as Exception:
             unit = None
 
         return unit
@@ -567,13 +568,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         count = 0
         ds_description = []
 
-        for id, layer in enumerate(infilelist, start=1):
+        for layer_id, layer in enumerate(infilelist, start=1):
             ds = gdal.Open(layer)
             filestr = os.path.splitext(os.path.basename(layer))[0]
             filename = ds.GetDescription()
             filestr = os.path.splitext(os.path.basename(filename))[0]
 
-            if id == 1:
+            if layer_id == 1:
                 proj = ds.GetProjection()
                 geot = ds.GetGeoTransform()
                 cols = ds.RasterXSize
@@ -712,8 +713,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             return 'tif'
         elif file_extension in ['.zip']:
             return 'zip'
-        else:
-            return 'others'
+
+        return 'others'
 
     def is_geotiff(self, filename):
         gdalinfo_lines = self.cmd("gdalinfo", filename)
@@ -919,8 +920,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             else:
                 self.cmd(*['cp', tmpfile, outputfile])
 
-            return outputfile
-
         elif shapefile:
             shapefile_out = f'{os.path.dirname(outputfile)}/tmpshapefile'
             boxproj, proj, shapefile_out, geometryname = self.shapefile_boxproj(
@@ -939,12 +938,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
             self.mask_via_shapefile2(tmpfile, shapefile_out, outputfile)
 
-            return outputfile
-
         else:
             self.cmd(*['cp', tiffile, outputfile])
 
-            return outputfile
+        return outputfile
 
     def boxwrs84_boxproj(self, boxwrs84, ref_ds):
         """
@@ -1080,7 +1077,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         outFeature = ogr.Feature(featureDefn)
         outFeature.SetGeometry(polygon)
         outLayer.CreateFeature(outFeature)
-        outFeature.Destroy
+        outFeature.Destroy()
         outDataSource.Destroy()
 
     def box2shapefile(self, inputfile, box):
@@ -1444,15 +1441,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             command = ['ncks']
             command.extend(['-C', '--overwrite', '-x', '-v'])
             command.extend([",".join(rmvar_lst)])
-            command.extend([tmpfile, outfile])
-            self.cmd(*command)
-
-            return outfile
         else:
             command = ['cp']
             command.extend(['-f'])
-            command.extend([tmpfile, outfile])
-            self.cmd(*command)
+
+        command.extend([tmpfile, outfile])
+        self.cmd(*command)
 
         return outfile
 
