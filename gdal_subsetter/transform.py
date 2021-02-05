@@ -220,10 +220,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             layernames.append(layer_id)
         else:
 
-            #variables = self.get_variables(input_filename)
-            variables = source.process('variables')
+            # all possible variables (band names) in the input_filenanme
 
-            for variable in variables:
+            variables = self.get_variables(input_filename)
+
+            # source.process('variables') is user's requested variables (bands)
+
+            for variable in source.process('variables'):
 
                 band = None
 
