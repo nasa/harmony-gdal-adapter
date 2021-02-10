@@ -1,3 +1,5 @@
+[version 1.0.9] 2021-02-10
+This version changes the authentication in the version 1.0.8 to new access-token authentication.
 [version 1.0.8] 2021-02-03
 modify transform.py to adopt to harmoy with STAC-catalog.
 [version 1.0.7] 2021-01-15
