@@ -24,9 +24,7 @@ lint:
 	flake8 harmony
 
 test:
-	coverage erase
-	coverage run --source harmony setup.py test
-	coverage report
+	pytest --cov=harmony tests
 
 cve-check:
 	safety check
