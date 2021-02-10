@@ -1,0 +1,8 @@
+pytest==6.1.2
+python-dotenv
+pytest-cov
+
+
+
+
+

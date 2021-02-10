@@ -137,6 +137,6 @@ venv/
 templates/
 testcases/
 .idea/
-unittest/data/
+#unittest/data/
 unittest/dockervenv/
 unittest/.env_unittest
