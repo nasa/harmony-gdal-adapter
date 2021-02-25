@@ -55,6 +55,11 @@ process_flags = {
     "maskband":False,
 }
 
+resampling_methods = [
+    "nearest","bilinear","cubic","cubicspline","lanczos","average","rms","mode"
+]
+
+
 class ObjectView(object):
     """
     Simple class to make a dict look like an object.
@@ -555,7 +560,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
     def reproject(self, layerid, srcfile, dstdir):
         crs = self.message.format.process('crs')
-        resample_method = "bilinear"
+        interpolation = self.message.format.process('interpolation')
+        if interpolation in resampling_methods:
+            resample_method = interpolation
+        else:
+            resample_method = "bilinear"
         if not crs:
             return srcfile
 
@@ -566,6 +575,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return dstfile
 
     def resize(self, layerid, srcfile, dstdir):
+        interpolation = self.message.format.process('interpolation')
+        if interpolation in resampling_methods:
+            resample_method = interpolation
+        else:
+            resample_method = "bilinear"
+
         command = ['gdal_translate']
         fmt = self.message.format
         normalized_layerid = layerid.replace('/', '_')
@@ -575,7 +590,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             width = fmt.process('width') or 0
             height = fmt.process('height') or 0
             command.extend(["-outsize", str(width), str(height)])
-
+        command.extend(['-r', resample_method])
         command.extend([srcfile, dstfile])
         self.cmd(*command)
 

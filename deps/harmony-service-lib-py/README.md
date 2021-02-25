@@ -6,45 +6,18 @@ A library for Python-based Harmony services to parse incoming messages, fetch da
 
 ### Using pip
 
-Install the latest version of the package from the Earthdata Nexus repo using pip:
+Install the latest version of the package from PyPI using pip:
 
-    $ pip install --extra-index-url https://maven.earthdata.nasa.gov/repository/python-repo/simple/ harmony-service-lib
-
-Or a specific version:
-
-    $ pip install --extra-index-url https://maven.earthdata.nasa.gov/repository/python-repo/simple/ harmony-service-lib==0.0.7
-
-In a requirements.txt file:
-
-```
---extra-index-url https://maven.earthdata.nasa.gov/repository/python-repo/simple/
-harmony-service-lib~=0.0.9
-```
-
-### Using conda
-
-In a conda environment, you may still use pip to install the harmony service lib, as shown above.
-However, in a conda environment.yml file, in addition to the conda dependencies, you can specify
-pip dependencies as shown here:
-
-```
-dependencies:
-  - ...
-  - pip:
-    - --extra-index-url https://maven.earthdata.nasa.gov/repository/python-repo/simple/
-    - harmony-service-lib~=0.0.9
-    - ...
-```
-
+    $ pip install harmony-service-lib
 ### Other methods:
 
 The package is installable from source via
 
-    $ pip install git+https://git.earthdata.nasa.gov/scm/harmony/harmony-service-lib-py.git
+    $ pip install git+https://github.com/harmony/harmony-service-lib-py.git#egg=harmony-service-lib
 
 If using a local source tree, run the following in the source root directory instead:
 
-    $ pip install .
+    $ pip install -e .
 
 ## Usage
 
@@ -154,27 +127,3 @@ Build & publish the package:
 Update the CHANGELOG with a short bulleted description of the changes
 to be built & deployed. Replace `DATE` with the date on which the
 feature will be released.
-
-NOTE: Currently the service library Python package is versioned
-by the Bamboo build number, and it only increments the patch version
-of the library. Unless the base version of the Bamboo job is updated,
-the resulting Python package version will not follow semantic
-versioning. If a change requires a minor or major version number
-increment, update the Bamboo job which builds the Python package (see
-below) so that the base version of the newly-built package is correct.
-
-New entries to the CHANGELOG should be of the form:
-
-```
-## DATE
-
-Changes:
-
-* Now uses a flux capacitor in the hydro-flange motivator circuit
-* Tastes better & is less filling than previous release
-```
-
-The [Harmony Python Service Library Bamboo Build](https://ci.earthdata.nasa.gov/browse/HARMONY-PSL)
-will be triggered on commits pushed to the
-[BitBucket repo](https://git.earthdata.nasa.gov/projects/HARMONY/repos/harmony-service-lib-py/browse).
-New versions of the Python package artifact will then be pushed to the [Earthdata Nexus Repository](https://maven.earthdata.nasa.gov/#browse/browse:python-repo:harmony-service-lib). It may then be installed using `pip`.
