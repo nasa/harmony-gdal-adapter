@@ -55,6 +55,11 @@ process_flags = {
     "maskband":False,
 }
 
+resampling_methods = [
+    "nearest","bilinear","cubic","cubicspline","lanczos","average","rms","mode"
+]
+
+
 class ObjectView(object):
     """
     Simple class to make a dict look like an object.
@@ -555,7 +560,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
     def reproject(self, layerid, srcfile, dstdir):
         crs = self.message.format.process('crs')
-        resample_method = "bilinear"
+        interpolation = self.message.format.process('interpolation')
+        if interpolation in resampling_methods:
+            resample_method = interpolation
+        else:
+            resample_method = "bilinear"
         if not crs:
             return srcfile
 
@@ -566,6 +575,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return dstfile
 
     def resize(self, layerid, srcfile, dstdir):
+        interpolation = self.message.format.process('interpolation')
+        if interpolation in resampling_methods:
+            resample_method = interpolation
+        else:
+            resample_method = "bilinear"
+
         command = ['gdal_translate']
         fmt = self.message.format
         normalized_layerid = layerid.replace('/', '_')
@@ -575,7 +590,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             width = fmt.process('width') or 0
             height = fmt.process('height') or 0
             command.extend(["-outsize", str(width), str(height)])
-
+        command.extend(['-r', resample_method])
         command.extend([srcfile, dstfile])
         self.cmd(*command)
 
@@ -594,11 +609,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         ds = gdal.Open(filelist[0])
         nodata_flag = ds.GetRasterBand(1).GetNoDataValue()
         ds = None
-        if nodata_flag:
-            tmpfile = self.stack_multi_file_with_nodata(filelist, tmpfile)
-        else:
-            tmpfile = self.stack_multi_file_with_maskband(filelist, tmpfile)
+        #if nodata_flag:
+        #    tmpfile = self.stack_multi_file_with_nodata(filelist, tmpfile)
+        #else:
+        #    tmpfile = self.stack_multi_file_with_maskband(filelist, tmpfile)
         
+        tmpfile = self.stack_multi_file_with_metadata(filelist, tmpfile)
         self.cmd2('cp', '-f', tmpfile, dstfile)
 
         return dstfile
@@ -606,10 +622,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def stack_multi_file_with_maskband(self, infilelist, outfile):
         #infilelist include multiple files, each file does not have the same number of bands, but they have the same peojection  and geogransform.
 
-        collection=[]
-        count=0
+        collection = []
+        count = 0
+        ds_description = []        
         for id, layer in enumerate(infilelist, start=1):
             ds=gdal.Open(layer)
+            filestr = os.path.splitext(os.path.basename(layer))[0]
             if id==1:
                 proj=ds.GetProjection()
                 geot=ds.GetGeoTransform()
@@ -628,8 +646,14 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 nodata = band.GetNoDataValue() 
                 mask = band.GetMaskBand().ReadAsArray()
                 count=count+1
+                band_name = "Band{count}:{filestr}-{i}".format(
+                    count=count, filestr=filestr, i=i)
+                tmp_bmd = {"bandname": band_name}
+                bmd.update(tmp_bmd)
+                ds_description.append(band_name)
                 collection.append({"band_sn":count,"band_md":bmd, "band_array":data, "mask_array":mask, "nodata":nodata})
-        
+            ds = None
+
         dst_ds = gdal.GetDriverByName('GTiff').Create(outfile, cols, rows, count, gtyp)
         #mask is readonly by default, you have to create the maskband before you can write the maskband
         gdal.SetConfigOption('GDAL_TIFF_INTERNAL_MASK', 'YES')
@@ -642,6 +666,59 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             dst_ds.GetRasterBand(i+1).GetMaskBand().WriteArray(collection[i]["mask_array"])
             #if collection[i]["nodata"]:
             #    dst_ds.GetRasterBand(i+1).SetNoDataValue(collection[i]["nodata"])
+
+        dst_ds.FlushCache()                     # write to disk
+        dst_ds = None
+        return outfile
+
+    def stack_multi_file_with_metadata(self, infilelist, outfile):
+        #infilelist include multiple files, each file does not have the same number of bands, but they have the same peojection  and geogransform.
+
+        collection=[]
+        count=0
+        ds_description = []
+        
+        for id, layer in enumerate(infilelist, start=1):
+            ds = gdal.Open(layer)
+            filestr = os.path.splitext(os.path.basename(layer))[0]
+            if id == 1:
+                proj=ds.GetProjection()
+                geot=ds.GetGeoTransform()
+                cols=ds.RasterXSize
+                rows=ds.RasterYSize
+                band1 = ds.GetRasterBand(1)
+                gtyp = band1.DataType
+
+            bandnum=ds.RasterCount
+            md=ds.GetMetadata()
+            for i in range(1,bandnum+1):
+                band=ds.GetRasterBand(i)
+                bmd=band.GetMetadata()
+                bmd.update(md)
+                data=band.ReadAsArray()
+                nodata = band.GetNoDataValue() 
+                mask = band.GetMaskBand().ReadAsArray()
+                count = count + 1
+                band_name = "Band{count}:{filestr}-{i}".format(
+                    count=count, filestr=filestr, i=i)
+                tmp_bmd = {"bandname": band_name}
+                bmd.update(tmp_bmd)
+                ds_description.append(band_name)
+                collection.append({"band_sn":count,"band_md":bmd, "band_array":data, "mask_array":mask, "nodata":nodata})
+            ds = None
+
+        dst_ds = gdal.GetDriverByName('GTiff').Create(outfile, cols, rows, count, gtyp)
+        #maskband is readonly by default, you have to create the maskband before you can write the maskband
+        gdal.SetConfigOption('GDAL_TIFF_INTERNAL_MASK', 'YES')
+        dst_ds.CreateMaskBand(gdal.GMF_PER_DATASET)
+        dst_ds.SetProjection(proj)
+        dst_ds.SetGeoTransform(geot)
+        for i, band in enumerate(collection):
+            dst_ds.GetRasterBand(i+1).WriteArray(collection[i]["band_array"])
+            dst_ds.GetRasterBand(i+1).SetMetadata(collection[i]["band_md"])
+            dst_ds.GetRasterBand(i+1).GetMaskBand().WriteArray(collection[i]["mask_array"])      
+            if collection[i]["nodata"]:
+                dst_ds.GetRasterBand(i+1).SetNoDataValue(collection[i]["nodata"])
 
         dst_ds.FlushCache()                     # write to disk
         dst_ds = None
@@ -662,8 +739,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         for layer_id, layer in enumerate(infilelist, start=1):
             ds = gdal.Open(layer)
             filestr = os.path.splitext(os.path.basename(layer))[0]
-            filename = ds.GetDescription()
-            filestr = os.path.splitext(os.path.basename(filename))[0]
+            #filename = ds.GetDescription()
+            #filestr = os.path.splitext(os.path.basename(filename))[0]
 
             if layer_id == 1:
                 proj = ds.GetProjection()
@@ -690,7 +767,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 collection.append(
                     {"band_sn": count, "band_md": bmd, "band_array": data, "nodata":nodata})
 
+            ds = None
+
         dst_ds = gdal.GetDriverByName('GTiff').Create(
+
             outfile, cols, rows, count, gtyp
         )    
         dst_ds.SetProjection(proj)
@@ -732,16 +812,20 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             ds = gdal.Open(srcfile)
             nodata_flag = ds.GetRasterBand(1).GetNoDataValue()
             ds = None
-            if nodata_flag:
-                try:
-                    dstfile = self.geotiff2netcdf_via_nodata(srcfile, dstfile)
-                except:
-                    return srcfile
-            else:
-                try:
-                    dstfile = self.geotiff2netcdf_via_maskband(srcfile, dstfile)
-                except:
-                    return srcfile
+            #if nodata_flag:
+            #    try:
+            #        dstfile = self.geotiff2netcdf_via_nodata(srcfile, dstfile)
+            #    except:
+            #        return srcfile
+            #else:
+            #    try:
+            #        dstfile = self.geotiff2netcdf_via_maskband(srcfile, dstfile)
+            #    except:
+            #        return srcfile
+            #try:
+            dstfile = self.geotiff2netcdf_combined(srcfile, dstfile, nodata_flag)
+            #except:
+            #    return srcfile 
         else:
             command = ['gdal_translate',
                        '-of', mime_to_gdal[output_mime],
@@ -920,9 +1004,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         if filelist_tif:
             tmpfile = f'{output_dir}/tmpfile'
-
             # stack the single-band files into a multiple-band file
-            tmptif = self.stack_multi_file_with_nodata(filelist_tif, tmpfile)
+            tmptif = self.stack_multi_file_with_metadata(filelist_tif, tmpfile)
 
         tmpnc = None
         filelist_nc = self.get_file_from_unzipfiles(f'{output_dir}/unzip', 'nc')
@@ -1018,13 +1101,14 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             command.extend([tiffile, tmpfile])
             self.cmd(*command)
 
-            if ref_nodata:
-                process_flags["maskband"] = False
-                self.mask_via_nodata(tmpfile, shapefile_out, outputfile)
-            else:
-                process_flags["maskband"] = True
-                self.mask_via_maskband(tmpfile, shapefile_out, outputfile)
+            #if ref_nodata:
+            #    process_flags["maskband"] = False
+            #    self.mask_via_nodata(tmpfile, shapefile_out, outputfile)
+            #else:
+            #    process_flags["maskband"] = True
+            #    self.mask_via_maskband(tmpfile, shapefile_out, outputfile)
 
+            self.mask_via_combined(tmpfile, shapefile_out, outputfile)
         else:
             self.cmd2(*['cp', tiffile, outputfile])
 
@@ -1318,75 +1402,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         out_ds = None
 
-    def mask_via_nodata2(self, inputfile, shapefile, outputfile):
-        """
-        It sets the pixles of the inputfile outside the bbox as a nodata value.
-        inputs: inputfile is geotiff file.
-                shapefile in the same coordinate reference as the inputfile/
-        return: outputfile is masked geotiff file.
-        """
-
-        tmpfilepre = inputfile.split(".")[0]
-        tmpfile = f"{tmpfilepre}-tmp.tif"
-
-        # copy inputfile to tmpfile
-        self.cmd2(*['cp', '-f', inputfile, tmpfile])
-
-        # get the infomation of inputfile
-        ds = gdal.Open(inputfile)
-        num = ds.RasterCount
-        tmpfilelst = []
-
-        # read shapefile info
-        shp = ogr.Open(shapefile)
-        ly = shp.GetLayerByIndex(0)
-        lyname = ly.GetName()
-
-        for i in range(num):
-            band_sn = i+1
-            band = ds.GetRasterBand(band_sn)
-            nodata = band.GetNoDataValue()
-            dtyp = gdal.GetDataTypeName(band.DataType)
-
-            if dtyp == 'Byte':
-                burnval = 0
-            else:
-                burnval = 0.0
-
-            # rasterize
-            command = ['gdal_rasterize']
-            command.extend(["-b", f"{band_sn}"])
-            command.extend(["-burn", f"{burnval}"])
-            command.extend(['-l', lyname, shapefile])
-            command.extend([tmpfile])
-            self.cmd(*command)
-
-            # calc
-            command = ['gdal_calc.py']
-            command.extend(
-                ["-A", f"{inputfile}", f"--A_band={band_sn}"])
-            command.extend(
-                ["-B", "{b}".format(b=tmpfile), "--B_band={band_sn}".format(band_sn=band_sn)])
-            command.extend(['--calc="A-B"'])
-            command.extend(['--overwrite'])
-            tmpbandfile = "{tmpfilepre}band{band_sn}.tif".format(
-                tmpfilepre=tmpfilepre, band_sn=band_sn)
-            command.extend(
-                ["--outfile={tmpbandfile}".format(tmpbandfile=tmpbandfile)])
-            self.cmd(*command)    
-            tmpfilelst.append(tmpbandfile)
-
-            # copy metadata
-            self.transfer_metadata(tmpfile, band_sn, tmpbandfile, 1)
-
-        # combine tmpbandfile to one outputfile
-        if os.path.exists(outputfile):
-            self.cmd2(*['rm', '-f', outputfile])
-
-        self.stack_multi_file_with_metadata(tmpfilelst, outputfile)
-
-        return outputfile
-
+ 
+        
     def mask_via_nodata(self, inputfile, shapefile, outputfile):
         """
         It sets the pixles of the inputfile outside the bbox as a nodata value.
@@ -1401,23 +1418,32 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         # copy inputfile to tmpfile
         self.cmd2(*['cp', '-f', inputfile, tmpfile])
+        #cmd =" ".join(['cp', '-f', inputfile, tmpfile])
+        #os.system(cmd)
+
         self.cmd2(*['cp', '-f', inputfile, outputfile])
+        #cmd = " ".join(['cp', '-f', inputfile, outputfile])
+        #os.system(cmd)
 
         # read shapefile info
         shp = ogr.Open(shapefile)
         ly = shp.GetLayerByIndex(0)
         lyname = ly.GetName()
 
-        # update the output file
-        src_ds = gdal.Open(outputfile, gdal.GA_Update)
-
         # update tmpfile (used as a mask file)
         msk_ds = gdal.Open(tmpfile, gdal.GA_Update)
+        maskflag = msk_ds.GetRasterBand(1).GetMaskFlags()
         num = msk_ds.RasterCount
+
+        # update the output file
+        out_ds = gdal.Open(outputfile, gdal.GA_Update)
+        #gdal.SetConfigOption('GDAL_TIFF_INTERNAL_MASK', 'YES')
+        #out_ds.CreateMaskBand(maskflag)
 
         for i in range(num):
             band_sn = i+1
             msk_band = msk_ds.GetRasterBand(band_sn)
+            msk_nodata = msk_band.GetNoDataValue() 
             msk_data = msk_band.ReadAsArray()
             gdal_dt = gdal.GetDataTypeName(msk_band.DataType)
             np_dt = gdal_array.GDALTypeCodeToNumericTypeCode(msk_band.DataType)
@@ -1439,30 +1465,30 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             msk_ds.FlushCache()
 
             # mask band of tmpfile2 with corresponding band of tmpfile
-            out_band = src_ds.GetRasterBand(band_sn)
+            out_band = out_ds.GetRasterBand(band_sn)
             out_data = out_band.ReadAsArray()
-            no_data_value = out_band.GetNoDataValue()
-            if not no_data_value:
-                if gdal_dt == 'Byte':
-                    nodata = 255
-                else:
-                    nodata = 9999
-
-                out_band.SetNoDataValue(nodata)
-                no_data_value = out_band.GetNoDataValue()
-
+            out_band.SetNoDataValue(msk_nodata)
             msk_band = msk_ds.GetRasterBand(band_sn)
             msk_data = msk_band.ReadAsArray()
             msk = msk_data == 0
-            out_data[msk] = no_data_value
+            out_data[msk] = msk_nodata
             out_band.WriteArray(out_data)
+
+            # process maskband
+            #out_maskband = out_band.GetMaskBand()
+            #out_mask = out_maskband.ReadAsArray()
+            #out_mask[msk] = 0
+            #out_maskband.WriteArray(out_mask)
+            #out_maskband.FlushCache()
+
+            #out_band.GetMaskBand().ReadAsArray() changes into 255 for every element
             out_band.FlushCache()
 
-        src_ds = None
+        out_ds = None
         msk_ds = None
 
         return 
-        
+
 
     def mask_via_maskband(self, inputfile, shapefile, outputfile):
         """
@@ -1521,6 +1547,100 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             out_msk = out_band.GetMaskBand()
             out_msk.WriteArray(out_msk_data)
             out_msk.FlushCache()
+            out_band.FlushCache()        
+
+            return
+
+        for band_sn in range(1,num+1):
+            _mask_band(tmp_ds, band_sn, dst_ds)
+        
+        dst_ds.FlushCache()
+        tmp_ds.FlushCache()
+        dst_ds = None
+        tmp_ds = None
+
+        return outputfile
+
+
+    def mask_via_combined(self, inputfile, shapefile, outputfile):
+        """
+        It calcualtes the maskbands and set databands with nodata value for each band according to the shapefile.
+        inputs: inputfile is geotiff file.
+                shapefile int same coordinate reference as the inputfile.
+        return: outputfile is masked geotiff file.
+        """
+        
+        # define temorary file name
+        tmpfilepre = os.path.splitext(inputfile)[0]
+        tmpfile = "{tmpfilepre}-tmp.tif".format(tmpfilepre=tmpfilepre)
+        self.cmd2(*['cp', '-f', inputfile, tmpfile])
+        #cmd = " ".join(['cp', '-f', inputfile, tmpfile])
+        #os.system(cmd)
+
+        self.cmd2(*['cp', '-f', inputfile, outputfile])
+        #cmd = " ".join(['cp', '-f', inputfile, outputfile])
+        #os.system(cmd)
+
+        # read shapefile info
+        shp = ogr.Open(shapefile)
+        ly = shp.GetLayerByIndex(0)
+        lyname = ly.GetName()
+        # update the outputfile
+        dst_ds = gdal.Open(outputfile, GA_Update)
+        gdal.SetConfigOption('GDAL_TIFF_INTERNAL_MASK', 'YES')
+        # this cahnges the maskband data in the dst_ds
+        dst_ds.CreateMaskBand(gdal.GMF_PER_DATASET)
+
+        # update tmpfile (used as a mask file)
+        tmp_ds = gdal.Open(tmpfile, gdal.GA_Update)
+        num = tmp_ds.RasterCount
+        # define inner function
+        def _mask_band(tmp_ds, band_sn, dst_ds):
+            tmp_band = tmp_ds.GetRasterBand(band_sn)
+            tmp_data = tmp_band.ReadAsArray()
+            tmp_mskband_pre = tmp_band.GetMaskBand()                
+            tmp_msk_pre = tmp_mskband_pre.ReadAsArray()
+            tmp_nodata_pre = tmp_band.GetNoDataValue()
+            np_dt = gdal_array.GDALTypeCodeToNumericTypeCode(tmp_band.DataType)
+            tmp_band.WriteArray(np.zeros(tmp_data.shape, np_dt))
+            #this flushCache() changes the all values in the maskband data to 255.
+            tmp_band.FlushCache()
+            
+            bands = [band_sn]
+            burn_value = 1
+            burns = [burn_value] 
+            # following statement modify the maskband data to 255.
+            # The original maskband data is stored in tmp_msk_pre.
+            
+            err = gdal.RasterizeLayer(
+                tmp_ds,
+                bands,
+                ly,
+                burn_values=burns,
+                options=["ALL_TOUCHED=TRUE"]
+            )
+            tmp_ds.FlushCache()
+            #combine original tmp mask band with tmp_data
+            tmp_band = tmp_ds.GetRasterBand(band_sn)
+            # tmp_data includes 0 and 1 values, where 0 indicates no valid pixels, and 1 indicates valid pixels. 
+            tmp_data = tmp_band.ReadAsArray()
+            out_band = dst_ds.GetRasterBand(band_sn)
+            out_data = out_band.ReadAsArray()
+
+            # set data band with nodata value if out_nodata exist
+            #tmp_nodata = tmp_band.GetNoDataValue()
+            if tmp_nodata_pre:
+                msk = tmp_data == 0
+                out_data[msk] = tmp_nodata_pre
+                out_band.WriteArray(out_data)
+                out_band.SetNoDataValue(tmp_nodata_pre)
+
+            # modify out_mskband
+            out_mskband = out_band.GetMaskBand()        
+            out_msk = tmp_data*tmp_msk_pre
+            out_mskband.WriteArray(out_msk)
+
+            out_mskband.FlushCache()
             out_band.FlushCache()        
 
             return
@@ -1603,50 +1723,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         command.extend([tmpfile, outfile])
         self.cmd2(*command)
-
         return outfile
-
-    def geotiff2netcdf2(self, infile, outfile):
-        '''
-        convert geotiff file to netcdf file via gdal_warp method. This way reprojects the infile
-        if it is rotated image.
-        input: infile - geotiff file name
-        return: outfile - netcdft file name
-        '''
-        command = ['gdalwarp']
-        command.extend(['-of', 'NETCDF', '-overwrite'])
-        command.extend([infile, outfile])
-        self.cmd(*command)
-
-        # add the metedata obtained from infile to nc file
-        ds_in = gdal.Open(infile)
-
-        # get crs defined in metadata
-        md = ds_in.GetMetadata()
-
-        # open outfile for update
-        ds_out = Dataset(outfile, 'a')
-
-        # convert metadata to variable atttrs
-        varnames = ds_out.variables.keys()
-
-        for varname in varnames:
-            varlst = [
-                x for x in md if bool(re.search(f"/{varname}*", x))
-            ]
-            var = ds_out.variables[varname]
-
-            for x in varlst:
-                attrname = x.split("#")[-1]
-                if not attrname in var.ncattrs():
-                    if attrname != '_FillValue':
-                        var.setncattr(attrname, md[x])
-
-        ds_in = None
-        ds_out.close()
-
-        return outfile
-
  
     def geotiff2netcdf_via_maskband(self, infile, outfile):
         '''
@@ -1745,6 +1822,116 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         ds_in = None
         src.close
         dst.close
-
         return outfile
 
+    def geotiff2netcdf_combined(self, infile, outfile, nodata_flag):
+        '''
+        convert geotiff file to netcdf file by copy everything to a new netcdf4 format file.
+        input: infile - geotiff file name
+            nodata_flag indicates you filling nodata value (True) or use maskband to represnet the subset (False)
+        return: outfile - netcdf file name
+        '''
+        # open infile
+        ds_in = gdal.Open(infile)
+        gt =ds_in.GetGeoTransform()  
+        tmpfile = os.path.splitext(infile)[0]+"_tmp.nc"
+        command = ['gdal_translate']
+        command.extend(['-of', 'NETCDF','-co', 'FORMAT=NC4'])
+        #command.extend(['-ot', datatypename])
+        command.extend([infile, tmpfile])
+        self.cmd(*command)
+        #cmd = " ".join(command)
+        #os.system(cmd)
+
+        src = Dataset(tmpfile)
+        # create a output nc file
+        dst = Dataset(outfile, "w", format="NETCDF4")
+        dimkeys = src.dimensions.keys()
+        dimnames = [name for name in dimkeys] 
+        # copy attributes 
+        for name in src.ncattrs():
+            dst.setncattr(name, src.getncattr(name))
+        # copy dimensions
+        for name, dimension in src.dimensions.items():
+            dst.createDimension(
+            name, (len(dimension) if not dimension.isunlimited() else None))
+        # copy all file data for variables    
+        for name, variable in src.variables.items():
+            if variable.shape:
+                if variable.ndim == 1:
+                    if name in dimnames:
+                        if gt[2] == 0.0 and gt[4] == 0.0:
+                            x = dst.createVariable(name, variable.datatype, variable.dimensions) 
+                            for t in variable.ncattrs():
+                                if t !='_FillValue': 
+                                    dst.variables[name].setncattr(t, variable.getncattr(t))
+                            dst.variables[name][:]=variable[:]
+                    else:
+                        x = dst.createVariable(name, variable.datatype, variable.dimensions) 
+                        for t in variable.ncattrs():
+                            if t !='_FillValue': 
+                                dst.variables[name].setncattr(t, variable.getncattr(t))
+                        dst.variables[name][:]=variable[:]    
+
+                elif variable.ndim == 2:
+                    lst = [ attr for attr in variable.ncattrs() if attr == '_FillValue']
+
+                    def find_band(ds_in, variable):
+                        #find out what band is associate to the variable    
+                        #if "Band" in name:
+                        #    r1 = re.compile("([a-zA-Z]+)([0-9]+)")
+                        #    m = r1.match(name)
+                        #    band_sn = int(m.group(m.lastindex))
+                        #    return band_sn
+                        #else:
+                        band_sn = None
+                        for i in range(1, ds_in.RasterCount+1):
+                            if ds_in.GetRasterBand(i).GetMetadata()["bandname"] == variable.getncattr("bandname"):
+                                band_sn = i
+                                break
+                        return band_sn
+                
+                    if lst:
+                        fillvalue = variable._FillValue
+                        x = dst.createVariable(name, variable.datatype, variable.dimensions, fill_value=fillvalue)
+                    else:
+                        x = dst.createVariable(name, variable.datatype, variable.dimensions)
+
+                    for t in variable.ncattrs():
+                        if t !='_FillValue': 
+                            dst.variables[name].setncattr(t, variable.getncattr(t))
+
+                    band_sn = find_band(ds_in, variable)
+
+                    if band_sn:
+                        band_in = ds_in.GetRasterBand(band_sn)
+                        nodata_in = band_in.GetNoDataValue() 
+                        mask_in_v =band_in.GetMaskBand().ReadAsArray()
+                        mask_in_b = mask_in_v == 0
+                        datatype_nc = variable.datatype
+                        if nodata_in:
+                            dst.variables[name][:,:] = variable[:,:]
+                        else:
+                            try: 
+                                tmp = variable[:,:]
+                            except Exception:
+                                pass
+                            tmp.mask = np.flipud(mask_in_b)
+                            dst.variables[name][:,:] = tmp
+                        
+                    else:
+                        dst.variables[name][:,:] = variable[:,:]
+                                                    
+                else:
+                    print("error")
+            else:
+                x = dst.createVariable(name, variable.datatype, variable.dimensions)
+                for t in variable.ncattrs():
+                    if t !='_FillValue': 
+                        dst.variables[name].setncattr(t, variable.getncattr(t))
+            
+        ds_in = None
+        src.close
+        dst.close
+
+        return outfile

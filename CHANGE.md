@@ -1,3 +1,6 @@
+[version 1.0.10] 2021-02-24
+This version marks the subset with either filling of nodata value directly to data bands or creating the mask bands which are associated with the data bands. It also implements the reproject/resize with optional input of resampling method from users. The available resampling methods are the same as those defined in the gdal library. They are nearest, bilinear, cubic, cubicspline, lanczos, average, rms, and mode.
+
 [version 1.0.9] 2021-02-10
 This version changes the authentication in the version 1.0.8 to new access-token authentication.
 [version 1.0.8] 2021-02-03
