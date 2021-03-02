@@ -1,3 +1,5 @@
+[version 1.0.11] 2021-03-02
+This version imporved the metedata in the output file.
 [version 1.0.10] 2021-02-24
 This version marks the subset with either filling of nodata value directly to data bands or creating the mask bands which are associated with the data bands. It also implements the reproject/resize with optional input of resampling method from users. The available resampling methods are the same as those defined in the gdal library. They are nearest, bilinear, cubic, cubicspline, lanczos, average, rms, and mode.
 
