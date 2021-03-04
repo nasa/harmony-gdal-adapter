@@ -176,7 +176,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     'No recognized file foarmat, not process'
                 )
 
-            self.update_layernames(filename, [v for v in layernames])
+            #self.update_layernames(filename, [v for v in layernames])
 
             # Update metadata with bbox and extent in lon/lat coordinates for the geotiff file
             # Also update the STAC record
@@ -664,6 +664,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         for i, band in enumerate(collection):
             dst_ds.GetRasterBand(i+1).WriteArray(collection[i]["band_array"])
             dst_ds.GetRasterBand(i+1).SetMetadata(collection[i]["band_md"])
+            dst_ds.GetRasterBand(i+1).SetDescription('')
             dst_ds.GetRasterBand(i+1).GetMaskBand().WriteArray(collection[i]["mask_array"])      
             if collection[i]["nodata"]:
                 dst_ds.GetRasterBand(i+1).SetNoDataValue(collection[i]["nodata"])
