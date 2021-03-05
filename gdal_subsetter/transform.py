@@ -205,6 +205,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             shutil.rmtree(output_dir)
 
     def process_geotiff(self, source, basename, input_filename, output_dir, layernames):
+        filelist = []
         if not source.variables:
             # process geotiff and all bands
 
@@ -216,21 +217,18 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
             #result = self.rename_to_result(
             #    layer_id, filename, output_dir)
-            result = self.add_to_result(
-                    layer_id,
-                    filename,
-                    output_dir
-                )
- 
+            #result = self.add_to_result(
+            #        layer_id,
+            #        filename,
+            #        output_dir
+            #    )
+            filelist.append(filename)
+            result = self.add_to_result(filelist, output_dir)
             layernames.append(layer_id)
         else:
-
             # all possible variables (band names) in the input_filenanme
-
             variables = self.get_variables(input_filename)
-            
             # source.process('variables') is user's requested variables (bands)
-            
             for variable in source.process('variables'):
 
                 band = None
@@ -239,6 +237,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     variables) if v.name.lower() == variable.name.lower())
                 if index is None:
                     return self.completed_with_error('band not found: ' + variable)
+
                 band = index + 1
 
                 filename = input_filename
@@ -248,16 +247,21 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 layer_id, filename, output_dir = self.combin_transfer(
                     layer_id, filename, output_dir, band)
 
-                result = self.add_to_result(
-                    layer_id,
-                    filename,
-                    output_dir
-                )
                 layernames.append(layer_id)
+
+                filelist.append(filename)
+
+
+                #result = self.add_to_result(layer_id,
+                #    filename,
+                #    output_dir
+                #)
+            result = self.add_to_result(filelist, output_dir)    
 
         return layernames, result
 
     def process_netcdf(self, source, basename, input_filename, output_dir, layernames):
+        filelist = []
         variables = source.process(
             'variables') or self.get_variables(input_filename)
 
@@ -281,12 +285,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             layer_id, filename, output_dir = self.combin_transfer(
                 layer_id, filename, output_dir, band)
 
-            result = self.add_to_result(
-                layer_id,
-                filename,
-                output_dir
-            )
             layernames.append(layer_id)
+
+            filelist.append(filename)
+
+        result = self.add_to_result(filelist, output_dir)
 
         return layernames, result
 
@@ -597,7 +600,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return dstfile
 
-    def add_to_result(self, layerid, srcfile, dstdir):
+    def add_to_result2(self, layerid, srcfile, dstdir):
         tmpfile = "%s/tmp-result.tif" % (dstdir)
         dstfile = "%s/result.tif" % (dstdir)
         if not os.path.exists(dstfile):
@@ -609,7 +612,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         self.cmd2('cp', '-f', tmpfile, dstfile)
         return dstfile
 
-    
+    def add_to_result(self, filelist, dstdir):
+        dstfile = "%s/result.tif" % (dstdir)
+        return self.stack_multi_file_with_metadata(filelist, dstfile)
+
+
     def stack_multi_file_with_metadata(self, infilelist, outfile):
         '''
         The infilelist includes multiple files, each file does may not have the same number of bands,
@@ -641,18 +648,26 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 nodata = band.GetNoDataValue() 
                 mask = band.GetMaskBand().ReadAsArray()
                 count = count + 1
+
                 if "standard_name" in bmd.keys():
-                    band_name = "Band{count}:{standard_name}".format(
-                    count=count, standard_name=bmd["standard_name"])
+                    #band_name = "Band{count}:{standard_name}".format(
+                    #count=count, standard_name=bmd["standard_name"])
+                    band_name = bmd["standard_name"]
                     tmp_bmd = {"bandname": band_name}
                 else:
-                    band_name = "Band{count}:{filestr}-{i}".format(
-                    count=count, filestr=filestr, i=i)
+                    #band_name = "Band{count}:{filestr}-{i}".format(
+                    #count=count, filestr=filestr, i=i)
+                    band_name = "{filestr}-{i}".format(filestr=filestr, i=i)
                     tmp_bmd ={"bandname": band_name,"standard_name": band_name, "long_name": band_name}
 
                 bmd.update(tmp_bmd)
+                if band.GetDescription():
+                    band_desc = band.GetDescription()
+                else:
+                    band_desc = band_name 
+
                 ds_description.append(band_name)
-                collection.append({"band_sn":count,"band_md":bmd, "band_array":data, "mask_array":mask, "nodata":nodata})
+                collection.append({"band_sn":count,"band_md":bmd, "band_desc":band_desc, "band_array":data, "mask_array":mask, "nodata":nodata})
             ds = None
 
         dst_ds = gdal.GetDriverByName('GTiff').Create(outfile, cols, rows, count, gtyp)
@@ -664,7 +679,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         for i, band in enumerate(collection):
             dst_ds.GetRasterBand(i+1).WriteArray(collection[i]["band_array"])
             dst_ds.GetRasterBand(i+1).SetMetadata(collection[i]["band_md"])
-            dst_ds.GetRasterBand(i+1).SetDescription('')
+            dst_ds.GetRasterBand(i+1).SetDescription(collection[i]["band_desc"])
             dst_ds.GetRasterBand(i+1).GetMaskBand().WriteArray(collection[i]["mask_array"])      
             if collection[i]["nodata"]:
                 dst_ds.GetRasterBand(i+1).SetNoDataValue(collection[i]["nodata"])
@@ -704,13 +719,16 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 nodata = band.GetNoDataValue() 
                 mask = band.GetMaskBand().ReadAsArray()
                 count = count + 1
-                band_name = "{filestr}-band{i}".format(count=count, filestr=filestr, i=i)
+                if band.GetDescription():
+                    band_name = band.GetDescription()
+                else:
+                    band_name = "{filestr}-band{i}".format(filestr=filestr, i=i)
                 long_name = band_name
                 standard_name = band_name
                 tmp_bmd = {"long_name": long_name, "standard_name":standard_name}
                 bmd.update(tmp_bmd)
                 ds_description.append(band_name)
-                collection.append({"band_sn":count,"band_md":bmd, "band_array":data, "mask_array":mask, "nodata":nodata})
+                collection.append({"band_sn":count,"band_md":bmd, "band_desc":band_name, "band_array":data, "mask_array":mask, "nodata":nodata})
             ds = None
 
         dst_ds = gdal.GetDriverByName('GTiff').Create(outfile, cols, rows, count, gtyp)
@@ -722,6 +740,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         for i, band in enumerate(collection):
             dst_ds.GetRasterBand(i+1).WriteArray(collection[i]["band_array"])
             dst_ds.GetRasterBand(i+1).SetMetadata(collection[i]["band_md"])
+            dst_ds.GetRasterBand(i+1).SetDescription(collection[i]["band_desc"])
             dst_ds.GetRasterBand(i+1).GetMaskBand().WriteArray(collection[i]["mask_array"])      
             if collection[i]["nodata"]:
                 dst_ds.GetRasterBand(i+1).SetNoDataValue(collection[i]["nodata"])
@@ -793,19 +812,18 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             return result
 
         # GeoTIFFs, where variables are bands, with descriptions set to their variable name
-        for subdataset in filter((lambda line: re.match(r"^\s*Description = ", line)), gdalinfo_lines):
-            result.append(ObjectView(
-                {"name": re.split(r" = ", subdataset)[-1]}
-            ))
+        #for subdataset in filter((lambda line: re.match(r"^\s*Description = ", line)), gdalinfo_lines):
+        #    varname = re.split(r" = ", subdataset)[-1].split("-")[-1]
+        #    if "band" in varname.lower():
+        #        result.append(ObjectView({"name": varname}))
+        #if result:
+        #    return result
 
-        if result:
-            return result
-
-        # Some GeoTIFFdoes not have descriptions. directly use Band # as the variables
+        # GeoTIFFs, directly use Band # as the variables.
         for subdataset in filter((lambda line: re.match(r"^Band", line)), gdalinfo_lines):
             tmpline = re.split(r" ", subdataset)
             result.append(ObjectView(
-                {"name": tmpline[0].strip()+tmpline[1].strip(), }))
+                {"name": tmpline[0].strip()+tmpline[1].strip()}))
 
         if result:
             return result
