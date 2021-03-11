@@ -11,6 +11,7 @@ pandas==1.1.2
 pyproj==2.6.1.post1
 pystac ~= 0.5.3
 pytz==2020.1
+PyCRS==1.0.2
 rasterio==1.1.5
 Shapely==1.7.1
 snuggs==1.4.7

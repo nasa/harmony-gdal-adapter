@@ -30,7 +30,9 @@ from pystac import Asset
 import numpy as np
 import geopandas as gpd
 import fiona
-
+import pycrs
+import numpy.ma as ma
+from datetime import datetime
 
 mime_to_gdal = {
     "image/tiff": "GTiff",
@@ -600,17 +602,17 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return dstfile
 
-    def add_to_result2(self, layerid, srcfile, dstdir):
-        tmpfile = "%s/tmp-result.tif" % (dstdir)
-        dstfile = "%s/result.tif" % (dstdir)
-        if not os.path.exists(dstfile):
-            filelist =[srcfile]
-        else:
-            filelist = [dstfile, srcfile]
-        
-        tmpfile = self.stack_multi_file_with_metadata(filelist, tmpfile)
-        self.cmd2('cp', '-f', tmpfile, dstfile)
-        return dstfile
+    #def add_to_result2(self, layerid, srcfile, dstdir):
+    #    tmpfile = "%s/tmp-result.tif" % (dstdir)
+    #    dstfile = "%s/result.tif" % (dstdir)
+    #    if not os.path.exists(dstfile):
+    #        filelist =[srcfile]
+    #    else:
+    #        filelist = [dstfile, srcfile]
+    #    
+    #    tmpfile = self.stack_multi_file_with_metadata(filelist, tmpfile)
+    #    self.cmd2('cp', '-f', tmpfile, dstfile)
+    #    return dstfile
 
     def add_to_result(self, filelist, dstdir):
         dstfile = "%s/result.tif" % (dstdir)
@@ -773,7 +775,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             ds = gdal.Open(srcfile)
             nodata_flag = ds.GetRasterBand(1).GetNoDataValue()
             ds = None
-            dstfile = self.geotiff2netcdf_combined(srcfile, dstfile, nodata_flag)
+            dstfile = self.geotiff2netcdf_direct(srcfile, dstfile)
         else:
             command = ['gdal_translate',
                        '-of', mime_to_gdal[output_mime],
@@ -1400,12 +1402,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             out_band = dst_ds.GetRasterBand(band_sn)
             out_data = out_band.ReadAsArray()
 
-            # set data band with nodata value if out_nodata exist
-            #tmp_nodata = tmp_band.GetNoDataValue()
+            # set out_band with nodata value if the tmp_band has nodatavalue
             if tmp_nodata_pre:
-                msk = tmp_data == 0
-                out_data[msk] = tmp_nodata_pre
-                out_band.WriteArray(out_data)
+                #msk = tmp_data == 0
+                #out_data[msk] = tmp_nodata_pre
+                #out_band.WriteArray(out_data)
                 out_band.SetNoDataValue(tmp_nodata_pre)
 
             # modify out_mskband
@@ -1427,7 +1428,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         tmp_ds = None
         return outputfile
  
-    def geotiff2netcdf_combined(self, infile, outfile, nodata_flag):
+    def geotiff2netcdf_combined2(self, infile, outfile, nodata_flag):
         '''
         convert geotiff file to netcdf file by copy everything to a new netcdf4 format file.
         input: infile - geotiff file name
@@ -1542,3 +1543,189 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         src.close
         dst.close
         return outfile
+
+
+    def geotiff2netcdf_direct(self, infile, outfile):
+        '''
+        convert geotiff file to netcdf file by read the geotiff and write to a new netcdf4 format file.
+        input: infile - geotiff file name
+            nodata_flag indicates you filling nodata value (True) or use maskband to represnet the subset (False)
+        return: outfile - netcdf file name
+        '''
+        
+        def _process_projected(ds_in, dst):
+            gt =ds_in.GetGeoTransform()
+            crs = pycrs.parse.from_ogc_wkt(ds_in.GetProjectionRef())
+            # define dimensions        
+            dst.createDimension('x', ds_in.RasterXSize)
+            dst.createDimension('y', ds_in.RasterYSize)
+            # copy attributes, geotiff metadata is party of attributes in netcdf.
+            # Conventions, GDAL, history
+            glb_attrs = ds_in.GetMetadata()
+            for key in glb_attrs:
+                dst.setncattr(key,glb_attrs[key].rstrip("\n"))
+
+            # create georeference variable
+            crs_name = crs.proj.name.ogc_wkt.lower()
+            geovar = dst.createVariable(crs_name,"S1")
+            geovar.grid_mapping_name = crs_name
+            for item in crs.params:
+                attr_name = str(item).split(".")[-1].split(" ")[0]
+                attr_lst = re.findall('[A-Z][^A-Z]*', attr_name)
+                name = "_".join(attr_lst).lower()
+                geovar.setncattr(name, item.value)
+
+            geovar.long_name = 'CRS definition'
+            geovar.longitude_of_prime_meridian = crs.geogcs.prime_mer.value
+            if crs.geogcs.datum.ellips:
+                geovar.semi_major_axis = crs.geogcs.datum.ellips.semimaj_ax.value
+                geovar.inverse_flattening = crs.geogcs.datum.ellips.inv_flat.value
+
+            geovar.spatial_ref = ds_in.GetProjectionRef()
+            geovar.GeoTransform = " ".join(map(str, list(gt)))
+            #create data variables
+            for i in range(1, ds_in.RasterCount + 1):
+                band = ds_in.GetRasterBand(i)
+                #meta = band.GetMetadata()
+                mask_band = band.GetMaskBand()
+                data = band.ReadAsArray()
+                mask = mask_band.ReadAsArray()
+                mx =ma.masked_array(data, mask=mask == 0)
+                fillvalue = band.GetNoDataValue()
+                if fillvalue:
+                    ma.set_fill_value(mx, fillvalue)
+
+                vardatatype = mx.data.dtype
+                varname ="Band{number}".format(number = i)            
+                if fillvalue:
+                    datavar = dst.createVariable(varname,vardatatype,("y","x"), fill_value=fillvalue)
+                else:
+                    datavar = dst.createVariable(varname,vardatatype,("y","x"))
+
+                datavar[:,:] = mx
+                #write attrs of the variabale datavar
+                datavar.grid_mapping = geovar.grid_mapping_name
+                var_attrs = band.GetMetadata()
+                for key in var_attrs:
+                    datavar.setncattr(key, var_attrs[key].rstrip("\n"))
+
+            # create coordinate variables if the geotiff is not rotated image
+            if gt[2] == 0 and gt[4] == 0:
+                x_array = gt[0]+0.5*gt[1]+gt[1]*np.arange(ds_in.RasterXSize)
+                y_array = gt[3]+0.5*gt[5]+gt[5]*np.arange(ds_in.RasterYSize)
+
+                xvar = dst.createVariable('x', np.dtype('float64'), ("x"))
+                xvar[:] = x_array
+                xvar.setncattr('standard_name','projection_x_coordinate')
+                xvar.setncattr('long_name','x coordinate of projection')
+                xvar.setncattr('units','m')
+
+                yvar = dst.createVariable('y', np.dtype('float64'), ("y"))
+                #yvar[:] = np.flip(y_array)
+                yvar[:] = y_array
+                yvar.setncattr('standard_name','projection_y_coordinate')
+                yvar.setncattr('long_name','y coordinate of projection')
+                yvar.setncattr('units','m')
+
+        def _process_geogcs(ds_in, dst):
+            gt =ds_in.GetGeoTransform()
+            crs = pycrs.parse.from_ogc_wkt(ds_in.GetProjectionRef())
+            # define dimensions        
+            #if isinstance(crs.unit, pycrs.elements.units.Meter):
+            #dims ={'x':ds_in.RasterXSize,'y':ds_in.RasterYSize}
+            dst.createDimension('lon', ds_in.RasterXSize)
+            dst.createDimension('lat', ds_in.RasterYSize)
+            # copy attributes, geotiff metadata is party of attributes in netcdf.
+            # Conventions, GDAL, history
+            glb_attrs = ds_in.GetMetadata()
+            for key in glb_attrs:
+                dst.setncattr(key,glb_attrs[key].rstrip("\n"))
+
+            # create georeference variable
+            # grid_mapping_name
+            geovar = dst.createVariable("crs","S1")
+            #geovar.grid_mapping_name = "latitude_longitude"
+            geovar.grid_mapping_name = "crs"
+            geovar.long_name = 'CRS definition'
+            geovar.longitude_of_prime_meridian = crs.prime_mer.value
+            if crs.datum.ellips:
+                geovar.semi_major_axis = crs.datum.ellips.semimaj_ax.value
+                geovar.inverse_flattening = crs.datum.ellips.inv_flat.value
+
+            geovar.spatial_ref = ds_in.GetProjectionRef()
+            geovar.GeoTransform = " ".join(map(str, list(gt)))
+            #create data variables
+            for i in range(1, ds_in.RasterCount + 1):
+                band = ds_in.GetRasterBand(i)
+                meta = band.GetMetadata()
+                mask_band = band.GetMaskBand()
+                data = band.ReadAsArray()
+                mask = mask_band.ReadAsArray()
+                mx =ma.masked_array(data, mask=mask == 0)
+                fillvalue = band.GetNoDataValue()
+                if fillvalue:
+                    ma.set_fill_value(mx, fillvalue)
+
+                vardatatype = mx.data.dtype
+                varnames = [item for item in meta if item == "standard_name"]
+                if varnames:
+                    varname =meta[varnames[0]]
+                else:
+                    varname ="Band{number}".format(number = i)
+
+                if fillvalue:
+                    datavar = dst.createVariable(varname,vardatatype,("lat","lon"), fill_value=fillvalue)
+                else:
+                    datavar = dst.createVariable(varname,vardatatype,("lat","lon"))
+
+                datavar[:,:] = mx
+                #write attrs of the variabale datavar
+                var_attrs = band.GetMetadata()
+                for key in var_attrs:
+                    if key.find(r"#") > -1:
+                        tmp = key.split(r"#")
+                        if tmp[0] == "NC_GLOBAL":
+                            dst.setncattr(tmp[1], var_attrs[key].rstrip("\n"))
+
+                    else:
+                        if key != '_FillValue':
+                            datavar.setncattr(key, var_attrs[key].rstrip("\n"))
+
+                datavar.grid_mapping = 'crs'
+
+            # create coordinate variables if the geotiff is not rotated image
+            if gt[2] == 0 and gt[4] == 0:
+                lon_array = gt[0]+0.5*gt[1]+gt[1]*np.arange(ds_in.RasterXSize)
+                lat_array = gt[3]+0.5*gt[5]+gt[5]*np.arange(ds_in.RasterYSize)
+
+                lonvar = dst.createVariable('lon', np.dtype('float64'), ("lon"))
+                lonvar[:] = lon_array
+                lonvar.setncattr('standard_name','longitude')
+                lonvar.setncattr('long_name','longitude')
+                lonvar.setncattr('units','degrees_east')
+
+                latvar = dst.createVariable('lat', np.dtype('float64'), ("lat"))
+                #latvar[:] = np.flip(lat_array)
+                latvar[:] = lat_array
+                latvar.setncattr('standard_name','latitude')
+                latvar.setncattr('long_name','latitude')
+                latvar.setncattr('units','degrees_north')
+
+        # open infile
+        ds_in = gdal.Open(infile)
+        # create a output nc file
+        dst = Dataset(outfile, mode='w', format="NETCDF4")
+        dst.setncattr('history',"The geotiff file is converted to NETCDF4 at {datetime} (UTC)"
+        .format(datetime=datetime.utcnow().strftime("%d/%m/%Y %H:%M:%S")))
+        dst.setncattr('GDAL', "Version {ver}".format(ver=gdal.__version__))
+        #separate "projected" and "geographic" coordinates
+        crs = pycrs.parse.from_ogc_wkt(ds_in.GetProjectionRef())
+        if crs.cs_type == 'Projected':
+            _process_projected(ds_in, dst)
+        else:
+            _process_geogcs(ds_in, dst)
+            
+        ds_in = None
+        dst.close
+        return outfile
+
