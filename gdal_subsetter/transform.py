@@ -630,7 +630,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         
         for id, layer in enumerate(infilelist, start=1):
             ds = gdal.Open(layer)
-            #filestr = os.path.splitext(os.path.basename(layer))[0]
             filename = ds.GetDescription()
             filestr = os.path.splitext(os.path.basename(filename))[0]
             if id == 1:
@@ -639,14 +638,15 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 cols=ds.RasterXSize
                 rows=ds.RasterYSize
                 gtyp = ds.GetRasterBand(1).DataType  
+                md = ds.GetMetadata()
 
-            bandnum=ds.RasterCount
-            md=ds.GetMetadata()
+            bandnum = ds.RasterCount
+            #md = ds.GetMetadata()
             for i in range(1,bandnum+1):
-                band=ds.GetRasterBand(i)
-                bmd=band.GetMetadata()
-                bmd.update(md)
-                data=band.ReadAsArray()
+                band = ds.GetRasterBand(i)
+                bmd = band.GetMetadata()
+                #bmd.update(md)
+                data = band.ReadAsArray()
                 nodata = band.GetNoDataValue() 
                 mask = band.GetMaskBand().ReadAsArray()
                 count = count + 1
@@ -678,6 +678,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         dst_ds.CreateMaskBand(gdal.GMF_PER_DATASET)
         dst_ds.SetProjection(proj)
         dst_ds.SetGeoTransform(geot)
+        dst_ds.SetMetadata(md)
+
         for i, band in enumerate(collection):
             dst_ds.GetRasterBand(i+1).WriteArray(collection[i]["band_array"])
             dst_ds.GetRasterBand(i+1).SetMetadata(collection[i]["band_md"])
@@ -701,7 +703,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         
         for id, layer in enumerate(infilelist, start=1):
             ds = gdal.Open(layer)
-            #filestr = os.path.splitext(os.path.basename(layer))[0]
             filename = ds.GetDescription()
             filestr = os.path.splitext(os.path.basename(filename))[0]
             if id == 1:
@@ -710,14 +711,15 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 cols=ds.RasterXSize
                 rows=ds.RasterYSize
                 gtyp = ds.GetRasterBand(1).DataType
-                
+                md = ds.GetMetadata()
+
             bandnum=ds.RasterCount
-            md=ds.GetMetadata()
+            #md = ds.GetMetadata()
             for i in range(1,bandnum+1):
-                band=ds.GetRasterBand(i)
-                bmd=band.GetMetadata()
-                bmd.update(md)
-                data=band.ReadAsArray()
+                band = ds.GetRasterBand(i)
+                bmd = band.GetMetadata()
+                #bmd.update(md)
+                data = band.ReadAsArray()
                 nodata = band.GetNoDataValue() 
                 mask = band.GetMaskBand().ReadAsArray()
                 count = count + 1
@@ -739,6 +741,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         dst_ds.CreateMaskBand(gdal.GMF_PER_DATASET)
         dst_ds.SetProjection(proj)
         dst_ds.SetGeoTransform(geot)
+        dst_ds.SetMetadata(md)
+
         for i, band in enumerate(collection):
             dst_ds.GetRasterBand(i+1).WriteArray(collection[i]["band_array"])
             dst_ds.GetRasterBand(i+1).SetMetadata(collection[i]["band_md"])
@@ -1404,9 +1408,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
             # set out_band with nodata value if the tmp_band has nodatavalue
             if tmp_nodata_pre:
-                #msk = tmp_data == 0
-                #out_data[msk] = tmp_nodata_pre
-                #out_band.WriteArray(out_data)
+                msk = tmp_data == 0
+                out_data[msk] = tmp_nodata_pre
+                out_band.WriteArray(out_data)
                 out_band.SetNoDataValue(tmp_nodata_pre)
 
             # modify out_mskband
@@ -1544,7 +1548,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         dst.close
         return outfile
 
-
     def geotiff2netcdf_direct(self, infile, outfile):
         '''
         convert geotiff file to netcdf file by read the geotiff and write to a new netcdf4 format file.
@@ -1562,8 +1565,17 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             # copy attributes, geotiff metadata is party of attributes in netcdf.
             # Conventions, GDAL, history
             glb_attrs = ds_in.GetMetadata()
+            #for key in glb_attrs:
+            #    dst.setncattr(key,glb_attrs[key].rstrip("\n"))
             for key in glb_attrs:
-                dst.setncattr(key,glb_attrs[key].rstrip("\n"))
+                if key.find(r"#") > -1:
+                    tmp = key.split(r"#")
+                    if tmp[0] == "NC_GLOBAL":
+                        dst.setncattr(tmp[1], glb_attrs[key].rstrip("\n"))
+
+                else:
+                    if key != '_FillValue':
+                        dst.setncattr(key, glb_attrs[key].rstrip("\n"))
 
             # create georeference variable
             crs_name = crs.proj.name.ogc_wkt.lower()
@@ -1586,28 +1598,43 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             #create data variables
             for i in range(1, ds_in.RasterCount + 1):
                 band = ds_in.GetRasterBand(i)
-                #meta = band.GetMetadata()
+                meta = band.GetMetadata()
                 mask_band = band.GetMaskBand()
                 data = band.ReadAsArray()
                 mask = mask_band.ReadAsArray()
                 mx =ma.masked_array(data, mask=mask == 0)
-                fillvalue = band.GetNoDataValue()
-                if fillvalue:
-                    ma.set_fill_value(mx, fillvalue)
-
-                vardatatype = mx.data.dtype
-                varname ="Band{number}".format(number = i)            
-                if fillvalue:
-                    datavar = dst.createVariable(varname,vardatatype,("y","x"), fill_value=fillvalue)
+                #varname
+                varnames = [item for item in meta if item == "standard_name"]
+                if varnames:
+                    varname =meta[varnames[0]]
                 else:
-                    datavar = dst.createVariable(varname,vardatatype,("y","x"))
+                    varname ="Band{number}".format(number = i)
+
+                #convert datatype of uint8 into float32
+                vardatatype = mx.data.dtype
+                fillvalue = band.GetNoDataValue()    
+                if fillvalue:
+                    datavar = dst.createVariable(varname, vardatatype, ("y","x"), fill_value=fillvalue)
+                else:
+                    if vardatatype not in [np.dtype('float32'), np.dtype('float64')]:
+                        vardatatype = np.dtype('float32')
+                        mx = mx.astype(vardatatype)
+        
+                    datavar = dst.createVariable(varname, vardatatype, ("y","x"), fill_value=np.nan)               
 
                 datavar[:,:] = mx
                 #write attrs of the variabale datavar
                 datavar.grid_mapping = geovar.grid_mapping_name
                 var_attrs = band.GetMetadata()
                 for key in var_attrs:
-                    datavar.setncattr(key, var_attrs[key].rstrip("\n"))
+                    if key.find(r"#") > -1:
+                        tmp = key.split(r"#")
+                        if tmp[0] == "NC_GLOBAL":
+                            dst.setncattr(tmp[1], var_attrs[key].rstrip("\n"))
+
+                    else:
+                        if key != '_FillValue':
+                            datavar.setncattr(key, var_attrs[key].rstrip("\n"))
 
             # create coordinate variables if the geotiff is not rotated image
             if gt[2] == 0 and gt[4] == 0:
@@ -1621,8 +1648,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 xvar.setncattr('units','m')
 
                 yvar = dst.createVariable('y', np.dtype('float64'), ("y"))
-                #yvar[:] = np.flip(y_array)
-                yvar[:] = y_array
+                yvar[:] = np.flip(y_array)
                 yvar.setncattr('standard_name','projection_y_coordinate')
                 yvar.setncattr('long_name','y coordinate of projection')
                 yvar.setncattr('units','m')
@@ -1639,7 +1665,14 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             # Conventions, GDAL, history
             glb_attrs = ds_in.GetMetadata()
             for key in glb_attrs:
-                dst.setncattr(key,glb_attrs[key].rstrip("\n"))
+                if key.find(r"#") > -1:
+                    tmp = key.split(r"#")
+                    if tmp[0] == "NC_GLOBAL":
+                        dst.setncattr(tmp[1], glb_attrs[key].rstrip("\n"))
+
+                else:
+                    if key != '_FillValue':
+                        dst.setncattr(key, glb_attrs[key].rstrip("\n"))
 
             # create georeference variable
             # grid_mapping_name
@@ -1662,22 +1695,25 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 data = band.ReadAsArray()
                 mask = mask_band.ReadAsArray()
                 mx =ma.masked_array(data, mask=mask == 0)
-                fillvalue = band.GetNoDataValue()
-                if fillvalue:
-                    ma.set_fill_value(mx, fillvalue)
-
-                vardatatype = mx.data.dtype
+                #varname
                 varnames = [item for item in meta if item == "standard_name"]
                 if varnames:
                     varname =meta[varnames[0]]
                 else:
                     varname ="Band{number}".format(number = i)
 
+                #convert datatype of uint8 into float32
+                vardatatype = mx.data.dtype
+                fillvalue = band.GetNoDataValue()
                 if fillvalue:
-                    datavar = dst.createVariable(varname,vardatatype,("lat","lon"), fill_value=fillvalue)
+                    datavar = dst.createVariable(varname, vardatatype, ("lat","lon"), fill_value=fillvalue)
                 else:
-                    datavar = dst.createVariable(varname,vardatatype,("lat","lon"))
-
+                    if vardatatype not in [np.dtype('float32'), np.dtype('float64')]:
+                        vardatatype = np.dtype('float32')
+                        mx = mx.astype(vardatatype)
+        
+                    datavar = dst.createVariable(varname, vardatatype, ("lat","lon"), fill_value=np.nan)               
+               
                 datavar[:,:] = mx
                 #write attrs of the variabale datavar
                 var_attrs = band.GetMetadata()
@@ -1705,8 +1741,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 lonvar.setncattr('units','degrees_east')
 
                 latvar = dst.createVariable('lat', np.dtype('float64'), ("lat"))
-                #latvar[:] = np.flip(lat_array)
-                latvar[:] = lat_array
+                latvar[:] = np.flip(lat_array)
                 latvar.setncattr('standard_name','latitude')
                 latvar.setncattr('long_name','latitude')
                 latvar.setncattr('units','degrees_north')
@@ -1715,10 +1750,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         ds_in = gdal.Open(infile)
         # create a output nc file
         dst = Dataset(outfile, mode='w', format="NETCDF4")
+        dst.setncattr('Conventions', 'CF-1.6')
         dst.setncattr('history',"The geotiff file is converted to NETCDF4 at {datetime} (UTC)"
         .format(datetime=datetime.utcnow().strftime("%d/%m/%Y %H:%M:%S")))
         dst.setncattr('GDAL', "Version {ver}".format(ver=gdal.__version__))
-        #separate "projected" and "geographic" coordinates
+        #create dimensions
         crs = pycrs.parse.from_ogc_wkt(ds_in.GetProjectionRef())
         if crs.cs_type == 'Projected':
             _process_projected(ds_in, dst)
@@ -1729,3 +1765,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         dst.close
         return outfile
 
+
+
+ 
