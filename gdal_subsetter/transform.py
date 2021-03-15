@@ -602,18 +602,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return dstfile
 
-    #def add_to_result2(self, layerid, srcfile, dstdir):
-    #    tmpfile = "%s/tmp-result.tif" % (dstdir)
-    #    dstfile = "%s/result.tif" % (dstdir)
-    #    if not os.path.exists(dstfile):
-    #        filelist =[srcfile]
-    #    else:
-    #        filelist = [dstfile, srcfile]
-    #    
-    #    tmpfile = self.stack_multi_file_with_metadata(filelist, tmpfile)
-    #    self.cmd2('cp', '-f', tmpfile, dstfile)
-    #    return dstfile
-
     def add_to_result(self, filelist, dstdir):
         dstfile = "%s/result.tif" % (dstdir)
         return self.stack_multi_file_with_metadata(filelist, dstfile)
@@ -776,9 +764,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             return srcfile
         dstfile = "%s/translated.%s" % (dstdir, mime_to_extension[output_mime])
         if output_mime == "application/x-netcdf4":
-            ds = gdal.Open(srcfile)
-            nodata_flag = ds.GetRasterBand(1).GetNoDataValue()
-            ds = None
+            #ds = gdal.Open(srcfile)
+            #nodata_flag = ds.GetRasterBand(1).GetNoDataValue()
+            #ds = None
             dstfile = self.geotiff2netcdf_direct(srcfile, dstfile)
         else:
             command = ['gdal_translate',
@@ -1412,7 +1400,16 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 out_data[msk] = tmp_nodata_pre
                 out_band.WriteArray(out_data)
                 out_band.SetNoDataValue(tmp_nodata_pre)
-
+            else:
+                # deal with byte data, map 0-255 to 0-254, and set 255 as nodata value
+                if out_data.dtype == np.dtype('uint8'):
+                    out_data =(254.0/255.0)*out_data
+                    tmp_nodata_pre = 255
+                    msk = tmp_data == 0
+                    out_data[msk] = tmp_nodata_pre
+                    out_band.WriteArray(out_data)
+                    out_band.SetNoDataValue(tmp_nodata_pre)
+                
             # modify out_mskband
             out_mskband = out_band.GetMaskBand()        
             out_msk = tmp_data*tmp_msk_pre
@@ -1619,8 +1616,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     if vardatatype not in [np.dtype('float32'), np.dtype('float64')]:
                         vardatatype = np.dtype('float32')
                         mx = mx.astype(vardatatype)
-        
-                    datavar = dst.createVariable(varname, vardatatype, ("y","x"), fill_value=np.nan)               
+                        datavar = dst.createVariable(varname, vardatatype, ("y","x"), fill_value=np.nan)               
+                    else:
+                        datavar = dst.createVariable(varname, vardatatype, ("y","x"))
 
                 datavar[:,:] = mx
                 #write attrs of the variabale datavar
@@ -1648,7 +1646,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 xvar.setncattr('units','m')
 
                 yvar = dst.createVariable('y', np.dtype('float64'), ("y"))
-                yvar[:] = np.flip(y_array)
+                yvar[:] = y_array
                 yvar.setncattr('standard_name','projection_y_coordinate')
                 yvar.setncattr('long_name','y coordinate of projection')
                 yvar.setncattr('units','m')
@@ -1711,8 +1709,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     if vardatatype not in [np.dtype('float32'), np.dtype('float64')]:
                         vardatatype = np.dtype('float32')
                         mx = mx.astype(vardatatype)
-        
-                    datavar = dst.createVariable(varname, vardatatype, ("lat","lon"), fill_value=np.nan)               
+                        datavar = dst.createVariable(varname, vardatatype, ("lat","lon"), fill_value=np.nan)
+                    else:
+                        datavar = dst.createVariable(varname, vardatatype, ("lat","lon"))              
                
                 datavar[:,:] = mx
                 #write attrs of the variabale datavar
@@ -1741,7 +1740,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 lonvar.setncattr('units','degrees_east')
 
                 latvar = dst.createVariable('lat', np.dtype('float64'), ("lat"))
-                latvar[:] = np.flip(lat_array)
+                latvar[:] = lat_array
                 latvar.setncattr('standard_name','latitude')
                 latvar.setncattr('long_name','latitude')
                 latvar.setncattr('units','degrees_north')
