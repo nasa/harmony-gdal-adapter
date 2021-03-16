@@ -1,3 +1,6 @@
+[version 1.0.13] 2021-03-16
+This version does not define nodata if the original image does not define the nodata. If the geotiff gile doe not define the nodata, the output netcdf file also does not define the nodata. but the default filling_value to be used to fill the data part of the variable before the geotiff data is written to the variable. For geotiff/netcdf without nodata definaition inside, the GIS software should use the mask data which has the same name as the data to correctly display the image. 
+
 [version 1.0.12] 2021-03-15
 This version is an experimental version. For the original image with byte type data, if it does not define the nodata, the valid data range is 0-255. We map the range of 0-255 to 0-254, and define the nodata value=255. This way the output image get well display in the GIS software.
  
