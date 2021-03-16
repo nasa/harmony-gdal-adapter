@@ -764,9 +764,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             return srcfile
         dstfile = "%s/translated.%s" % (dstdir, mime_to_extension[output_mime])
         if output_mime == "application/x-netcdf4":
-            #ds = gdal.Open(srcfile)
-            #nodata_flag = ds.GetRasterBand(1).GetNoDataValue()
-            #ds = None
             dstfile = self.geotiff2netcdf_direct(srcfile, dstfile)
         else:
             command = ['gdal_translate',
@@ -1394,21 +1391,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             out_band = dst_ds.GetRasterBand(band_sn)
             out_data = out_band.ReadAsArray()
 
-            # set out_band with nodata value if the tmp_band has nodatavalue
+            # set out_band with nodata value if the tmp_band has nodata value
             if tmp_nodata_pre:
                 msk = tmp_data == 0
                 out_data[msk] = tmp_nodata_pre
                 out_band.WriteArray(out_data)
                 out_band.SetNoDataValue(tmp_nodata_pre)
-            else:
-                # deal with byte data, map 0-255 to 0-254, and set 255 as nodata value
-                if out_data.dtype == np.dtype('uint8'):
-                    out_data =(254.0/255.0)*out_data
-                    tmp_nodata_pre = 255
-                    msk = tmp_data == 0
-                    out_data[msk] = tmp_nodata_pre
-                    out_band.WriteArray(out_data)
-                    out_band.SetNoDataValue(tmp_nodata_pre)
                 
             # modify out_mskband
             out_mskband = out_band.GetMaskBand()        
@@ -1607,18 +1595,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 else:
                     varname ="Band{number}".format(number = i)
 
-                #convert datatype of uint8 into float32
                 vardatatype = mx.data.dtype
                 fillvalue = band.GetNoDataValue()    
                 if fillvalue:
                     datavar = dst.createVariable(varname, vardatatype, ("y","x"), fill_value=fillvalue)
                 else:
-                    if vardatatype not in [np.dtype('float32'), np.dtype('float64')]:
-                        vardatatype = np.dtype('float32')
-                        mx = mx.astype(vardatatype)
-                        datavar = dst.createVariable(varname, vardatatype, ("y","x"), fill_value=np.nan)               
-                    else:
-                        datavar = dst.createVariable(varname, vardatatype, ("y","x"))
+                    datavar = dst.createVariable(varname, vardatatype, ("y","x"))
 
                 datavar[:,:] = mx
                 #write attrs of the variabale datavar
@@ -1700,18 +1682,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 else:
                     varname ="Band{number}".format(number = i)
 
-                #convert datatype of uint8 into float32
                 vardatatype = mx.data.dtype
                 fillvalue = band.GetNoDataValue()
                 if fillvalue:
                     datavar = dst.createVariable(varname, vardatatype, ("lat","lon"), fill_value=fillvalue)
                 else:
-                    if vardatatype not in [np.dtype('float32'), np.dtype('float64')]:
-                        vardatatype = np.dtype('float32')
-                        mx = mx.astype(vardatatype)
-                        datavar = dst.createVariable(varname, vardatatype, ("lat","lon"), fill_value=np.nan)
-                    else:
-                        datavar = dst.createVariable(varname, vardatatype, ("lat","lon"))              
+                    datavar = dst.createVariable(varname, vardatatype, ("lat","lon"))              
                
                 datavar[:,:] = mx
                 #write attrs of the variabale datavar
