@@ -11,6 +11,8 @@ pyproj = "*"
 pytest = "*"
 numpy = "*"
 gdal = "==3.0.4"
+xarray = "*"
+netcdf4 = "*"
 
 [requires]
 python_version = "3.8"
