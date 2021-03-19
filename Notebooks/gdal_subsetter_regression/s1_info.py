@@ -18,7 +18,7 @@ def s1_info():
         'gcs_epsg': '4326',
         'subset': [33.0, 33.1, -115.5, -115.25],
         'bands': 1,
-        'variables': ['amplitude', 'NA', 'NA', 'NA'],
+        'variables': ['amplitude', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'],
         'xy_size':[300, 120]
         },
 #Query  2
@@ -39,7 +39,7 @@ def s1_info():
        'gcs_epsg': '4326',
        'subset': [26.95, 27.25, 37.25, 38.15],
        'bands': 1,
-       'variables': ['coherence', 'NA', 'NA', 'NA'],
+       'variables': ['coherence', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'],
        'xy_size':[1080, 360]
        },
 #Query 3
@@ -60,7 +60,7 @@ def s1_info():
        'gcs_epsg': '4326',
        'subset': [27.0, 27.5, 37.5, 38.25],
        'bands': 1,
-       'variables': ['connectedComponents', 'NA', 'NA', 'NA'],
+       'variables': ['connectedComponents', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'],
        'xy_size':[900, 600]
        },
 #Query 4
@@ -81,7 +81,7 @@ def s1_info():
        'gcs_epsg': '4326',
        'subset': [26.9, 27.5, 36.9, 39.1],
        'bands': 1,
-       'variables': ['unwrappedPhase', 'NA', 'NA', 'NA'],
+       'variables': ['unwrappedPhase', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'],
        'xy_size':[2640, 720]
        },
 #Query 5
@@ -102,7 +102,7 @@ def s1_info():
        'gcs_epsg': '4326',
        'subset': [33.0, 33.1, -115.5, -115.25],
        'bands': 2,
-       'variables': ['amplitude', 'coherence', 'NA', 'NA'],
+       'variables': ['amplitude', 'coherence', 'NA', 'NA', 'NA', 'NA', 'NA'],
        'xy_size':[150, 60]
         },
 #Query 6
@@ -123,7 +123,7 @@ def s1_info():
        'gcs_epsg': '4326',
        'subset': [33.05, 33.1, -115.52, -115.27],
        'bands': 3,
-       'variables': ['amplitude', 'coherence', 'connectedComponents', 'NA'],
+       'variables': ['amplitude', 'coherence', 'connectedComponents', 'NA', 'NA', 'NA', 'NA'],
        'xy_size':[75,30]
        },
 #Query 7
@@ -144,7 +144,7 @@ def s1_info():
        'gcs_epsg': '4326',
        'subset': [32.95, 33.09, -115.45, -115.15],
        'bands': 4,
-       'variables': ['amplitude', 'coherence', 'connectedComponents', 'unwrappedPhase'],
+       'variables': ['amplitude', 'coherence', 'connectedComponents', 'unwrappedPhase', 'NA', 'NA', 'NA'],
        'xy_size':[360,168]
        },
 #Query 8: South America (negative lat and long) spatial subset area smaller than product bounding box
@@ -165,7 +165,7 @@ def s1_info():
        'gcs_epsg': '4326',
        'subset': [-37.2, -36.9, -69.8, -68.8],
        'bands': 1,
-       'variables': ['amplitude', 'NA', 'NA', 'NA'],
+       'variables': ['amplitude', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'],
        'xy_size':[1200,360]
        },
 #Query 9: South America (negative lat and long) spatial subset area larger than product bounding box
@@ -186,7 +186,7 @@ def s1_info():
        'gcs_epsg': '4326',
        'subset': [-38.14, -36.0, -71.41, -67.96],
        'bands': 1,
-       'variables': ['coherence', 'NA', 'NA', 'NA'],
+       'variables': ['coherence', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'],
        'xy_size':[4143,2559]
        },
 
@@ -208,7 +208,7 @@ def s1_info():
        'gcs_epsg': '4326',
        'subset': [43.75, 44.85, 86.85, 88.15],
        'bands': 2,
-       'variables': ['coherence', 'unwrappedPhase', 'NA', 'NA'],
+       'variables': ['coherence', 'unwrappedPhase', 'NA', 'NA', 'NA', 'NA', 'NA'],
        'xy_size':[1560,1320]
        },
 #Query 11: Verify png output works
