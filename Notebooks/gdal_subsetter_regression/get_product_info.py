@@ -38,7 +38,7 @@ def get_product_info(collection, infile):
     ds = None
 
     gdi = gdal.Info(infile)
-    var_list = ['NA', 'NA', 'NA', 'NA']
+    var_list = ['NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA']
     var_count = 0
     # GRFN
     if collection == 's1_insar':
@@ -46,8 +46,8 @@ def get_product_info(collection, infile):
             if "NETCDF" in item:
                 var_list[var_count] = item.strip().partition("=")[2]
                 var_count += 1
-    # UAVSAR
-    elif collection == 'uavsar' or collection == 'avnir':
+    # UAVSAR and AVNIR
+    elif collection == 'uavsar' or collection == 'avnir' or collection == 'alos_rt2' or collection == 'alos_rt2':
         for item in gdi.split("\n"):
             if "Description" in item:
                 var_list[var_count] = item.strip().partition("= ")[2]

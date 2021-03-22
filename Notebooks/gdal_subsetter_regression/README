@@ -12,7 +12,7 @@ https://github.com/asfadmin/asf-harmony-gdal.git
 Install Jupyter Notebook from within Notebooks:
 pipenv install jupyter
 
-Install dependencies from Pipfile.lock in Notebooks/gdal_subsetter_regression:
+Install dependencies from Pipfile.lock in Notebooks and in Notebooks/gdal_subsetter_regression:
 
 pipenv install --ignore-pipfile
 
@@ -65,3 +65,17 @@ uavsar_query6_reference: subset of UA_eighty_14047_16008_006_160225_L090_CX_01-P
 uavsar_query7_reference: subset of UA_kluane_01902_17064_005_170615_L090_CX_01-PAULI
 uavsar_query8_reference: subset of UA_ChiVol_00700_15030_010_150330_L090_CX_01-PAULI
 uavsar_query9_reference: subset of UA_gulfco_27086_16101_004_161117_L090_CX_01-PAULI
+
+AVNIR-2
+avnir_query1_reference: subset of ALAV2A237403590
+avnir_query2_reference: subset of ALAV2A264953300
+avnir_query3_reference: subset of ALAV2A239652240
+avnir_query4_reference: subset of ALAV2A278852850
+avnir_query5_reference: subset of ALAV2A278852850
+avnir_query6_reference: subset of ALAV2A151894120
+avnir_query7_reference: subset of ALAV2A277832590
+avnir_query8_reference: subset of ALAV2A150623400
+avnir_query9_reference: subset of ALAV2A151894120
+avnir_query10_reference: None
+avnir_query11_reference: None
+avnir_query12-18_reference: subset of ALAV2A237403590
