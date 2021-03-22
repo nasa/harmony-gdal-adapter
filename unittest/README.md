@@ -1,38 +1,40 @@
-The unittest does test according to the message json file.
+The unittest does test according to the message json files in `data/prod`.
 
-requires:
-1.if you run the container version unittest in local environment, you need connect to ASF VPN-Full.
+## Setup
 
-2. you need define the EDL_USERNAME and EDL_PASSWORD in the unittest directory
-cd ${home directory of unittest}
+if you run the container version unittest in a local environment, you need connect to ASF VPN-Full.
 
-copy env_unittest .env_unittest file, and edit the file, replace edl_username and edl_password in the file
-export EDL_USERNAME=XXXXXXXXXXX
-export EDL_PASSWORD=XXXXXXXXXXX
+### Environment
 
+Copy `env.unittest` to `.env` and set `EDL_USERNAME` and `EDL_PASSWORD`
 
-Two ways to run the test:
+```
+  cp env.example .env
+```
 
-1. run the unittest insider the docker
+### Build
 
-from host 
+build the docker iamge asfdataservices/gdal-subsetter on the host
 
+```
+cd gdal-subsetter
+bin/build_iamge
+```
+
+### Run
+
+from host
+
+```
 ./run-interactive.bash
+```
 
 This brings you in to the docker container.
 
-Insdier the container,
+Then from insdier the container,
 
+```
 cd /home/unittest
+pytest
 
-./test_all_message.bash
-
-
-2. run the script in the host
-
-./run-unittest.bash
-
-
-
-
-
+```

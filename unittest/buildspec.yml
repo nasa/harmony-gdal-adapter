@@ -1,0 +1,26 @@
+version: 0.2
+env:
+  parameter-store:
+    EDL_USERNAME: /Codebuild/EDL/Username
+    EDL_PASSWORD: /Codebuild/EDL/Password
+
+phases:
+  pre_build:
+    commands:
+      - echo 'installing deps'
+      - pip3 install -r requirements.txt
+      - pip3 install -r requirements_dev.txt
+      - pip3 install deps/harmony-service-lib-py
+  build:
+    commands:
+      - echo 'running unittests'
+      - cd unittest
+      - cp env.example .env
+      - sed -i "s/{EDL_USERNAME}/$EDL_USERNAME/g" .env
+      - sed -i "s/{EDL_PASSWORD}/$EDL_PASSWORD/g" .env
+      - pytest --cov-report xml:cov.xml --cov=../gdal_subsetter/ .
+  post_build:
+    commands:
+      - echo 'update badges'
+      - curl https://img.shields.io/badge/Coverage-$(python cov-from-xml.py cov.xml)%25-brightgreen.svg > cov.svg
+      - aws s3 cp cov.svg s3://data-services-github-badges/cov.svg
