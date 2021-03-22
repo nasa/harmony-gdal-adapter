@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document id="root_doc">
+<Schema name="GCS_AVNIR_Equator_doughnut_json" id="GCS_AVNIR_Equator_doughnut_json">
+	<SimpleField name="FID" type="int"></SimpleField>
+	<SimpleField name="Id" type="int"></SimpleField>
+</Schema>
+<Folder><name>GCS_AVNIR_Equator_doughnut_json</name>
+  <Placemark>
+	<Style><LineStyle><color>ff0000ff</color></LineStyle><PolyStyle><fill>0</fill></PolyStyle></Style>
+	<ExtendedData><SchemaData schemaUrl="#GCS_AVNIR_Equator_doughnut_json">
+		<SimpleData name="FID">0</SimpleData>
+		<SimpleData name="Id">0</SimpleData>
+	</SchemaData></ExtendedData>
+      <Polygon><outerBoundaryIs><LinearRing><coordinates>-50.7154428706272,0.043146620993547 -50.7620461986379,0.060381799377749 -50.8010411161688,-0.005685782040419 -50.7382690243591,-0.035368232714379 -50.7078342472135,-0.01143072262111 -50.7154428706272,0.043146620993547</coordinates></LinearRing></outerBoundaryIs><innerBoundaryIs><LinearRing><coordinates>-50.7306603517205,0.015379216557629 -50.7439755986126,-0.018133254944177 -50.7677528760765,-0.006643270887846 -50.7639484932533,0.023039265024749 -50.7306603517205,0.015379216557629</coordinates></LinearRing></innerBoundaryIs></Polygon>
+  </Placemark>
+</Folder>
+</Document></kml>
