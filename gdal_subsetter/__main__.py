@@ -38,6 +38,6 @@ def main():
 
 if __name__ == "__main__":
     #os.environ["FALLBACK_AUTHN_ENABLED"] = 'true'
-    os.environ["BUFFER"] = '{"degree":0.01, "meter":10.0}'
+    os.environ["BUFFER"] = '{"degree":0.0001, "meter":10.0}'
 
     main()

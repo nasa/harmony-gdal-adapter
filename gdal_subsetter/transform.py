@@ -464,6 +464,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         '''
         convert point or line feature geojson file to multi-polygon feature geojson file
         input:  infile - point or line feature geojson file name
+                buf - buffer defined in degree or meter for geographic or projected coordinaters for line or point features geojson file.
         return: outfile - multi-polygon feature ESRI shapefile directory name
         '''
         if not buf:
