@@ -50,7 +50,7 @@ def avnir_info():
                   'NA', 'NA', 'NA', 'NA', 'NA'],
     'xy_size':[3392, 1762]
     },
-    #Query 3
+    # Query 3
     {
     'q_num':'3',
     'test_mode' :'standard_subsetting',
@@ -359,14 +359,14 @@ def avnir_info():
     'authority': 'EPSG',
     'proj_epsg': '32622',
     'gcs_epsg': '4326',
-    'subset': [-0.06, 0.1, -50.8, -50.69],
+    'subset': [-0.06, 0.09, -50.79, -50.7],
     'bands': 1,
     'variables': ['IMG-01-ALAV2A237403590-OORIRFU_000-band1', 
                   'NA',
                   'NA', 
                   'NA', 
                   'NA', 'NA', 'NA'],
-    'xy_size':[1552, 1512]
+    'xy_size':[1291, 1382]
     },
     # Query 15
     {
@@ -390,14 +390,14 @@ def avnir_info():
     'authority': 'EPSG',
     'proj_epsg': '32622',
     'gcs_epsg': '4326',
-    'subset': [-0.07, 0.06, -50.7, -50.67],
+    'subset': [-0.06, 0.05, -50.69, -50.68],
     'bands': 1,
     'variables': ['IMG-02-ALAV2A237403590-OORIRFU_000-band1', 
                   'NA', 
                   'NA', 
                   'NA', 
                   'NA', 'NA', 'NA'],
-    'xy_size':[687, 1336]
+    'xy_size':[425, 1149]
     },
     # Query 16
     {
@@ -514,14 +514,14 @@ def avnir_info():
     'authority': 'EPSG',
     'proj_epsg': '32622',
     'gcs_epsg': '4326',
-    'subset': [-0.06, 0.1, -50.8, -50.69],
+    'subset': [-0.06, 0.09, -50.79, -50.7],
     'bands': 1,
     'variables': ['IMG-01-ALAV2A237403590-OORIRFU_000-band1', 
                   'NA',
                   'NA', 
                   'NA', 
                   'NA', 'NA', 'NA'],
-    'xy_size':[1552, 1512]
+    'xy_size':[1291, 1382]
     },
     # Query 20
     {
@@ -545,14 +545,14 @@ def avnir_info():
     'authority': 'EPSG',
     'proj_epsg': '32622',
     'gcs_epsg': '4326',
-    'subset': [-0.07, 0.06, -50.7, -50.67],
+    'subset': [-0.06, 0.05, -50.69, -50.68],
     'bands': 1,
     'variables': ['IMG-02-ALAV2A237403590-OORIRFU_000-band1', 
                   'NA', 
                   'NA', 
                   'NA', 
                   'NA', 'NA', 'NA'],
-    'xy_size':[687, 1336]
+    'xy_size':[425, 1149]
     },
     # Query 21
     {
@@ -607,14 +607,14 @@ def avnir_info():
     'authority': 'EPSG',
     'proj_epsg': '32622',
     'gcs_epsg': '4326',
-    'subset': [-0.07, 0.06, -50.7, -50.67],
+    'subset': [-0.06, 0.05, -50.69, -50.68],
     'bands': 1,
     'variables': ['IMG-02-ALAV2A237403590-OORIRFU_000-band1', 
                   'NA', 
                   'NA', 
                   'NA', 
                   'NA', 'NA', 'NA'],
-    'xy_size':[687, 1336]
+    'xy_size':[425, 1149]
     },
     # Query 23
     {
@@ -709,7 +709,7 @@ def avnir_info():
                   'NA', 'NA', 'NA'],
     'xy_size':[1143, 1143]
     },
-    #Query 26
+    # Query 26
     {
     'q_num':'26',
     'test_mode' :'shapefile',
