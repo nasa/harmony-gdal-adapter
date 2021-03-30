@@ -1534,46 +1534,44 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         dst.close
         return outfile
 
+
     def geotiff2netcdf_direct(self, infile, outfile):
         '''
-        convert geotiff file to netcdf file by read the geotiff and write to a new netcdf4 format file.
+        convert geotiff file to netcdf file by reading the geotiff and writing to a new netcdf4 format file.
         input: infile - geotiff file name
-            nodata_flag indicates you filling nodata value (True) or use maskband to represnet the subset (False)
         return: outfile - netcdf file name
         '''
         
         def _process_projected(ds_in, dst):
             gt =ds_in.GetGeoTransform()
             crs = pycrs.parse.from_ogc_wkt(ds_in.GetProjectionRef())
+            unitname = crs.unit.unitname.proj4
             # define dimensions        
             dst.createDimension('x', ds_in.RasterXSize)
             dst.createDimension('y', ds_in.RasterYSize)
             # copy attributes, geotiff metadata is party of attributes in netcdf.
             # Conventions, GDAL, history
             glb_attrs = ds_in.GetMetadata()
-            #for key in glb_attrs:
-            #    dst.setncattr(key,glb_attrs[key].rstrip("\n"))
             for key in glb_attrs:
                 if key.find(r"#") > -1:
                     tmp = key.split(r"#")
                     if tmp[0] == "NC_GLOBAL":
                         dst.setncattr(tmp[1], glb_attrs[key].rstrip("\n"))
-
                 else:
-                    if key != '_FillValue':
+                    if key != '_FillValue' and key != "Conventions":
                         dst.setncattr(key, glb_attrs[key].rstrip("\n"))
 
             # create georeference variable
             crs_name = crs.proj.name.ogc_wkt.lower()
             geovar = dst.createVariable(crs_name,"S1")
             geovar.grid_mapping_name = crs_name
+            geovar.long_name = 'CRS definition'
             for item in crs.params:
                 attr_name = str(item).split(".")[-1].split(" ")[0]
                 attr_lst = re.findall('[A-Z][^A-Z]*', attr_name)
                 name = "_".join(attr_lst).lower()
                 geovar.setncattr(name, item.value)
 
-            geovar.long_name = 'CRS definition'
             geovar.longitude_of_prime_meridian = crs.geogcs.prime_mer.value
             if crs.geogcs.datum.ellips:
                 geovar.semi_major_axis = crs.geogcs.datum.ellips.semimaj_ax.value
@@ -1581,6 +1579,47 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
             geovar.spatial_ref = ds_in.GetProjectionRef()
             geovar.GeoTransform = " ".join(map(str, list(gt)))
+
+            # create 1D coordinate variables if the geotiff is not rotated image
+            if gt[2] == 0.0 and gt[4] == 0.0:
+                x_array = gt[0] + gt[1]*(np.arange(ds_in.RasterXSize) + 0.5)
+                y_array = gt[3] + gt[5]*(np.arange(ds_in.RasterYSize) + 0.5)
+                xvar = dst.createVariable('x', np.dtype('float64'), ("x"))
+                xvar[:] = x_array
+                xvar.setncattr('standard_name','projection_x_coordinate')
+                xvar.setncattr('axis','X')
+                xvar.setncattr('long_name','x-coordinate in projected coordinate system')
+                xvar.setncattr('units',unitname)
+                yvar = dst.createVariable('y', np.dtype('float64'), ("y"))
+                yvar[:] = y_array
+                yvar.setncattr('standard_name','projection_y_coordinate')
+                xvar.setncattr('axis','Y')
+                yvar.setncattr('long_name','y-coordinate in projected coordinate system')
+                yvar.setncattr('units',unitname)
+                lcc =Proj(ds_in.GetProjectionRef())
+
+                # lon 1D
+                tmp_y = np.zeros(x_array.shape, x_array.dtype)
+                tmp_y[:] = y_array[0]
+                lon, tmp_lat = lcc(x_array, tmp_y, inverse=True )
+
+                # lat 1D
+                tmp_x = np.zeros(y_array.shape, y_array.dtype)
+                tmp_x[:] = x_array[0]
+                tmp_lon, lat = lcc(tmp_x, y_array, inverse=True )
+
+                lon_var = dst.createVariable('lon', np.float64, ('x'), zlib=True)
+                lon_var[:] = lon
+                lon_var.units = 'degrees_east'
+                lon_var.standard_name = 'longitude'
+                lon_var.long_name = 'longitude'
+
+                lat_var = dst.createVariable('lat', np.float64, ('y'), zlib=True)
+                lat_var[:] = lat
+                lat_var.units = 'degrees_north'
+                lat_var.standard_name = 'latitude'
+                lat_var.long_name = 'latitude'
+        
             #create data variables
             for i in range(1, ds_in.RasterCount + 1):
                 band = ds_in.GetRasterBand(i)
@@ -1589,23 +1628,22 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 data = band.ReadAsArray()
                 mask = mask_band.ReadAsArray()
                 mx =ma.masked_array(data, mask=mask == 0)
-                #varname
+                #get varname
                 varnames = [item for item in meta if item == "standard_name"]
                 if varnames:
-                    varname =meta[varnames[0]]
+                    varname =meta[varnames[0]].replace("-","_")
                 else:
-                    varname ="Band{number}".format(number = i)
+                    varname ="Band{number}".format(number = i).replace("-","_")
 
                 vardatatype = mx.data.dtype
                 fillvalue = band.GetNoDataValue()    
                 if fillvalue:
-                    datavar = dst.createVariable(varname, vardatatype, ("y","x"), fill_value=fillvalue)
+                    datavar = dst.createVariable(varname, vardatatype, ("y","x"), zlib=True, fill_value=fillvalue)
                 else:
-                    datavar = dst.createVariable(varname, vardatatype, ("y","x"))
+                    datavar = dst.createVariable(varname, vardatatype, ("y","x"), zlib=True)
 
                 datavar[:,:] = mx
                 #write attrs of the variabale datavar
-                datavar.grid_mapping = geovar.grid_mapping_name
                 var_attrs = band.GetMetadata()
                 for key in var_attrs:
                     if key.find(r"#") > -1:
@@ -1615,35 +1653,29 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
                     else:
                         if key != '_FillValue':
-                            datavar.setncattr(key, var_attrs[key].rstrip("\n"))
+                            if key == 'units' and var_attrs[key] == 'unitless':
+                                datavar.setncattr(key, '1')
+                            else:                    
+                                datavar.setncattr(key, var_attrs[key].rstrip("\n").replace("-","_"))
 
-            # create coordinate variables if the geotiff is not rotated image
-            if gt[2] == 0 and gt[4] == 0:
-                x_array = gt[0]+0.5*gt[1]+gt[1]*np.arange(ds_in.RasterXSize)
-                y_array = gt[3]+0.5*gt[5]+gt[5]*np.arange(ds_in.RasterYSize)
+                # add standard_name no standard_mame in datavar 
+                lst = [ attr for attr in datavar.ncattrs() if attr in ["standard_name", "long_name"] ]            
+                if not lst:
+                    datavar.standard_name = varname
 
-                xvar = dst.createVariable('x', np.dtype('float64'), ("x"))
-                xvar[:] = x_array
-                xvar.setncattr('standard_name','projection_x_coordinate')
-                xvar.setncattr('long_name','x coordinate of projection')
-                xvar.setncattr('units','m')
+                #add units attr
+                if "units" not in datavar.ncattrs():
+                    datavar.setncattr('units', '1')
 
-                yvar = dst.createVariable('y', np.dtype('float64'), ("y"))
-                yvar[:] = y_array
-                yvar.setncattr('standard_name','projection_y_coordinate')
-                yvar.setncattr('long_name','y coordinate of projection')
-                yvar.setncattr('units','m')
+                datavar.grid_mapping = crs_name
 
         def _process_geogcs(ds_in, dst):
             gt =ds_in.GetGeoTransform()
             crs = pycrs.parse.from_ogc_wkt(ds_in.GetProjectionRef())
             # define dimensions        
-            #if isinstance(crs.unit, pycrs.elements.units.Meter):
-            #dims ={'x':ds_in.RasterXSize,'y':ds_in.RasterYSize}
             dst.createDimension('lon', ds_in.RasterXSize)
             dst.createDimension('lat', ds_in.RasterYSize)
             # copy attributes, geotiff metadata is party of attributes in netcdf.
-            # Conventions, GDAL, history
             glb_attrs = ds_in.GetMetadata()
             for key in glb_attrs:
                 if key.find(r"#") > -1:
@@ -1652,14 +1684,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                         dst.setncattr(tmp[1], glb_attrs[key].rstrip("\n"))
 
                 else:
-                    if key != '_FillValue':
-                        dst.setncattr(key, glb_attrs[key].rstrip("\n"))
+                    if key != '_FillValue' and key != "Conventions":
+                            dst.setncattr(key, glb_attrs[key].rstrip("\n"))
 
             # create georeference variable
-            # grid_mapping_name
-            geovar = dst.createVariable("crs","S1")
-            #geovar.grid_mapping_name = "latitude_longitude"
-            geovar.grid_mapping_name = "crs"
+            crs_name = "latitude_longitude"
+            geovar = dst.createVariable(crs_name,"S1")
+            geovar.grid_mapping_name = crs_name
             geovar.long_name = 'CRS definition'
             geovar.longitude_of_prime_meridian = crs.prime_mer.value
             if crs.datum.ellips:
@@ -1668,6 +1699,38 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
             geovar.spatial_ref = ds_in.GetProjectionRef()
             geovar.GeoTransform = " ".join(map(str, list(gt)))
+            # create coordinate variables if the geotiff is non-rotated image
+            if gt[2] == 0.0 and gt[4] == 0.0:
+                lon_array = gt[0] + gt[1]*(np.arange(ds_in.RasterXSize) + 0.5)
+                lat_array = gt[3] + gt[5]*(np.arange(ds_in.RasterYSize) + 0.5)
+                lonvar = dst.createVariable('lon', np.dtype('float64'), ("lon"))
+                lonvar[:] = lon_array
+                lonvar.setncattr('standard_name','longitude')
+                lonvar.setncattr('long_name','longitude')
+                lonvar.setncattr('units','degrees_east')
+                latvar = dst.createVariable('lat', np.dtype('float64'), ("lat"))
+                latvar[:] = lat_array
+                latvar.setncattr('standard_name','latitude')
+                latvar.setncattr('long_name','latitude')
+                latvar.setncattr('units','degrees_north')
+            #else:
+            # create auxilliary coordinates
+            #lcc =Proj(ds_in.GetProjectionRef())
+            #J, I = np.meshgrid(np.arange(dst.dimensions['lon'].size), np.arange(dst.dimensions['lat'].size) )
+            #lon_array = gt[0] + gt[1]*(J + 0.5) + gt[2]*(I + 0.5)
+            #lat_array = gt[3] + gt[4]*(J + 0.5) + gt[5]*(I + 0.5)
+            #lon, lat = lcc(lon_array, lat_array,inverse=True )    
+            #lon_var = dst.createVariable('lon', np.float64, ('lat', 'lon'), zlib=True)
+            #lon_var[:,:] = lon
+            #lon_var.units = 'degrees_east'
+            #lon_var.standard_name = 'longitude'
+            #lon_var.long_name = 'longitude'
+            #lat_var = dst.createVariable('lat', np.float64, ('lat', 'lon'), zlib=True)
+            #lat_var[:,:] = lat
+            #lat_var.units = 'degrees_north'
+            #lat_var.standard_name = 'latitude'
+            #lat_var.long_name = 'latitude'
+
             #create data variables
             for i in range(1, ds_in.RasterCount + 1):
                 band = ds_in.GetRasterBand(i)
@@ -1676,20 +1739,20 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 data = band.ReadAsArray()
                 mask = mask_band.ReadAsArray()
                 mx =ma.masked_array(data, mask=mask == 0)
-                #varname
+                #get varname
                 varnames = [item for item in meta if item == "standard_name"]
                 if varnames:
-                    varname =meta[varnames[0]]
+                    varname =meta[varnames[0]].replace("-","_")
                 else:
-                    varname ="Band{number}".format(number = i)
+                    varname ="Band{number}".format(number = i).replace("-","_")
 
                 vardatatype = mx.data.dtype
                 fillvalue = band.GetNoDataValue()
                 if fillvalue:
-                    datavar = dst.createVariable(varname, vardatatype, ("lat","lon"), fill_value=fillvalue)
+                    datavar = dst.createVariable(varname, vardatatype, ("lat","lon"), zlib=True, fill_value=fillvalue)
                 else:
-                    datavar = dst.createVariable(varname, vardatatype, ("lat","lon"))              
-               
+                    datavar = dst.createVariable(varname, vardatatype, ("lat","lon"), zlib=True)              
+                
                 datavar[:,:] = mx
                 #write attrs of the variabale datavar
                 var_attrs = band.GetMetadata()
@@ -1701,35 +1764,37 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
                     else:
                         if key != '_FillValue':
-                            datavar.setncattr(key, var_attrs[key].rstrip("\n"))
+                            if key == 'units' and var_attrs[key] == 'unitless':
+                                datavar.setncattr(key, '1')
+                            else:                    
+                                datavar.setncattr(key, var_attrs[key].rstrip("\n").replace("-","_"))
 
-                datavar.grid_mapping = 'crs'
+                # add standard_name if 
+                lst = [ attr for attr in datavar.ncattrs() if attr in ["standard_name", "long_name"] ]            
+                if not lst:
+                    datavar.standard_name = varname
 
-            # create coordinate variables if the geotiff is not rotated image
-            if gt[2] == 0 and gt[4] == 0:
-                lon_array = gt[0]+0.5*gt[1]+gt[1]*np.arange(ds_in.RasterXSize)
-                lat_array = gt[3]+0.5*gt[5]+gt[5]*np.arange(ds_in.RasterYSize)
+                datavar.grid_mapping = crs_name
+                #add units attr
+                if "units" not in datavar.ncattrs():
+                    datavar.setncattr('units', '1')
 
-                lonvar = dst.createVariable('lon', np.dtype('float64'), ("lon"))
-                lonvar[:] = lon_array
-                lonvar.setncattr('standard_name','longitude')
-                lonvar.setncattr('long_name','longitude')
-                lonvar.setncattr('units','degrees_east')
-
-                latvar = dst.createVariable('lat', np.dtype('float64'), ("lat"))
-                latvar[:] = lat_array
-                latvar.setncattr('standard_name','latitude')
-                latvar.setncattr('long_name','latitude')
-                latvar.setncattr('units','degrees_north')
+                if gt[2] == 0.0 and gt[4] == 0.0:
+                    datavar.coordinates = 'lon lat'
 
         # open infile
         ds_in = gdal.Open(infile)
         # create a output nc file
         dst = Dataset(outfile, mode='w', format="NETCDF4")
-        dst.setncattr('Conventions', 'CF-1.6')
-        dst.setncattr('history',"The geotiff file is converted to NETCDF4 at {datetime} (UTC)"
-        .format(datetime=datetime.utcnow().strftime("%d/%m/%Y %H:%M:%S")))
-        dst.setncattr('GDAL', "Version {ver}".format(ver=gdal.__version__))
+        # define global attributes    
+        dst.title = ''
+        dst.institution = 'Alaska Satellite Facility'
+        dst.source = ''
+        dst.references = ''
+        dst.comment = ''
+        dst.history = "{datetime} (UTC)".format(datetime=datetime.utcnow().strftime("%d/%m/%Y %H:%M:%S"))
+        dst.GDAL = "Version {ver}".format(ver=gdal.__version__)
+
         #create dimensions
         crs = pycrs.parse.from_ogc_wkt(ds_in.GetProjectionRef())
         if crs.cs_type == 'Projected':
@@ -1738,9 +1803,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             _process_geogcs(ds_in, dst)
             
         ds_in = None
+        dst.Conventions = 'CF-1.7'
         dst.close
         return outfile
 
-
-
- 
