@@ -4,7 +4,7 @@ def s1_info():
         {
         'q_num':'1',
         'reference_image':'grfn_query1_reference.tiff',
-        'request_url':'science%2Fgrids%2Fdata%2Famplitude/coverage/rangeset?subset=lat(33:33.1)&subset=lon(-115.5:-115.25)&granuleID=',
+        'request_url':'science%2Fgrids%2Fdata%2Famplitude/coverage/rangeset?subset=lat(33:33.1)&subset=lon(-115.5:-115.25)&format=image%2Ftiff&granuleID=',
         'prod_gid':'G1715962900-ASF',
         'uat_gid':'G1234646236-ASF',
         'sit_gid':'G1234646236-ASF',
@@ -46,7 +46,7 @@ def s1_info():
        {
       'q_num':'3',
       'reference_image':'grfn_query3_reference.tiff',
-       'request_url':'science%2Fgrids%2Fdata%2FconnectedComponents/coverage/rangeset?subset=lat(27.0:27.5)&subset=lon(37.5:38.25)&granuleID=',
+       'request_url':'science%2Fgrids%2Fdata%2FconnectedComponents/coverage/rangeset?subset=lat(27.0:27.5)&subset=lon(37.5:38.25)&format=image%2Ftiff&granuleID=',
        'message':'Variable subset connectedComponents. Spatial subset.',
        'outfile':'_grfn_query3.tiff',
        'prod_gid':'G1944514838-ASF',
@@ -67,7 +67,7 @@ def s1_info():
        {
        'q_num':'4',
        'reference_image':'grfn_query4_reference.tiff',
-       'request_url':'science%2Fgrids%2Fdata%2FunwrappedPhase/coverage/rangeset?subset=lat(26.9:27.5)&subset=lon(36.9:39.1)&granuleID=',
+       'request_url':'science%2Fgrids%2Fdata%2FunwrappedPhase/coverage/rangeset?subset=lat(26.9:27.5)&subset=lon(36.9:39.1)&format=image%2Ftiff&granuleID=',
        'message':'Variable subset unwrappedPhase and spatial subset',
        'outfile':'_grfn_query4.tiff',
        'prod_gid':'G1944514838-ASF',
@@ -88,7 +88,7 @@ def s1_info():
        {
        'q_num':'5',
        'reference_image':'grfn_query5_reference.tiff',
-       'request_url':'science%2Fgrids%2Fdata%2Famplitude%2Cscience%2Fgrids%2Fdata%2Fcoherence/coverage/rangeset?subset=lat(33:33.1)&subset=lon(-115.5:-115.25)&height=60&width=150&granuleID=',
+       'request_url':'science%2Fgrids%2Fdata%2Famplitude%2Cscience%2Fgrids%2Fdata%2Fcoherence/coverage/rangeset?subset=lat(33:33.1)&subset=lon(-115.5:-115.25)&height=60&width=150&format=image%2Ftiff&granuleID=',
        'message':'Variable subset 2 variables (amplitude and coherence). Spatial subset and specify height and width of output.',
        'outfile':'_grfn_query5.tiff',
        'prod_gid':'G1715962900-ASF',
@@ -109,7 +109,7 @@ def s1_info():
        {
        'q_num':'6',
        'reference_image':'grfn_query6_reference.tiff',
-       'request_url':'science%2Fgrids%2Fdata%2Famplitude%2Cscience%2Fgrids%2Fdata%2Fcoherence%2Cscience%2Fgrids%2Fdata%2FconnectedComponents/coverage/rangeset?subset=lat(33.05:33.1)&subset=lon(-115.52:-115.27)&height=30&width=75&granuleID=',
+       'request_url':'science%2Fgrids%2Fdata%2Famplitude%2Cscience%2Fgrids%2Fdata%2Fcoherence%2Cscience%2Fgrids%2Fdata%2FconnectedComponents/coverage/rangeset?subset=lat(33.05:33.1)&subset=lon(-115.52:-115.27)&height=30&width=75&format=image%2Ftiff&granuleID=',
        'message':'Varable subset 3 variables (amplitude, coherence, and connectedComponents). Specify height and width of output.',
        'outfile':'_grfn_query6.tiff',
        'prod_gid':'G1715962900-ASF',
@@ -130,7 +130,7 @@ def s1_info():
        {
        'q_num':'7',
        'reference_image':'grfn_query7_reference.tiff',
-       'request_url':'science%2Fgrids%2Fdata%2Famplitude%2Cscience%2Fgrids%2Fdata%2Fcoherence%2Cscience%2Fgrids%2Fdata%2FconnectedComponents%2Cscience%2Fgrids%2Fdata%2FunwrappedPhase/coverage/rangeset?subset=lat(32.95:33.09)&subset=lon(-115.45:-115.15)&granuleID=',
+       'request_url':'science%2Fgrids%2Fdata%2Famplitude%2Cscience%2Fgrids%2Fdata%2Fcoherence%2Cscience%2Fgrids%2Fdata%2FconnectedComponents%2Cscience%2Fgrids%2Fdata%2FunwrappedPhase/coverage/rangeset?subset=lat(32.95:33.09)&subset=lon(-115.45:-115.15)&format=image%2Ftiff&granuleID=',
        'message':'Variable subset 4 variables with comma separated list. Spatial subset.',
        'outfile':'_grfn_query7.tiff',
        'prod_gid':'G1715962900-ASF',
@@ -151,7 +151,7 @@ def s1_info():
        {
        'q_num':'8',
        'reference_image':'grfn_query8_reference.tiff',
-       'request_url':'science%2Fgrids%2Fdata%2Famplitude/coverage/rangeset?subset=lat(-37.2:-36.9)&subset=lon(-69.8:-68.8)&granuleID=',
+       'request_url':'science%2Fgrids%2Fdata%2Famplitude/coverage/rangeset?subset=lat(-37.2:-36.9)&subset=lon(-69.8:-68.8)&format=image%2Ftiff&granuleID=',
        'message':'Spatial subset in negative lat and lon region. Subset bbox smaller than original granule extent.',
        'outfile':'_grfn_query8.tiff',
        'prod_gid':'G1697222082-ASF',
@@ -172,7 +172,7 @@ def s1_info():
        {
        'q_num':'9',
        'reference_image':'grfn_query9_reference.tiff',
-       'request_url':'science%2Fgrids%2Fdata%2Fcoherence/coverage/rangeset?subset=lat(-39.0:-35.0)&subset=lon(-71.6:-67.5)&granuleID=',
+       'request_url':'science%2Fgrids%2Fdata%2Fcoherence/coverage/rangeset?subset=lat(-39.0:-35.0)&subset=lon(-71.6:-67.5)&format=image%2Ftiff&granuleID=',
        'message':'Spatial subset in negative lat and lon region. Subset bbox larger than original granule extent.',
        'outfile':'_grfn_query9.tiff',
        'prod_gid':'G1697222082-ASF',
@@ -194,7 +194,7 @@ def s1_info():
        {
        'q_num':'10',
        'reference_image':'grfn_query10_reference.tiff',
-       'request_url':'science%2Fgrids%2Fdata%2Fcoherence%2Cscience%2Fgrids%2Fdata%2FunwrappedPhase/coverage/rangeset?subset=lat(43.75:44.85)&subset=lon(86.85:88.15)&granuleID=',
+       'request_url':'science%2Fgrids%2Fdata%2Fcoherence%2Cscience%2Fgrids%2Fdata%2FunwrappedPhase/coverage/rangeset?subset=lat(43.75:44.85)&subset=lon(86.85:88.15)&format=image%2Ftiff&granuleID=',
        'message':'Variable subset coherence and unwrappedPhase. Spatial subset bbox totaly enclosed in original granule extent.',
        'outfile':'_grfn_query10.tiff',
        'prod_gid':'G1722540208-ASF',
