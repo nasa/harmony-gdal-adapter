@@ -1,3 +1,6 @@
+[version 1.0.14] 2021-03-30
+This version improves the geotiff to netcdf conversion code to make the output netcdf file be CF compliant. For a non-rotated image, we define two 1D coordinate variables. For a rotated image, we do not define the coordinate variables. We could define two 2D coordinate variables for the rotated image, but we found that the GIS software does not use the 2D coordinate variables to decide the pixel locations. So we do not output 2D coordinate varaibles in this version for sake of reducing the file size. 
+
 [version 1.0.13] 2021-03-16
 This version does not define nodata if the original image does not define the nodata. If the geotiff gile doe not define the nodata, the output netcdf file also does not define the nodata. but the default filling_value to be used to fill the data part of the variable before the geotiff data is written to the variable. For geotiff/netcdf without nodata definaition inside, the GIS software should use the mask data which has the same name as the data to correctly display the image. 
 

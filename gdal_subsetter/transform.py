@@ -33,6 +33,7 @@ import fiona
 import pycrs
 import numpy.ma as ma
 from datetime import datetime
+from pyproj import Proj
 
 mime_to_gdal = {
     "image/tiff": "GTiff",
@@ -1658,6 +1659,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                             else:                    
                                 datavar.setncattr(key, var_attrs[key].rstrip("\n").replace("-","_"))
 
+                datavar.grid_mapping = crs_name
+
                 # add standard_name no standard_mame in datavar 
                 lst = [ attr for attr in datavar.ncattrs() if attr in ["standard_name", "long_name"] ]            
                 if not lst:
@@ -1667,7 +1670,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 if "units" not in datavar.ncattrs():
                     datavar.setncattr('units', '1')
 
-                datavar.grid_mapping = crs_name
 
         def _process_geogcs(ds_in, dst):
             gt =ds_in.GetGeoTransform()
@@ -1699,7 +1701,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
             geovar.spatial_ref = ds_in.GetProjectionRef()
             geovar.GeoTransform = " ".join(map(str, list(gt)))
-            # create coordinate variables if the geotiff is non-rotated image
+            # create coordinate variables if the geotiff is a non-rotated image
             if gt[2] == 0.0 and gt[4] == 0.0:
                 lon_array = gt[0] + gt[1]*(np.arange(ds_in.RasterXSize) + 0.5)
                 lat_array = gt[3] + gt[5]*(np.arange(ds_in.RasterYSize) + 0.5)
@@ -1769,12 +1771,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                             else:                    
                                 datavar.setncattr(key, var_attrs[key].rstrip("\n").replace("-","_"))
 
-                # add standard_name if 
+                datavar.grid_mapping = crs_name
+
+                # add standard_name if there is no standard_name or long_name attributs associated with datavar 
                 lst = [ attr for attr in datavar.ncattrs() if attr in ["standard_name", "long_name"] ]            
                 if not lst:
                     datavar.standard_name = varname
 
-                datavar.grid_mapping = crs_name
                 #add units attr
                 if "units" not in datavar.ncattrs():
                     datavar.setncattr('units', '1')
