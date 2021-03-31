@@ -686,10 +686,10 @@ def avnir_info():
      'gcs_epsg': '4326',
      'subset': [10.24, 10.27, 17.68, 17.71],
      'bands': 4,
-     'variables': ['IMG-01-ALAV2A278803390-OORIRFU_000-band1', 
-                   'IMG-02-ALAV2A278803390-OORIRFU_000-band1', 
-                   'IMG-03-ALAV2A278803390-OORIRFU_000-band1', 
-                   'IMG-04-ALAV2A278803390-OORIRFU_000-band1', 
+     'variables': ['IMG_01_ALAV2A278803390_OORIRFU_000_band1', 
+                   'IMG_02_ALAV2A278803390_OORIRFU_000_band1', 
+                   'IMG_03_ALAV2A278803390_OORIRFU_000_band1', 
+                   'IMG_04_ALAV2A278803390_OORIRFU_000_band1', 
                    'NA', 'NA', 'NA'],
      'xy_size':[403, 243]
      },
@@ -713,8 +713,9 @@ def avnir_info():
      #modified for mask 'subset': [36.9, 37.1, -99.15, -98.85],
      'subset': [36.85, 37.15, -99.21, -98.79],
      'bands': 3,
-     'variables': ['IMG-04-ALAV2A278852850-OORIRFU_000-band1', 
-                   'lon', 'lat', 'NA', 'NA', 'NA', 'NA'],
+     'variables': ['lon', 'lat', 
+                   'IMG_04_ALAV2A278852850_OORIRFU_000_band1', 
+                   'NA', 'NA', 'NA', 'NA'],
      'xy_size':[0, 0]
      }
     ]
