@@ -10,9 +10,11 @@ requests = "*"
 pyproj = "*"
 pytest = "*"
 numpy = "*"
-gdal = "==3.0.4"
 xarray = "*"
 netcdf4 = "*"
+gdal = "==3.2.2"
+osr = "*"
+jupyter = "*"
 
 [requires]
 python_version = "3.8"
