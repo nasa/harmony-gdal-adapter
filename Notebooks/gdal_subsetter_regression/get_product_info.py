@@ -1,6 +1,5 @@
 def get_product_info(collection, infile):
-    from osgeo import gdal
-    import osr
+    from osgeo import gdal, osr
     from pyproj import Transformer
     ds = gdal.Open(infile)
     proj = osr.SpatialReference(wkt=ds.GetProjection())

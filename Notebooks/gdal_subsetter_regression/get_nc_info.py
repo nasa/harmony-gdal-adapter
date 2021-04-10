@@ -32,9 +32,9 @@ def get_nc_info(collection, outfile):
         var_list[band_index]=band
         band_index += 1
 
-    if keys[0] == 'crs':
+    if keys[0] == 'latitude_longitude':
         cs = 'Geographic'
-        crs = f.variables['crs']
+        crs = f.variables['latitude_longitude']
         sr = crs.spatial_ref
         authority_idx = sr.find('AUTHORITY')
         authority = sr[authority_idx+11:authority_idx+15]
@@ -46,7 +46,7 @@ def get_nc_info(collection, outfile):
         gcs_epsg = sr[gcs_epsg_idx+7:gcs_epsg_idx+11]
         xy_size=[0,0]
 
-    if keys[0] != 'crs':
+    if keys[0] != 'latitude_longitude':
         cs = 'Projected'
         proj = f.variables[keys[0]]
         sr = proj.spatial_ref
