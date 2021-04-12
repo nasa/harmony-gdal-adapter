@@ -632,10 +632,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             xres, yres = fmt.process('scaleSize').x, fmt.process('scaleSize').y 
         else:
             xres, yres = None, None
+
         if fmt.scaleExtent:
             box = [fmt.process('scaleExtent')]
         else:
             box = None
+            
         normalized_layerid = layerid.replace('/', '_')
 
         dstfile = "%s/%s" % (dstdir, normalized_layerid + '__regridded.tif')
@@ -1905,17 +1907,17 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def regrid(self, infile, outfile, resampling_mode = 'bilinear', ref_file = None,  
         ref_crs=None, ref_box = None, ref_xres = None, ref_yres = None, ref_xsize = None, ref_ysize = None):
         '''
-        reproject/resampling the infile image via the reference geotiff file, 
+        regridding the infile image via the reference geotiff file, 
         referecenc geojson file, and the reproject parameters such as 
         ref_crs (wkt, speg, proj4 format), box, and xres/yres or xsize/ysize.
-        box is defined as a list[xmin,ymin, xmax, ymax].
+        box is defined as a list[xmin,ymin, xmax, ymax] (scaleExtent(xmin,ymin,xmax,ymax)) in the coordinates of output file.
         The function process following three sets of inputs:
         1. users input geotiff file, neglect other parameters.
         2. users input geojson file, requirs ref_xref/ref_yres.
         3. users donot input ref_file and ref_crs, this function does not do reprojection, it may do resizing and reboxing in the input projection.  
         4. users do not input ref_file, input ref_crs, it does reprojection and/or resizing and/or reboxing in the ref_crs projection. box, 
-        and/or ref_xres/ref_yres or ref_xsize/ref_ysize are optional.
-        In the arguments, ref_xres/ref_yres and ref_xsize/ref_ysize can not be defined in the same time.
+        and/or ref_xres/ref_yres(scaleSize) or ref_xsize/ref_ysize(width/height) are optional.
+        In the arguments, ref_xres/ref_yres (scaleSize) and ref_xsize/ref_ysize(width/height) can not be defined in the same time.
         '''
         resampling_methods =[
         'near','bilinear','cubic','cubicspline','lanczos','average','rms','mode','max','min','med','q1','q3','sum'
@@ -1938,7 +1940,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
             src = None
             dst = None
-            return                  
+            return outfile                 
 
         def _regrid(infile, outfile, resampling_mode='bilinear', ref_crs=None, ref_box=None, 
             ref_xres=None, ref_yres=None, ref_xsize=None, ref_ysize=None):
@@ -2000,7 +2002,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                             ref_xres=ref_xres, ref_yres=ref_yres, ref_xsize=ref_xsize, ref_ysize=ref_ysize)
 
         # copy metadata
-        _copy_metadata(infile, outfile)
+        outfile = _copy_metadata(infile, outfile)
 
         return outfile    
 

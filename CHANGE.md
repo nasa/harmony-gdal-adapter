@@ -1,3 +1,6 @@
+[version 1.0.16] 2021-04-12
+This version integrates the regridding functionality. Users can set regridding parameters in the url query for the harmony api. They are outputCrs, scaleSize(xres/yres in output coordinates), scaleExtent(xmin,ymin,xmax,ymax) in output coordinates, and width/height (columnes/rows) of output file. You are not allow to use scaleSize and width/height in the same time.
+
 [version 1.0.15] 2021-04-09
 This version extends the collection of datasets that gdal-subsetter can process.The new datasets are: ALOS_PALSAR_Level2.2, ALOS_PALSAR_RTC_HIGH_RES, and ALOS_PALSAR_RTC_LOW_RES.
 
