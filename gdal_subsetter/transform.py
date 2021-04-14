@@ -376,7 +376,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             args[0] + " " + " ".join(["'{}'".format(arg) for arg in args[1:]])
         )
         result_str = subprocess.check_output(args).decode("utf-8")
-
         return result_str.split("\n")
 
     def cmd3(self, *args):
@@ -386,14 +385,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         result_str = subprocess.check_output(args).decode("utf-8")
         return result_str.split("\n")
 
-
-
-
     def is_rotated_geotransform(self, srcfile):
         dataset = gdal.Open(srcfile)
         gt = dataset.GetGeoTransform()
         check = False
-
         if gt[2] != 0.0 or gt[4] != 0:
             check = True
 
@@ -435,12 +430,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def subset(self, layerid, srcfile, dstdir, band=None):
         normalized_layerid = layerid.replace('/', '_')
         subset = self.message.subset
-
         if subset.bbox is None and subset.shape is None:
             dstfile = "%s/%s" % (dstdir, normalized_layerid +
                                  '__varsubsetted.tif')
             dstfile = self.varsubset(srcfile, dstfile, band=band)
-
             return dstfile
 
         if subset.bbox:
@@ -479,7 +472,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             shapefile = self.get_shapefile(subset.shape, dstdir)
             dstfile = self.subset2(
                 srcfile, dstfile, shapefile=shapefile, band=band)
-
             return dstfile
 
     def convert2multipolygon(self, infile, outfile, buf=None):
@@ -493,26 +485,21 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             return infile
 
         fd_infile = fiona.open(infile)
-
         # get feature type of infile
         featype = fd_infile.schema.get('geometry')
-
         # prepare meta for polygon file
         meta = fd_infile.meta
         meta['schema']['geometry'] = 'Polygon'
         meta['schema']['properties'] = {'id': 'int'}
         meta['driver'] = 'GeoJSON'
-
         with fiona.open(outfile, 'w', **meta) as fd_outfile:
             poly_lst = []
-
             for index_point, point in enumerate(fd_infile):
                 pt = shape(point['geometry'])
                 polygon = pt.buffer(buf)
                 poly_lst.append(polygon)
 
             polygons = cascaded_union(poly_lst)
-
             if polygons.geometryType() == 'Polygon':
                 fd_outfile.write({
                     'geometry': mapping(polygons),
@@ -587,68 +574,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return outfile
 
-    def reproject(self, layerid, srcfile, dstdir):
-        crs = self.message.format.process('crs')
-        interpolation = self.message.format.process('interpolation')
-        if interpolation in resampling_methods:
-            resample_method = interpolation
-        else:
-            resample_method = "bilinear"
-        if not crs:
-            return srcfile
-
-        normalized_layerid = layerid.replace('/', '_')
-        dstfile = "%s/%s" % (dstdir, normalized_layerid + '__reprojected.tif')
-        self.cmd('gdalwarp', "-t_srs", crs, "-r", resample_method, "-overwrite", srcfile, dstfile)
-
-        return dstfile
-
-    def reprojandresize(self, layerid, srcfile, dstdir):
-        '''
-        The Harmony API accepts several query parameters related to regridding and interpolation in addition to the reprojection parameters above: 
-        interpolation=<String> - gdalwarp resampling method are valid options
-        scaleSize=xres,yres - 2 comma separated numbers as floats in output crs
-        scaleExtent=xmin,ymin,xmax,ymax - 4 comma separated numbers as floats in output crs
-        width=<Float> number of colume of the 2D array  
-        height=<Float> number of row of the 2D array 
-        An error is returned if both scaleSize and width/height parameters are both provided (only one or the other can be used).
-        '''
-        crs = self.message.format.process('crs')        
-        interpolation = self.message.format.process('interpolation')
-        if interpolation in resampling_methods:
-            resample_method = interpolation
-        else:
-            resample_method = "bilinear"
-
-        fmt = self.message.format
-        if fmt.width or fmt.height:
-            width = fmt.process('width') or 0
-            height = fmt.process('height') or 0
-        else:
-            width = None
-            height = None
-
-        if fmt.scaleSize:
-            xres, yres = fmt.process('scaleSize').x, fmt.process('scaleSize').y 
-        else:
-            xres, yres = None, None
-        if fmt.scaleExtent:
-            box = [fmt.process('scaleExtent')]
-        else:
-            box = None
-        normalized_layerid = layerid.replace('/', '_')
-
-        dstfile = "%s/%s" % (dstdir, normalized_layerid + '__regridded.tif')
-        
-        if xres and yres:
-            dstfile = self.regrid(srcfile, dstfile, resampling_mode = resample_method,  
-                            ref_crs = crs, ref_box = box, ref_xres = xres, ref_yres = yres)
-        else:
-            dstfile = self.regrid(srcfile, dstfile, resampling_mode = resample_method,  
-                            ref_crs = crs, ref_box = box, ref_xsize = width, ref_ysize = height)
-
-        return dstfile
-
     def resize(self, layerid, srcfile, dstdir):
         interpolation = self.message.format.process('interpolation')
         if interpolation in resampling_methods:
@@ -665,12 +590,55 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             width = fmt.process('width') or 0
             height = fmt.process('height') or 0
             command.extend(["-outsize", str(width), str(height)])
-        command.extend(['-r', resample_method])
-        command.extend([srcfile, dstfile])
-        self.cmd(*command)
+            command.extend(['-r', resample_method])
+            command.extend([srcfile, dstfile])
+            self.cmd(*command)
+            return dstfile
+        else:
+            return srcfile            
 
+    def reproject(self, layerid, srcfile, dstdir):
+        crs = self.message.format.process('crs')
+        interpolation = self.message.format.process('interpolation')
+        if interpolation in resampling_methods:
+            resample_method = interpolation
+        else:
+            resample_method = "bilinear"
+        if not crs:
+            return srcfile
+
+        normalized_layerid = layerid.replace('/', '_')
+        dstfile = "%s/%s" % (dstdir, normalized_layerid + '__reprojected.tif')
+        fmt = self.message.format
+        if fmt.scaleSize:
+            xres, yres = fmt.process('scaleSize').x, fmt.process('scaleSize').y 
+        else:
+            xres, yres = None, None
+        if fmt.scaleExtent:
+            box = [ fmt.process('scaleExtent').x.min, fmt.process('scaleExtent').y.min,
+                    fmt.process('scaleExtent').x.max, fmt.process('scaleExtent').y.max ]
+        else:
+            box = None
+
+        def _regrid(infile, outfile, resampling_mode='bilinear', ref_crs=None, ref_box=None, 
+            ref_xres=None, ref_yres=None):
+            command=['gdalwarp','-of', 'GTiff',  '-overwrite', '-r', resampling_mode]
+            if ref_crs:  #proj, box, xres/yres
+                command.extend([ '-t_srs', ref_crs])
+                #command.extend([ '-t_srs', "'{ref_crs}'".format(ref_crs=ref_crs)])
+            if ref_box:
+                box = [str(x) for x in ref_box]
+                command.extend(['-te', box[0], box[1], box[2], box[3], '-te_srs', ref_crs])
+                #command.extend(['-te', box[0], box[1], box[2], box[3], '-te_srs', "'{ref_crs}'".format(ref_crs=ref_crs)])
+            if ref_xres and ref_yres:
+                command.extend(['-tr', str(ref_xres), str(ref_yres) ])
+            command.extend([infile, outfile])
+            self.cmd(*command)
+            return outfile
+
+        dstfile = _regrid(srcfile, dstfile, resampling_mode=resample_method, ref_crs =crs, ref_box=box, ref_xres=xres, ref_yres=yres)
         return dstfile
-
+    
     def add_to_result(self, filelist, dstdir):
         dstfile = "%s/result.tif" % (dstdir)
         return self.stack_multi_file_with_metadata(filelist, dstfile)
@@ -757,72 +725,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         dst_ds.FlushCache()                     # write to disk
         dst_ds = None
-
         return outfile
-
-    def stack_multi_file(self, infilelist, outfile):
-        '''
-        The infilelist includes multiple files, each file may not have the same number of bands,
-        but they must have the same peojection and geogransform.
-        '''
-        collection=[]
-        count=0
-        ds_description = []
-        
-        for id, layer in enumerate(infilelist, start=1):
-            ds = gdal.Open(layer)
-            filename = ds.GetDescription()
-            filestr = os.path.splitext(os.path.basename(filename))[0]
-            if id == 1:
-                proj=ds.GetProjection()
-                geot=ds.GetGeoTransform()
-                cols=ds.RasterXSize
-                rows=ds.RasterYSize
-                gtyp = ds.GetRasterBand(1).DataType
-                md = ds.GetMetadata()
-
-            bandnum=ds.RasterCount
-            #md = ds.GetMetadata()
-            for i in range(1,bandnum+1):
-                band = ds.GetRasterBand(i)
-                bmd = band.GetMetadata()
-                #bmd.update(md)
-                data = band.ReadAsArray()
-                nodata = band.GetNoDataValue() 
-                mask = band.GetMaskBand().ReadAsArray()
-                count = count + 1
-                if band.GetDescription():
-                    band_name = band.GetDescription()
-                else:
-                    band_name = "{filestr}_band_{i}".format(filestr=filestr, i=i)
-                long_name = band_name
-                standard_name = band_name
-                tmp_bmd = {"long_name": long_name, "standard_name":standard_name}
-                bmd.update(tmp_bmd)
-                ds_description.append(band_name)
-                collection.append({"band_sn":count,"band_md":bmd, "band_desc":band_name, "band_array":data, "mask_array":mask, "nodata":nodata})
-            ds = None
-
-        dst_ds = gdal.GetDriverByName('GTiff').Create(outfile, cols, rows, count, gtyp)
-        #maskband is readonly by default, you have to create the maskband before you can write the maskband
-        gdal.SetConfigOption('GDAL_TIFF_INTERNAL_MASK', 'YES')
-        dst_ds.CreateMaskBand(gdal.GMF_PER_DATASET)
-        dst_ds.SetProjection(proj)
-        dst_ds.SetGeoTransform(geot)
-        dst_ds.SetMetadata(md)
-
-        for i, band in enumerate(collection):
-            dst_ds.GetRasterBand(i+1).WriteArray(collection[i]["band_array"])
-            dst_ds.GetRasterBand(i+1).SetMetadata(collection[i]["band_md"])
-            dst_ds.GetRasterBand(i+1).SetDescription(collection[i]["band_desc"])
-            dst_ds.GetRasterBand(i+1).GetMaskBand().WriteArray(collection[i]["mask_array"])      
-            if collection[i]["nodata"]:
-                dst_ds.GetRasterBand(i+1).SetNoDataValue(collection[i]["nodata"])
-
-        dst_ds.FlushCache()                     # write to disk
-        dst_ds = None
-        return outfile
-
 
     def rename_to_result(self, layerid, srcfile, dstdir):
         dstfile = "%s/result.tif" % (dstdir)
@@ -929,22 +832,19 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             filename,
             output_dir,
             band
-        )
-        filename = self.reprojandresize(
+        )       
+        filename = self.reproject(
             layer_id,
             filename,
             output_dir
         )
-        #filename = self.reproject(
-        #    layer_id,
-        #    filename,
-        #    output_dir
-        #)
-        #filename = self.resize(
-        #    layer_id,
-        #    filename,
-        #    output_dir
-        #)
+        filename = self.resize(
+            layer_id,
+            filename,
+            output_dir
+        )
+
+        
         return layer_id, filename, output_dir
 
     def get_bbox(self, filename):
@@ -977,34 +877,26 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         ur_x, ur_y = self.calc_ij_coord(gt, cols, 0)
         lr_x, lr_y = self.calc_ij_coord(gt, cols, rows)
         ll_x, ll_y = self.calc_ij_coord(gt, 0, rows)
-
         projection = ds.GetProjection()
         dst = osr.SpatialReference(projection)
         dstproj4 = dst.ExportToProj4()
         ct2 = pyproj.Proj(dstproj4)
-
         ul_x2, ul_y2 = ct2(ul_x, ul_y, inverse=True)
         ur_x2, ur_y2 = ct2(ur_x, ur_y, inverse=True)
         lr_x2, lr_y2 = ct2(lr_x, lr_y, inverse=True)
         ll_x2, ll_y2 = ct2(ll_x, ll_y, inverse=True)
-
         ul_x2 = float("{:.7f}".format(ul_x2))
         ul_y2 = float("{:.7f}".format(ul_y2))
-
         ur_x2 = float("{:.7f}".format(ur_x2))
         ur_y2 = float("{:.7f}".format(ur_y2))
-
         lr_x2 = float("{:.7f}".format(lr_x2))
         lr_y2 = float("{:.7f}".format(lr_y2))
-
         ll_x2 = float("{:.7f}".format(ll_x2))
         ll_y2 = float("{:.7f}".format(ll_y2))
-
         lon_left = min(ul_x2, ll_x2)
         lat_low = min(ll_y2, lr_y2)
         lon_right = max(lr_x2, ur_x2)
         lat_high = max(ul_y2, ur_y2)
-
         # write bbox and extent in lon/lat unit to the metadata of the filename
         md = ds.GetMetadata()
         bbox = [lon_left, lat_low, lon_right, lat_high]
@@ -1014,7 +906,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         md['extent'] = str(extent)
         ds.SetMetadata(md)
         ds = None
-
         return bbox
 
     def pack_zipfile(self, zipfilename, output_dir, variables=None):
@@ -1025,10 +916,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             zip_ref.extractall(output_dir+'/unzip')
 
         tmptif = None
-
         filelist_tif = self.get_file_from_unzipfiles(
             f'{output_dir}/unzip', 'tif', variables)
-
         if filelist_tif:
             tmpfile = f'{output_dir}/tmpfile'
             # stack the single-band files into a multiple-band file
@@ -1036,9 +925,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             tmptif = self.stack_multi_file_with_metadata(filelist_tif, tmpfile)  
          
         tmpnc = None
-
         filelist_nc = self.get_file_from_unzipfiles(f'{output_dir}/unzip', 'nc')
-
         if filelist_nc:
             tmpnc = filelist_nc
 
@@ -1046,7 +933,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
     def get_file_from_unzipfiles(self, extract_dir, filetype, variables=None):
         '''
-        inputs: extract_dir which include geotiff files, filetype is either 'tif' or 'nc', variables is the list of variable names
+        inputs: extract_dir which include geotiff files, filetype is
+        either 'tif' or 'nc', variables is the list of variable names.
         '''
         tmpexp = f'{extract_dir}/*.{filetype}'
         filelist = sorted(glob.glob(tmpexp))
@@ -1107,10 +995,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         # covert to absolute path
         tiffile = os.path.abspath(tiffile)
         outputfile = os.path.abspath(outputfile)
-        RasterFormat = 'GTiff'
+        #RasterFormat = 'GTiff'
         ref_ds = gdal.Open(tiffile)
         ref_band = ref_ds.GetRasterBand(1)
-        ref_nodata = ref_band.GetNoDataValue()
+        #ref_nodata = ref_band.GetNoDataValue()
         tmpfile = f'{os.path.splitext(outputfile)[0]}-tmp.tif'
         if bbox or shapefile:
             if bbox:
@@ -1300,62 +1188,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return shapefile
 
-    def rasterize(self, infile, shapefile, outfile):
-        """
-        inputs: infile- geotiff file
-                shaepfile - mask the rasterfile with this shapefile
-                outfile - output file name
-        return: outfile
-        """
-        infile = os.path.abspath(infile)
-
-        # copy infile to tmpfile
-        self.cmd2(*['cp', '-f', infile, outfile])
-
-        # get the infomation of outfile
-        ds = gdal.Open(outfile, gdal.GA_Update)
-        num = ds.RasterCount
-        bands = list(range(1, num+1))
-        burns = list(np.full(num, 0))
-
-        # get the information of shapefile
-        shp = ogr.Open(shapefile)
-        ly = shp.GetLayerByIndex(0)
-        lyname = ly.GetName()
-
-        # rasterize the shapefile according to infile
-        err = gdal.RasterizeLayer(
-            ds,
-            bands,
-            ly,
-            burn_values=burns
-        )
-        ds.FlushCache()
-        ds = None
-
-        # tested options initValues and Inverse, both are not work
-        # options=["ATTRIBUTE={lyname}".format(lyname=lyname)]
-        # need use following way to process the pixels outside the box
-        # update the bands of ds
-        in_ds = gdal.Open(infile, gdal.GA_ReadOnly)
-        in_data = in_ds.ReadAsArray()
-        ds = gdal.Open(outfile, gdal.GA_Update)
-        out_data = ds.ReadAsArray()
-        rst_data = in_data-out_data
-
-        if num == 1:
-            out_band = ds.GetRasterBand(1)
-            out_band.WriteArray(rst_data)
-        else:
-            for i in range(1, num+1):
-                out_band = ds.GetRasterBand(i)
-                out_band.WriteArray(rst_data[i-1, :, :])
-
-        ds.FlushCache()
-        in_ds, ds = None, None
-
     def shapefile_boxproj(self, shapefile, ref_ds, outputfile):
-        """
+        '''
         convert shapefile and calculate the envelop box in the projection defined in ref_ds
         inputs:  shapefile - used to define the AOI
                  ref_ds - dataset associate with the reference geotiff file
@@ -1364,8 +1198,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                  ref_proj - projection of the ref_ds
                  outputfile - output shapefile name
                  geometryname - geometry name of the features in the outputfile
-        """
-
+        '''
         ref_proj = ref_ds.GetProjection()
         tmp = gpd.GeoDataFrame.from_file(shapefile)
         tmpproj = tmp.to_crs(ref_proj)
@@ -1376,7 +1209,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         feature = lyr.GetNextFeature()
         geometry = feature.GetGeometryRef()
         geometryname = geometry.GetGeometryName()
-
         # Extent[lon_min,lon_max,lat_min,lat_max]
         #boxproj={"llxy":llxy, "lrxy":lrxy, "urxy":urxy, "ulxy":ulxy}
         # where llxy,lrxy, urxy, and ulxy are coordinate pairs in projection
@@ -1384,41 +1216,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         lrxy = (lyrextent[1], lyrextent[2])
         urxy = (lyrextent[1], lyrextent[3])
         ulxy = (lyrextent[0], lyrextent[3])
-
         boxproj = {"llxy": llxy, "lrxy": lrxy, "urxy": urxy, "ulxy": ulxy}
-
         return boxproj, ref_proj, outputfile, geometryname
-
-    def transfer_metadata(self, infile, inband, outfile, outband):
-        """
-        readout the file metadata and band metadata from infile inband, write these metadata to outfile outband
-        input: infile
-               inband - band number in the infile, 1,2,3, etc.
-               outfile
-               outband -band nuber in outfile 1,2,3, etc.
-        """
-        in_ds = gdal.Open(infile, gdal.GA_ReadOnly)
-        in_md = in_ds.GetMetadata()
-        in_b = in_ds.GetRasterBand(inband)
-        in_nodata = in_b.GetNoDataValue()
-        in_bmd = in_b.GetMetadata()
-        out_ds = gdal.Open(outfile, gdal.GA_Update)
-        out_md = out_ds.GetMetadata()
-        out_md.update(in_md)
-        out_ds.SetMetadata(out_md)
-        out_b = out_ds.GetRasterBand(outband)
-        out_bmd = out_b.GetMetadata()
-        out_bmd.update(in_bmd)
-        out_b.SetMetadata(out_bmd)
-        if in_nodata:
-            out_b.SetNoDataValue(in_nodata)
-        else:
-            out_b.DeleteNoDataValue()
-
-         # write to disk
-        out_ds.FlushCache()
-        out_ds = None
-
  
     def mask_via_combined(self, inputfile, shapefile, outputfile):
         """
@@ -1463,13 +1262,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             tmp_band.WriteArray(np.zeros(tmp_data.shape, np_dt))
             #this flushCache() changes the all values in the maskband data to 255.
             tmp_band.FlushCache()
-            
             bands = [band_sn]
             burn_value = 1
             burns = [burn_value] 
             # following statement modify the maskband data to 255.
-            # The original maskband data is stored in tmp_msk_pre.
-            
+            # The original maskband data is stored in tmp_msk_pre.            
             err = gdal.RasterizeLayer(
                 tmp_ds,
                 bands,
@@ -1484,22 +1281,18 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             tmp_data = tmp_band.ReadAsArray()
             out_band = dst_ds.GetRasterBand(band_sn)
             out_data = out_band.ReadAsArray()
-
             # set out_band with nodata value if the tmp_band has nodata value
             if tmp_nodata_pre:
                 msk = tmp_data == 0
                 out_data[msk] = tmp_nodata_pre
                 out_band.WriteArray(out_data)
-                out_band.SetNoDataValue(tmp_nodata_pre)
-                
+                out_band.SetNoDataValue(tmp_nodata_pre)                
             # modify out_mskband
             out_mskband = out_band.GetMaskBand()        
             out_msk = tmp_data*tmp_msk_pre
             out_mskband.WriteArray(out_msk)
-
             out_mskband.FlushCache()
             out_band.FlushCache()        
-
             return
 
         for band_sn in range(1,num+1):
@@ -1511,123 +1304,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         tmp_ds = None
         return outputfile
  
-    def geotiff2netcdf_combined2(self, infile, outfile, nodata_flag):
-        '''
-        convert geotiff file to netcdf file by copy everything to a new netcdf4 format file.
-        input: infile - geotiff file name
-            nodata_flag indicates you filling nodata value (True) or use maskband to represnet the subset (False)
-        return: outfile - netcdf file name
-        '''
-        # open infile
-        ds_in = gdal.Open(infile)
-        gt =ds_in.GetGeoTransform()  
-        tmpfile = os.path.splitext(infile)[0]+"_tmp.nc"
-        command = ['gdal_translate']
-        command.extend(['-of', 'NETCDF','-co', 'FORMAT=NC4'])
-        #command.extend(['-ot', datatypename])
-        command.extend([infile, tmpfile])
-        self.cmd(*command)
-        #cmd = " ".join(command)
-        #os.system(cmd)
-
-        src = Dataset(tmpfile)
-        # create a output nc file
-        dst = Dataset(outfile, "w", format="NETCDF4")
-        dimkeys = src.dimensions.keys()
-        dimnames = [name for name in dimkeys] 
-        # copy attributes 
-        for name in src.ncattrs():
-            dst.setncattr(name, src.getncattr(name))
-        # copy dimensions
-        for name, dimension in src.dimensions.items():
-            dst.createDimension(
-            name, (len(dimension) if not dimension.isunlimited() else None))
-        # copy all file data for variables    
-        for name, variable in src.variables.items():
-            if variable.shape:
-                if variable.ndim == 1:
-                    if name in dimnames:
-                        if gt[2] == 0.0 and gt[4] == 0.0:
-                            x = dst.createVariable(name, variable.datatype, variable.dimensions) 
-                            for t in variable.ncattrs():
-                                if t !='_FillValue': 
-                                    dst.variables[name].setncattr(t, variable.getncattr(t))
-                            dst.variables[name][:]=variable[:]
-                    else:
-                        x = dst.createVariable(name, variable.datatype, variable.dimensions) 
-                        for t in variable.ncattrs():
-                            if t !='_FillValue': 
-                                dst.variables[name].setncattr(t, variable.getncattr(t))
-                        dst.variables[name][:]=variable[:]    
-
-                elif variable.ndim == 2:
-                    lst = [ attr for attr in variable.ncattrs() if attr == '_FillValue']
-
-                    def find_band(ds_in, variable):
-                        #find out what band is associate to the variable    
-                        #if "Band" in name:
-                        #    r1 = re.compile("([a-zA-Z]+)([0-9]+)")
-                        #    m = r1.match(name)
-                        #    band_sn = int(m.group(m.lastindex))
-                        #    return band_sn
-                        #else:
-                        band_sn = None
-                        for i in range(1, ds_in.RasterCount+1):
-                            if ds_in.GetRasterBand(i).GetMetadata()["bandname"] == variable.getncattr("bandname"):
-                                band_sn = i
-                                break
-                        return band_sn
-
-                    band_sn = find_band(ds_in, variable)
-                    if band_sn:
-                        band_in = ds_in.GetRasterBand(band_sn)
-                        nodata_in = band_in.GetNoDataValue() 
-                        mask_in_v =band_in.GetMaskBand().ReadAsArray()
-                        mask_in_b = mask_in_v == 0
-                        #datatype_nc = variable.datatype
-                  
-                        if nodata_in:
-                            x = dst.createVariable(name, variable.datatype, variable.dimensions, fill_value = variable._FillValue)
-                        else:
-                            x = dst.createVariable(name, variable.datatype, variable.dimensions)
-
-                        for t in variable.ncattrs():
-                            if t !='_FillValue': 
-                                dst.variables[name].setncattr(t, variable.getncattr(t))
-
-                        try: 
-                            tmp = variable[:,:]
-                        except Exception:
-                            pass
-                        tmp.mask = np.flipud(mask_in_b)
-                        dst.variables[name][:,:] = tmp
-                    
-                    else:
-                        if lst:
-                            x = dst.createVariable(name, variable.datatype, variable.dimensions, fill_value = variable._FillValue)
-                        else:
-                            x = dst.createVariable(name, variable.datatype, variable.dimensions)
-
-                        for t in variable.ncattrs():
-                            if t !='_FillValue': 
-                                dst.variables[name].setncattr(t, variable.getncattr(t))
-
-                        dst.variables[name][:,:] = variable[:,:]
-                                                    
-                else:
-                    print("error")
-            else:
-                x = dst.createVariable(name, variable.datatype, variable.dimensions)
-                for t in variable.ncattrs():
-                    if t !='_FillValue': 
-                        dst.variables[name].setncattr(t, variable.getncattr(t))
-            
-        ds_in = None
-        src.close
-        dst.close
-        return outfile
-
-
     def geotiff2netcdf_direct(self, infile, outfile):
         '''
         convert geotiff file to netcdf file by reading the geotiff and writing to a new netcdf4 format file.
@@ -1902,106 +1578,3 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         dst.close
         return outfile
 
-    def regrid(self, infile, outfile, resampling_mode = 'bilinear', ref_file = None,  
-        ref_crs=None, ref_box = None, ref_xres = None, ref_yres = None, ref_xsize = None, ref_ysize = None):
-        '''
-        reproject/resampling the infile image via the reference geotiff file, 
-        referecenc geojson file, and the reproject parameters such as 
-        ref_crs (wkt, speg, proj4 format), box, and xres/yres or xsize/ysize.
-        box is defined as a list[xmin,ymin, xmax, ymax].
-        The function process following three sets of inputs:
-        1. users input geotiff file, neglect other parameters.
-        2. users input geojson file, requirs ref_xref/ref_yres.
-        3. users donot input ref_file and ref_crs, this function does not do reprojection, it may do resizing and reboxing in the input projection.  
-        4. users do not input ref_file, input ref_crs, it does reprojection and/or resizing and/or reboxing in the ref_crs projection. box, 
-        and/or ref_xres/ref_yres or ref_xsize/ref_ysize are optional.
-        In the arguments, ref_xres/ref_yres and ref_xsize/ref_ysize can not be defined in the same time.
-        '''
-        resampling_methods =[
-        'near','bilinear','cubic','cubicspline','lanczos','average','rms','mode','max','min','med','q1','q3','sum'
-        ]
-
-        if resampling_mode not in resampling_methods:
-            resampling_mode ='bilinear'
-
-        def _copy_metadata(infile, outfile):
-            src = gdal.Open(infile)
-            dst = gdal.Open(outfile)
-            #copy band metadata
-            bandnum = src.RasterCount
-            for i  in range(1,bandnum + 1):
-                src_bmd = src.GetRasterBand(i).GetMetadata()
-                dst_bmd = dst.GetRasterBand(i).GetMetadata()
-                for item in src_bmd:
-                    if item not in dst_bmd:
-                        dst_bmd.update({item:src_bmd[item]})
-
-            src = None
-            dst = None
-            return                  
-
-        def _regrid(infile, outfile, resampling_mode='bilinear', ref_crs=None, ref_box=None, 
-            ref_xres=None, ref_yres=None, ref_xsize=None, ref_ysize=None):
-            command=['gdalwarp','-of', 'GTiff',  '-overwrite', '-r', resampling_mode]
-            if ref_crs:  #proj, box, xres/yres or xsize/ysize
-                command.extend([ '-t_srs', "'{ref_crs}'".format(ref_crs=ref_crs)])
-            if ref_box:
-                box = [str(x) for x in ref_box]
-                if ref_crs:
-                    command.extend(['-te', box[0], box[1], box[2], box[3], '-te_srs', "'{ref_crs}'".format(ref_crs=ref_crs)])
-                else:
-                    command.extend(['-te', box[0], box[1], box[2], box[3]])
-            if ref_xsize and ref_ysize:
-                command.extend( ['-ts',str(ref_xsize),str(ref_ysize)] )
-            elif ref_xres and ref_yres:
-                command.extend(['-tr', str(ref_xres), str(ref_yres) ] )
-            command.extend([infile, outfile])
-            cmd = " ".join(command)
-            os.system(cmd)
-            return outfile
-
-        def _regri_via_geotiff(infile, outfile, reffile, resampling_mode='bilinear'):
-            src_ds = gdal.Open(infile, gdalconst.GA_ReadOnly)
-            src_proj = src_ds.GetProjection()
-            src_bandcount = src_ds.RasterCount
-            src_datatype = src_ds.GetRasterBand(1).DataType
-            
-            ref_ds = gdal.Open(reffile, gdalconst.GA_ReadOnly)
-            ref_proj = ref_ds.GetProjection()
-            ref_gt = ref_ds.GetGeoTransform()
-            ref_xsize = ref_ds.RasterXSize
-            ref_ysize = ref_ds.RasterYSize
-            # Output / destination
-            dst_ds = gdal.GetDriverByName('GTiff').Create(outfile, ref_xsize, ref_ysize, src_bandcount, src_datatype)
-            dst_ds.SetGeoTransform(ref_gt)
-            dst_ds.SetProjection(ref_proj)
-            # copy band metadata to output  
-            # Do the work 
-            gdal.ReprojectImage( src_ds, dst_ds, src_proj, ref_proj, get_resample_method(resampling_mode) )
-            dst_ds = None # Flush
-            src_ds = None
-            ref_ds = None
-            return outfile
-
-        if ref_file: #reproject/resampling based on ref_file   
-            if "tif" in os.path.splitext(ref_file)[-1]: # geotiff file
-                outfile = _regri_via_geotiff(infile, outfile, ref_file, resampling_mode=resampling_mode)
-                
-            else: # geojson file
-                ref_ds = fiona.open(ref_file)
-                ref_crs = ref_ds.crs_wkt
-                box = ref_ds.bounds
-                ref_box = [str(x) for x in box]    
-                outfile = _regrid(infile, outfile, resampling_mode='bilinear', ref_crs=ref_crs, 
-                            ref_box=ref_box, ref_xres = ref_xres, ref_yres=ref_yres)
-
-        else:
-            outfile = _regrid(infile, outfile, resampling_mode='bilinear', ref_crs=ref_crs, ref_box=ref_box,
-                            ref_xres=ref_xres, ref_yres=ref_yres, ref_xsize=ref_xsize, ref_ysize=ref_ysize)
-
-        # copy metadata
-        _copy_metadata(infile, outfile)
-
-        return outfile    
-
-    
