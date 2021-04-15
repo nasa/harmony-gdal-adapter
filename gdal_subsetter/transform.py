@@ -123,16 +123,14 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                         (message.subset.shape.href,))
 
         layernames = []
-
         operations = dict(
             variable_subset=source.variables,
-            is_regridded=bool(message.format.crs),
-            is_subsetted=bool(message.subset and message.subset.bbox)
+            is_regridded=bool(message.format.crs or message.format.width or message.format.height),
+            is_subsetted=bool(message.subset and (message.subset.bbox or message.subset.shape) )
         )
         
         stac_record = item.clone()
         stac_record.assets = {}
-
         output_dir = mkdtemp()
         try:
             # Get the data file
@@ -176,33 +174,37 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 )
             else:
                 self.completed_with_error(
-                    'No recognized file foarmat, not process'
+                    'No recognized file format, not process'
+                )
+                return None
+            
+            if layernames and filename:
+                # Update metadata with bbox and extent in lon/lat coordinates for the geotiff file
+                # Also update the STAC record
+                stac_record.bbox = self.get_bbox_lonlat(filename)
+                stac_record.geometry = bbox_to_geometry(stac_record.bbox)
+                # Filename may change into the format other than geotiff
+                filename = self.reformat(filename, output_dir)
+                output_filename = basename + os.path.splitext(filename)[-1]
+                mime = message.format.mime
+                url = stage(
+                    filename,
+                    output_filename,
+                    mime,
+                    location=message.stagingLocation,
+                    logger=logger,
+                    cfg=self.config)
+
+                stac_record.assets['data'] = Asset(
+                    url, title=output_filename, media_type=mime, roles=['data']
                 )
 
-            #self.update_layernames(filename, [v for v in layernames])
-
-            # Update metadata with bbox and extent in lon/lat coordinates for the geotiff file
-            # Also update the STAC record
-            stac_record.bbox = self.get_bbox_lonlat(filename)
-            stac_record.geometry = bbox_to_geometry(stac_record.bbox)
-
-            # Filename may change into the format other than geotiff
-            filename = self.reformat(filename, output_dir)
-            output_filename = basename + os.path.splitext(filename)[-1]
-            mime = message.format.mime
-            url = stage(
-                filename,
-                output_filename,
-                mime,
-                location=message.stagingLocation,
-                logger=logger,
-                cfg=self.config)
-
-            stac_record.assets['data'] = Asset(
-                url, title=output_filename, media_type=mime, roles=['data']
-            )
-
-            return stac_record
+                return stac_record
+            else:
+                self.completed_with_error(
+                    'variables are not stackable, not process'
+                )
+                return None
 
         finally:
             shutil.rmtree(output_dir)
@@ -246,25 +248,14 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                             band = int(key.split("Band")[-1])
                             break
 
-                if band is None:
-                    return self.completed_with_error('band not found: ' + variable)
+                if band:
+                    filename = input_filename
+                    layer_id = basename + '__' + variable.name
+                    layer_id, filename, output_dir = self.combin_transfer(
+                        layer_id, filename, output_dir, band)
+                    layernames.append(layer_id)
+                    filelist.append(filename)
 
-                filename = input_filename
-
-                layer_id = basename + '__' + variable.name
-
-                layer_id, filename, output_dir = self.combin_transfer(
-                    layer_id, filename, output_dir, band)
-
-                layernames.append(layer_id)
-
-                filelist.append(filename)
-
-
-                #result = self.add_to_result(layer_id,
-                #    filename,
-                #    output_dir
-                #)
             result = self.add_to_result(filelist, output_dir)    
 
         return layernames, result
@@ -303,7 +294,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return layernames, result
 
     def process_zip(self, source, basename, input_filename, output_dir, layernames):
-
+        result = None
         variables = source.process('variables')
 
         variableslist =[item.name for item in variables]
@@ -641,7 +632,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     
     def add_to_result(self, filelist, dstdir):
         dstfile = "%s/result.tif" % (dstdir)
-        return self.stack_multi_file_with_metadata(filelist, dstfile)
+        if filelist:
+            return self.stack_multi_file_with_metadata(filelist, dstfile)
+        else:
+            return None
 
 
     def stack_multi_file_with_metadata(self, infilelist, outfile):
@@ -908,6 +902,55 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         ds = None
         return bbox
 
+
+    def checkstackable(self, filelist):
+        '''
+        input:  list of the geotiff file names.
+        return: True/False to indicate that if the files in the filelist can be stacked.
+        only files with the same projection and geotransform can be stacked.
+        '''
+        projlst=[]
+        gtlst=[]
+        dtypelst=[]
+        xsizelst=[]
+        ysizelst=[]
+
+        for item in filelist:
+            ds = gdal.Open(item)
+            projlst.append(ds.GetProjection())
+            gtlst.append("{gt}".format( gt = ds.GetGeoTransform() ) )
+            dtypelst.append("{dtype}".format( dtype = ds.GetRasterBand(1).DataType))
+            xsizelst.append("{xsize}".format( xsize = ds.RasterXSize))
+            ysizelst.append("{ysize}".format( ysize = ds.RasterYSize))
+
+
+        result_proj = False
+        if len(projlst) > 0 :
+            result_proj = all(elem == projlst[0] for elem in projlst)
+
+        result_gt = False
+        if len(gtlst) > 0 :
+            result_gt = all(elem == gtlst[0] for elem in gtlst)
+
+        result_dtype = False
+        if len(dtypelst) > 0 :
+            result_dtype = all(elem == dtypelst[0] for elem in dtypelst)
+
+        result_xsize = False
+        if len(xsizelst) > 0 :
+            result_xsize = all(elem == xsizelst[0] for elem in xsizelst)
+
+        result_ysize = False
+        if len(ysizelst) > 0 :
+            result_ysize = all(elem == ysizelst[0] for elem in ysizelst)
+
+        if result_proj and result_gt and result_dtype and result_xsize and result_ysize:
+
+            return True
+        else:
+            return False
+
+
     def pack_zipfile(self, zipfilename, output_dir, variables=None):
         '''
         inputs:zipfilename, output_dir, variables which is the list of variable names.
@@ -918,10 +961,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         tmptif = None
         filelist_tif = self.get_file_from_unzipfiles(
             f'{output_dir}/unzip', 'tif', variables)
-        if filelist_tif:
+        if filelist_tif and self.checkstackable(filelist_tif):
             tmpfile = f'{output_dir}/tmpfile'
-            # stack the single-band files into a multiple-band file
-            #tmptif = self.stack_multi_file(filelist_tif, tmpfile)
             tmptif = self.stack_multi_file_with_metadata(filelist_tif, tmpfile)  
          
         tmpnc = None
