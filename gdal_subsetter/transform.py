@@ -39,14 +39,16 @@ mime_to_gdal = {
     "image/tiff": "GTiff",
     "image/png": "PNG",
     "image/gif": "GIF",
-    "application/x-netcdf4": "NETCDF"
+    "application/x-netcdf4": "NETCDF",
+    "application/x-zarr": "zarr"
 }
 
 mime_to_extension = {
     "image/tiff": "tif",
     "image/png": "png",
     "image/gif": "gif",
-    "application/x-netcdf4": "nc"
+    "application/x-netcdf4": "nc",
+    "application/x-zarr": "nc"
 }
 
 mime_to_options = {
@@ -169,7 +171,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     source, basename, input_filename, output_dir, layernames
                 )
             elif file_type == 'zip':
-                layernames, filename = self.process_zip(
+                layernames, filename, process_msg = self.process_zip(
                     source, basename, input_filename, output_dir, layernames
                 )
             else:
@@ -201,9 +203,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
                 return stac_record
             else:
-                self.completed_with_error(
-                    'variables are not stackable, not process'
-                )
+                self.completed_with_error(process_msg)
                 return None
 
         finally:
@@ -294,22 +294,31 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return layernames, result
 
     def process_zip(self, source, basename, input_filename, output_dir, layernames):
+
         result = None
+
         variables = source.process('variables')
 
         variableslist =[item.name for item in variables]
 
-        [tiffile, ncfile] = self.pack_zipfile(input_filename, output_dir, variableslist)
+        [is_tif, tiffile, msg_tif, is_nc, ncfile, msg_nc] = self.pack_zipfile(input_filename, output_dir, variableslist)
 
-        if tiffile:
-            layernames, result = self.process_geotiff(
-                source, basename, tiffile, output_dir, layernames)
+        if is_tif:
+            if tiffile:
+                layernames, result = self.process_geotiff(
+                    source, basename, tiffile, output_dir, layernames)
 
-        if ncfile:
-            layernames, result = self.process_netcdf(
-                source, basename, ncfile, output_dir, layernames)
+            return layernames, result, msg_tif  
 
-        return layernames, result
+        elif is_nc:
+            if ncfile:
+                layernames, result = self.process_netcdf(
+                    source, basename, ncfile, output_dir, layernames)
+            
+            return layernames, result, msg_nc
+
+        return layernames, result, "the granule does not have tif or nc files, no process." 
+
 
     def update_layernames(self, filename, layernames):
         """
@@ -740,15 +749,18 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         if output_mime == "image/tiff":
             return srcfile
         dstfile = "%s/translated.%s" % (dstdir, mime_to_extension[output_mime])
-        if output_mime == "application/x-netcdf4":
+        if output_mime == "application/x-netcdf4" or output_mime == "application/x-zarr":
+            dstfile = "%s/translated.%s" % (dstdir, "nc")
             dstfile = self.geotiff2netcdf_direct(srcfile, dstfile)
-        else:
+            return dstfile
+        else: #png, gif
             command = ['gdal_translate',
                        '-of', mime_to_gdal[output_mime],
                        '-scale',
                        srcfile, dstfile]
             self.cmd(*command)
-        return dstfile
+            return dstfile
+        
 
     def read_layer_format(self, collection, filename, layer_id):
         gdalinfo_lines = self.cmd("gdalinfo", filename)
@@ -959,23 +971,35 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             zip_ref.extractall(output_dir+'/unzip')
 
         tmptif = None
+        is_tif = bool(self.get_file_from_unzipfiles(f'{output_dir}/unzip', 'tif') )
         filelist_tif = self.get_file_from_unzipfiles(
             f'{output_dir}/unzip', 'tif', variables)
-        if filelist_tif and self.checkstackable(filelist_tif):
-            tmpfile = f'{output_dir}/tmpfile'
-            tmptif = self.stack_multi_file_with_metadata(filelist_tif, tmpfile)  
+        if filelist_tif:
+            if self.checkstackable(filelist_tif):
+                tmpfile = f'{output_dir}/tmpfile'
+                tmptif = self.stack_multi_file_with_metadata(filelist_tif, tmpfile)
+                msg_tif = "OK"
+            else:
+                msg_tif = "variables are not stackable, not process."
+        else:
+            msg_tif ="no available data for the variables in the granule, not process."  
          
         tmpnc = None
         filelist_nc = self.get_file_from_unzipfiles(f'{output_dir}/unzip', 'nc')
+        is_nc = bool(filelist_nc)
         if filelist_nc:
             tmpnc = filelist_nc
+            msg_nc = "OK"
+        else:
+            msg_nc = "no available data for the variables, not process."
 
-        return tmptif, tmpnc
+        return is_tif, tmptif, msg_tif, is_nc, tmpnc, msg_nc
 
     def get_file_from_unzipfiles(self, extract_dir, filetype, variables=None):
         '''
         inputs: extract_dir which include geotiff files, filetype is
         either 'tif' or 'nc', variables is the list of variable names.
+        return: filelist for variables.
         '''
         tmpexp = f'{extract_dir}/*.{filetype}'
         filelist = sorted(glob.glob(tmpexp))
