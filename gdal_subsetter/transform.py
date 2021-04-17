@@ -167,9 +167,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     source, basename, input_filename, output_dir, layernames
                 )
             elif file_type == 'nc':
-                layernames, filename = self.process_netcdf(
+                layernames, filename, process_msg = self.process_netcdf(
                     source, basename, input_filename, output_dir, layernames
                 )
+
             elif file_type == 'zip':
                 layernames, filename, process_msg = self.process_zip(
                     source, basename, input_filename, output_dir, layernames
@@ -261,13 +262,14 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return layernames, result
 
     def process_netcdf(self, source, basename, input_filename, output_dir, layernames):
+
         filelist = []
+
         variables = source.process(
             'variables') or self.get_variables(input_filename)
 
         for variable in variables:
             band = None
-
             # For non-geotiffs, we reference variables by appending a file path
             layer_format = self.read_layer_format(
                 source.collection,
@@ -279,19 +281,25 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
             layer_id = basename + '__' + variable.name
 
-            # convert the subdataset in the nc file into the geotif file
+            # convert a subdataset in the nc file into the geotif file
             filename = self.nc2tiff(layer_id, filename, output_dir)
+            if filename:
+                layer_id, filename, output_dir = self.combin_transfer(
+                    layer_id, filename, output_dir, band)
 
-            layer_id, filename, output_dir = self.combin_transfer(
-                layer_id, filename, output_dir, band)
+                layernames.append(layer_id)
 
-            layernames.append(layer_id)
-
-            filelist.append(filename)
+                filelist.append(filename)
 
         result = self.add_to_result(filelist, output_dir)
+        
+        if result:
 
-        return layernames, result
+            process_msg = "OK"
+        else:
+            process_msg = "subsets in the nc file are not stackable, not process."
+
+        return layernames, result, process_msg
 
     def process_zip(self, source, basename, input_filename, output_dir, layernames):
 
@@ -403,18 +411,18 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         normalized_layerid = layerid.replace('/', '_')
         dstfile = "%s/%s" % (dstdir, normalized_layerid + '__nc2tiff.tif')
-        ds = gdal.Open(filename)
-        metadata = ds.GetMetadata()
-        crs_wkt = search(metadata, "crs_wkt")
-
-        if crs_wkt:
-            command = ['gdal_translate', '-a_srs']
-            command.extend([crs_wkt])
-            command.extend([filename, dstfile])
-            self.cmd(*command)
-            return dstfile
-
-        return filename
+        try:
+            ds = gdal.Open(filename)
+            metadata = ds.GetMetadata()
+            crs_wkt = search(metadata, "crs_wkt")
+            if crs_wkt:
+                command = ['gdal_translate', '-a_srs']
+                command.extend([crs_wkt])
+                command.extend([filename, dstfile])
+                self.cmd(*command)
+                return dstfile
+        except:
+            return None
 
     def varsubset(self, srcfile, dstfile, band=None):
         if not band:
@@ -641,7 +649,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     
     def add_to_result(self, filelist, dstdir):
         dstfile = "%s/result.tif" % (dstdir)
-        if filelist:
+        if filelist and self.checkstackable(filelist):
             return self.stack_multi_file_with_metadata(filelist, dstfile)
         else:
             return None
