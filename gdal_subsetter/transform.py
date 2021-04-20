@@ -176,9 +176,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     source, basename, input_filename, output_dir, layernames
                 )
             else:
-                self.completed_with_error(
-                    'No recognized file format, not process'
-                )
+                #self.completed_with_error(
+                #    'No recognized file format, not process'
+                #)
+                logger.warn("No reconnized filr format, not process")
+
                 return None
             
             if layernames and filename:
@@ -204,7 +206,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
                 return stac_record
             else:
-                self.completed_with_error(process_msg)
+                # self.completed_with_error(process_msg)
+                logger.warn(process_msg)    
                 return None
 
         finally:
