@@ -176,16 +176,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     source, basename, input_filename, output_dir, layernames
                 )
             else:
-                #self.completed_with_error(
-                #    'No recognized file format, not process'
-                #)
-                logger.warn("No reconnized filr format, not process")
+                logger.warn("No reconnized file format, not process")
+                filename = None
 
-                return None
-            
             if layernames and filename:
-                # Update metadata with bbox and extent in lon/lat coordinates for the geotiff file
-                # Also update the STAC record
+                # Update metadata with bbox and extent in lon/lat coordinates for the geotiff file,
+                # and update the STAC record.
                 stac_record.bbox = self.get_bbox_lonlat(filename)
                 stac_record.geometry = bbox_to_geometry(stac_record.bbox)
                 # Filename may change into the format other than geotiff
@@ -206,7 +202,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
                 return stac_record
             else:
-                # self.completed_with_error(process_msg)
                 logger.warn(process_msg)    
                 return None
 
