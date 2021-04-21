@@ -3,16 +3,16 @@ The GDAL Subsetter regression tests use a Jupyter notebook and were developed wi
 Install pipenv:
 pip install pipenv
 
-Spawn a shell in a virtual environment:
-pipenv shell
-
 Download the github repo asf-harmony-gdal:
 https://github.com/asfadmin/asf-harmony-gdal.git
 
-Install Jupyter Notebook from within Notebooks:
-pipenv install jupyter
+cd to asf-harmony-gdal/Notebooks/gdal_subsetter_regression
 
-Install dependencies from Pipfile.lock in Notebooks and in Notebooks/gdal_subsetter_regression:
+Start a virtual environment from within that directory
+
+pipenv shell
+
+Install dependencies from Pipfile.lock in Notebooks/gdal_subsetter_regression:
 
 pipenv install --ignore-pipfile
 
@@ -21,6 +21,10 @@ pip3 uninstall gdal
 pip3 uninstall numpy
 pip3 install numpy
 pip3 install GDAL==3.0.4
+After encountering additional issues with get_product_info.py it was necessary to:
+pipenv uninstall GDAL==3.0.4
+pipenv install GDAL==3.2.2
+pipenv install osr
 
 Authentication:
 The harmony_requests.py module uses EDL URS credentials in a .netrc file.
@@ -31,9 +35,9 @@ jupyter notebook
 
 In the Jupyter Notebook open 'GDAL_Subsetter_Regression.ipynb'
 Run the first cell to select the environment (default is uat)
-Run the second cell to perform regression tests against the S1 InSAR (GRFN) collection.
-Run the third cell to perform regression tests against the UAVSAR POLSAR PAULI collection.
-Run the fourth cell to perform regression tests against the AVNIR-2 collection.
+Run the second cell to perform regression tests against the AVNIR-2 collection.
+Run the third cell to perform regression tests against the S1 InSAR (Beta) collection (This only works in PROD).
+Run the fourth cell to perform regression tests against the UAVSAR POLSAR PAULI collection. (Only works in PROD).
 
 Program flow overview (how it all works):
 1. The user selects an environment in the first cell.
