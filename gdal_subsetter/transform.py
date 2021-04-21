@@ -177,7 +177,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 )
             else:
                 logger.warn("No reconnized file format, not process")
-                filename = None
+                return None
 
             if layernames and filename:
                 # Update metadata with bbox and extent in lon/lat coordinates for the geotiff file,
