@@ -13,6 +13,12 @@ def get_base_url_info(env,collection):
             base_url_info['collection_id'] = 'C1214354031-ASF'
         elif collection == 'avnir':
             base_url_info['collection_id'] = 'C1808440897-ASF'
+        elif collection == 'alos_rt1':
+            base_url_info['collection_id'] = 'C1206487504-ASF'
+        elif collection == 'alos_rt2':
+            base_url_info['collection_id'] = 'C1206487217-ASF'
+        elif collection == 'alos_l22':
+            base_url_info['collection_id'] = 'C2011599335-ASF'
     elif env == 'uat':
         base_url_info['base_url'] = 'https://harmony.uat.earthdata.nasa.gov/'
         base_url_info['granule_env_flag'] = 'uat_gid'
@@ -22,6 +28,12 @@ def get_base_url_info(env,collection):
             base_url_info['collection_id'] = 'C1207038647-ASF'
         elif collection == 'avnir':
             base_url_info['collection_id'] = 'C1233629671-ASF'
+        elif collection == 'alos_rt1':
+            base_url_info['collection_id'] = 'C1207181535-ASF'
+        elif collection == 'alos_rt2':
+            base_url_info['collection_id'] = 'C1208013295-ASF'
+        elif collection == 'alos_l22':
+            base_url_info['collection_id'] = 'C1239927797-ASF'
     elif env == 'sit':
         base_url_info['base_url'] = 'https://harmony.sit.earthdata.nasa.gov/'
         base_url_info['granule_env_flag'] = 'sit_gid'
@@ -31,5 +43,11 @@ def get_base_url_info(env,collection):
             base_url_info['collection_id'] = 'C1207038647-ASF'
         elif collection == 'avnir':
             base_url_info['collection_id'] = 'C1233629671-ASF'
+        elif collection == 'alos_rt1':
+            base_url_info['collection_id'] = 'C1207181535-ASF'
+        elif collection == 'alos_rt2':
+            base_url_info['collection_id'] = 'C1208013295-ASF'
+        elif collection == 'alos_l22':
+            base_url_info['collection_id'] = 'C1239927797-ASF'
 
     return(base_url_info)
