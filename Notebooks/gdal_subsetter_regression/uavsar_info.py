@@ -137,33 +137,30 @@ def uavsar_info():
                   'NA', 'NA', 'NA', 'NA'],
     'xy_size':[540, 2232]
     },
-    ## The variable name assertions for the test associated with this query are failing due to unexpected
-    ## band names in the products. The issue is known and seems to only be the case for UAVSAR where the 
-    ## subset bbox is larger than the granule and the 'all' option is used.
-    # # Query 7
-    # {
-    # 'q_num':'7',
-    # 'reference_image':'uavsar_query7_reference.tiff',
-    # 'request_url':'all/coverage/rangeset?subset=lat(61:62)&subset=lon(-139:-137)&format=image%2Ftiff&granuleID=',
-    # 'message':'Northern hemisphere and subset bbox larger than granule extent.',
-    # 'prod_gid':'G1402334529-ASF',
-    # 'uat_gid':'G1233284396-ASF',
-    # 'sit_gid':'G1233284396-ASF',
-    # 'outfile':'_uavsar_query7.tiff',
-    # 'cs': 'Geographic',
-    # 'proj_cs':'NA',
-    # 'gcs': 'WGS 84',
-    # 'authority': 'EPSG',
-    # 'proj_epsg': 'NA',
-    # 'gcs_epsg': '4326',
-    # 'subset': [61.57, 61.76, -138.36, -137.85],
-    # 'bands': 3,
-    # 'variables': ['kluane_01902_17064_005_170615_L090_CX_01_pauli_subsetted__all__subsetted_band_1',
-    #               'kluane_01902_17064_005_170615_L090_CX_01_pauli_subsetted__all__subsetted_band_2',
-    #               'kluane_01902_17064_005_170615_L090_CX_01_pauli_subsetted__all__subsetted_band_3',
-    #               'NA', 'NA', 'NA', 'NA'],
-    # 'xy_size':[4514, 3477]
-    # },
+     # Query 7
+    {
+    'q_num':'7',
+    'reference_image':'uavsar_query7_reference.tiff',
+    'request_url':'all/coverage/rangeset?subset=lat(61:62)&subset=lon(-139:-137)&format=image%2Ftiff&granuleID=',
+    'message':'Northern hemisphere and subset bbox larger than granule extent.',
+    'prod_gid':'G1402334529-ASF',
+    'uat_gid':'G1233284396-ASF',
+    'sit_gid':'G1233284396-ASF',
+    'outfile':'_uavsar_query7.tiff',
+    'cs': 'Geographic',
+    'proj_cs':'NA',
+    'gcs': 'WGS 84',
+    'authority': 'EPSG',
+    'proj_epsg': 'NA',
+    'gcs_epsg': '4326',
+    'subset': [61.57, 61.76, -138.36, -137.85],
+    'bands': 3,
+    'variables': ['kluane_01902_17064_005_170615_L090_CX_01_pauli_subsetted__all__subsetted_band_1',
+                  'kluane_01902_17064_005_170615_L090_CX_01_pauli_subsetted__all__subsetted_band_2',
+                  'kluane_01902_17064_005_170615_L090_CX_01_pauli_subsetted__all__subsetted_band_3',
+                  'NA', 'NA', 'NA', 'NA'],
+    'xy_size':[4514, 3477]
+    },
     # Query 8
     {
     'q_num':'8',
