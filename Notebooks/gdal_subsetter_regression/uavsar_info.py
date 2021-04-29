@@ -137,6 +137,9 @@ def uavsar_info():
                   'NA', 'NA', 'NA', 'NA'],
     'xy_size':[540, 2232]
     },
+    ## The variable name assertions for the test associated with this query are failing due to unexpected
+    ## band names in the products. The issue is known and seems to only be the case for UAVSAR where the 
+    ## subset bbox is larger than the granule and the 'all' option is used.
     # # Query 7
     # {
     # 'q_num':'7',
