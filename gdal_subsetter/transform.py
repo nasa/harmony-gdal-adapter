@@ -100,6 +100,14 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             version = ','.join(file_version.readlines())
 
         return version
+    
+    def rename_file(self, input_filename, href):
+        output_filename = "{dirname}/{basename}".format(dirname=os.path.dirname(input_filename),
+        basename=generate_output_filename(href))
+        command=['mv']
+        command.extend([input_filename, output_filename])
+        self.cmd(*command)
+        return output_filename
 
     def process_item(self, item, source):
         """
@@ -146,6 +154,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     logger=self.logger,
                     access_token=None,
                     cfg=self.config)
+                input_filename = self.rename_file(input_filename, asset.href)
+                                
             else:
                 input_filename = download(
                     asset.href,
@@ -153,6 +163,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     logger=self.logger,
                     access_token=self.message.accessToken,
                     cfg=self.config)
+                input_filename = self.rename_file(input_filename, asset.href)
 
             basename = os.path.splitext(os.path.basename(
                 generate_output_filename(asset.href, **operations))
@@ -219,13 +230,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             layer_id, filename, output_dir = self.combin_transfer(
                 layer_id, filename, output_dir, band)
 
-            #result = self.rename_to_result(
-            #    layer_id, filename, output_dir)
-            #result = self.add_to_result(
-            #        layer_id,
-            #        filename,
-            #        output_dir
-            #    )
             filelist.append(filename)
             result = self.add_to_result(filelist, output_dir)
             layernames.append(layer_id)
@@ -977,9 +981,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             zip_ref.extractall(output_dir+'/unzip')
 
         tmptif = None
-        is_tif = bool(self.get_file_from_unzipfiles(f'{output_dir}/unzip', 'tif') )
-        filelist_tif = self.get_file_from_unzipfiles(
-            f'{output_dir}/unzip', 'tif', variables)
+        filelist_tif = self.get_file_from_unzipfiles(f'{output_dir}/unzip', 'tif', variables)
+        is_tif = bool(filelist_tif)
         if filelist_tif:
             if self.checkstackable(filelist_tif):
                 tmpfile = f'{output_dir}/tmpfile'
@@ -1021,7 +1024,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                                 ch_filelist.append(filename)
                                 break
                 else:
-                    ch_filelist =filelist           
+                    ch_filelist = filelist           
             else:
                 ch_filelist = filelist
         return ch_filelist
