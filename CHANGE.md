@@ -1,3 +1,6 @@
+[version 1.0.17] 2021-05-05
+This is the final version. We will stop the development for a while.
+
 [version 1.0.16] 2021-04-12
 This version integrates the regridding functionality. Users can set regridding parameters in the url query for the harmony api. They are outputCrs, scaleSize(xres/yres in output coordinates), scaleExtent(xmin,ymin,xmax,ymax) in output coordinates, and width/height (columnes/rows) of output file. You are not allow to use scaleSize and width/height in the same time.
 
