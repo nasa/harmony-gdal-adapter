@@ -13,8 +13,9 @@ import harmony
 from harmony import BaseHarmonyAdapter
 from harmony.message import Message
 from argparse import ArgumentParser
+from harmony.logging import setup_stdout_log_formatting
 from harmony.util import (CanceledException, HarmonyException, receive_messages, delete_message,
-                          change_message_visibility, setup_stdout_log_formatting, config, create_decrypter)
+                          change_message_visibility, config, create_decrypter)
 
 
 class UnittestAdapter(HarmonyAdapter):

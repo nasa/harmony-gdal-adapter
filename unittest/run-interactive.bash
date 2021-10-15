@@ -1,5 +1,3 @@
-gdalsubsetter="/home/jzhu4/projects/work/harmony-curr/gdal-subsetter"
+gdalsubsetter="/path/to/asf-harmony-gdal"
 
-harmonyservicelibpy="/home/jzhu4/projects/work/harmony-curr/harmony-service-lib-py"
-
-docker run -it --entrypoint /bin/bash  -v ${gdalsubsetter}:/home -v ${harmonyservicelibpy}/harmony:/usr/lib/harmony-service-lib-py/harmony asfdataservices/gdal-subsetter  
+docker run --rm -it --entrypoint /bin/bash  -v ${gdalsubsetter}:/home asfdataservices/gdal-subsetter

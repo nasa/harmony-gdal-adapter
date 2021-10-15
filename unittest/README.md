@@ -6,7 +6,7 @@ if you run the container version unittest in a local environment, you need conne
 
 ### Environment
 
-Copy `env.unittest` to `.env` and set `EDL_USERNAME` and `EDL_PASSWORD`
+Copy `env.example` to `.env` and set `EDL_USERNAME` and `EDL_PASSWORD`
 
 ```
   cp env.example .env
@@ -14,18 +14,20 @@ Copy `env.unittest` to `.env` and set `EDL_USERNAME` and `EDL_PASSWORD`
 
 ### Build
 
-build the docker iamge asfdataservices/gdal-subsetter on the host
+build the docker image asfdataservices/gdal-subsetter on the host
 
 ```
 cd gdal-subsetter
-bin/build_iamge
+bin/build_image
 ```
 
 ### Run
 
-from host
+First, edit `unittest/run-interactive.bash` and set `gdalsubsetter` to the absolute filepath on the host that contains the source code
+Then, from host
 
 ```
+cd unittest
 ./run-interactive.bash
 ```
 
@@ -34,7 +36,7 @@ This brings you in to the docker container.
 Then from insdier the container,
 
 ```
+pip install -r requirements_dev.txt
 cd /home/unittest
 pytest
-
 ```
