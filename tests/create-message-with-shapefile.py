@@ -22,12 +22,12 @@ import sys
 
 # In[2]:
 
-
+from pathlib import Path
 from urllib import request, parse
 from http.cookiejar import CookieJar
 import getpass
 import netrc
-import os
+import tempfile
 import requests
 import json
 import pprint
@@ -53,9 +53,11 @@ from owslib.wms import WebMapService
 
 
 # ---- Change this to save to a directory where you have write permissions
-local_dir = '/tmp/test_output/'
+local_dir = tempfile.mkdtemp()
 
-os.system('mkdir -p '+local_dir)
+
+
+Path('local_dir' ).mkdir( parents=True, exist_ok=True )
 
 # ## Earthdata Login Authentication
 # 

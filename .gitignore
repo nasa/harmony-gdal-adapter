@@ -138,5 +138,5 @@ templates/
 testcases/
 .idea/
 #unittest/data/
-unittest/dockervenv/
-unittest/.env_unittest
+tests/dockervenv/
+tests/.env_unittest
