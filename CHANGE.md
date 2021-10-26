@@ -1,3 +1,6 @@
+[version 1.1.0] 2021-TBD
+New functionality added for being able to produce PNG output from NetCDF input
+
 [version 1.0.17] 2021-05-05
 This is the final version. We will stop the development for a while.
 
