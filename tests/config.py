@@ -52,6 +52,11 @@ class UnittestAdapterNoDownload(HarmonyAdapter):
         elif granule.name == 'UA_gulfco_32010_09045_001_090617_L090_CX_01-PAULI':
             granule.local_filename = 'file://./data/granules/uavsar/gulfco_32010_09045_001_090617_L090_CX_01_pauli.tif'
             item.add_asset('data', pystac.Asset(granule.local_filename, roles=['data']))
+        elif granule.name == '20211017090000-JPL-L4_GHRSST-SSTfnd-MUR-GLOB-v02.0-fv04.1':
+            granule.local_filename = 'file://./data/granules/mur/20211017090000-JPL-L4_GHRSST-SSTfnd-MUR-GLOB-v02.0-fv04.1.nc'
+            item.add_asset('data', pystac.Asset(granule.local_filename, roles=['data']))
+        else:
+            assert False, f'Unkown granule {granule.name}, add new case to UnittestAdapterNoDownload'
 
         self.adapter = HarmonyAdapter(message, catalog=catalog, config=cfg)
         self.adapter.get_version = lambda: "unittest" \

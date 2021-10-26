@@ -15,8 +15,11 @@ import shutil
 from affine import Affine
 import glob
 import json
+import argparse
+import time
 
-from harmony import BaseHarmonyAdapter, util
+import harmony
+from harmony.adapter import BaseHarmonyAdapter, util
 from harmony.util import stage, bbox_to_geometry, download, generate_output_filename
 
 import shapely
@@ -104,9 +107,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def rename_file(self, input_filename, href):
         output_filename = "{dirname}/{basename}".format(dirname=os.path.dirname(input_filename),
         basename=generate_output_filename(href))
-        command=['mv']
-        command.extend([input_filename, output_filename])
-        self.cmd(*command)
+        os.rename(input_filename, output_filename)
         return output_filename
 
     def process_item(self, item, source):
@@ -417,12 +418,15 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             ds = gdal.Open(filename)
             metadata = ds.GetMetadata()
             crs_wkt = search(metadata, "crs_wkt")
-            if crs_wkt:
-                command = ['gdal_translate', '-a_srs']
-                command.extend([crs_wkt])
-                command.extend([filename, dstfile])
-                self.cmd(*command)
-                return dstfile
+
+            if crs_wkt is None:
+                crs_wkt = 'EPSG:4326'
+            command = ['gdal_translate', '-a_srs']
+            command.extend([crs_wkt])
+            command.extend([filename, dstfile])
+            self.cmd(*command)
+
+            return dstfile
         except:
             return None
 
@@ -596,6 +600,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         normalized_layerid = layerid.replace('/', '_')
         dstfile = "%s/%s__resized.tif" % (dstdir, normalized_layerid)
 
+        if self.message.format.mime == 'image/png':
+            # need to unscale values to color PNGs correctly
+            command.extend(['-unscale', '-ot', 'Float64'])
+
         if fmt.width or fmt.height:
             width = fmt.process('width') or 0
             height = fmt.process('height') or 0
@@ -648,14 +656,70 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         dstfile = _regrid(srcfile, dstfile, resampling_mode=resample_method, ref_crs =crs, ref_box=box, ref_xres=xres, ref_yres=yres)
         return dstfile
-    
-    def add_to_result(self, filelist, dstdir):
-        dstfile = "%s/result.tif" % (dstdir)
-        if filelist and self.checkstackable(filelist):
-            return self.stack_multi_file_with_metadata(filelist, dstfile)
-        else:
-            return None
 
+    def recolor(self, layerid, srcfile, dstdir):
+        fmt = self.message.format
+        dstfile = srcfile  # passthrough if no colormap
+        # colormap = fmt.colormap
+
+        # Use hard coded colormaps that match layerid
+        colormaps_dir = os.path.dirname(os.path.realpath(__file__)) + '/colormaps/'
+        if 'ECCO' in srcfile:
+            colormap = colormaps_dir + 'MedspirationIndexed.txt'
+            discrete = True
+        elif 'analysed_sst' in srcfile:
+            colormap = colormaps_dir + 'GHRSST_Sea_Surface_Temperature.txt'
+            discrete = True
+        elif 'sst_anomaly' in srcfile:
+            colormap = colormaps_dir + 'GHRSST_Sea_Surface_Temperature_Anomalies.txt'
+            discrete = True
+        elif 'sea_ice_fraction' in srcfile:
+            colormap = colormaps_dir + 'GHRSST_Sea_Ice_Concentration.txt'
+            discrete = True
+        else:
+            colormap = colormaps_dir + 'Gray.txt'
+            discrete = False
+
+        if colormap:
+            normalized_layerid = layerid.replace('/', '_')
+            dstfile = "%s/%s" % (dstdir, normalized_layerid + '__colored')
+            command = [
+                'gdaldem',
+                'color-relief',
+                '-alpha',
+            ]
+            if discrete:
+                command.extend(['-nearest_color_entry'])
+            if 'png' in fmt.mime:
+                command.extend(['-of', 'PNG', '-co', 'WORLDFILE=YES'])
+                dstfile += '.png'
+            elif 'jpeg' in fmt.mime:
+                command.extend(['-of', 'JPEG', '-co', 'WORLDFILE=YES'])
+                dstfile += '.jpeg'
+            else:
+                dstfile += '.tif'
+            command.extend([srcfile, colormap, dstfile])
+            self.cmd(*command)
+            if 'png' in fmt.mime or 'jpeg' in fmt.mime:
+                shutil.copyfile(dstfile, "%s/%s%s" % (dstdir, 'result', os.path.splitext(dstfile)[1]))
+                shutil.copyfile(os.path.splitext(dstfile)[0] + '.wld', "%s/%s" % (dstdir, 'result.wld'))
+
+        return dstfile
+
+    def add_to_result(self, filelist, dstdir):
+        dstfile = "%s/result" % (dstdir)
+        output = None
+        if 'png' in self.message.format.mime:
+            dstfile += '.png'
+            output = dstfile
+        elif 'jpeg' in self.message.format.mime:
+            dstfile += '.jpeg'
+            output = dstfile
+        else:
+            dstfile += '.tif'
+            if filelist and self.checkstackable(filelist):
+                output = self.stack_multi_file_with_metadata(filelist, dstfile)
+        return output
 
     def stack_multi_file_with_metadata(self, infilelist, outfile):
         '''
@@ -751,9 +815,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def reformat(self, srcfile, dstdir):
         gdal_subsetter_version = "gdal_subsetter_version={gdal_subsetter_ver}".format(
             gdal_subsetter_ver=self.get_version())
-        command = ['gdal_edit.py',  '-mo', gdal_subsetter_version, srcfile]
-        self.cmd(*command)
         output_mime = self.message.format.process('mime')
+        if not output_mime == "image/png" or output_mime == "image/jpeg":
+            command = ['gdal_edit.py',  '-mo', gdal_subsetter_version, srcfile]
+            self.cmd(*command)
         if output_mime not in mime_to_gdal:
             raise Exception('Unrecognized output format: ' + output_mime)
         if output_mime == "image/tiff":
@@ -859,6 +924,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             filename,
             output_dir
         )
+        filename = self.recolor(
+            layer_id,
+            filename,
+            output_dir
+        )
 
         
         return layer_id, filename, output_dir
@@ -885,7 +955,17 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         input:raster file name
         output:bbox of the raster file
         """
-        ds = gdal.Open(filename, gdal.GA_Update)
+        output_mime = self.message.format.process('mime')
+        if output_mime == "image/png" or output_mime == "image/jpeg":
+            # PNG and JPEGs don't support update and assumes WGS84
+            ds = gdal.Open(filename, gdal.GA_ReadOnly)
+            ct2 = pyproj.Proj('+proj=longlat +datum=WGS84 +no_defs')
+        else:
+            ds = gdal.Open(filename, gdal.GA_Update)
+            projection = ds.GetProjection()
+            dst = osr.SpatialReference(projection)
+            dstproj4 = dst.ExportToProj4()
+            ct2 = pyproj.Proj(dstproj4)
         gt = ds.GetGeoTransform()
         cols = ds.RasterXSize
         rows = ds.RasterYSize
@@ -893,10 +973,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         ur_x, ur_y = self.calc_ij_coord(gt, cols, 0)
         lr_x, lr_y = self.calc_ij_coord(gt, cols, rows)
         ll_x, ll_y = self.calc_ij_coord(gt, 0, rows)
-        projection = ds.GetProjection()
-        dst = osr.SpatialReference(projection)
-        dstproj4 = dst.ExportToProj4()
-        ct2 = pyproj.Proj(dstproj4)
         ul_x2, ul_y2 = ct2(ul_x, ul_y, inverse=True)
         ur_x2, ur_y2 = ct2(ur_x, ur_y, inverse=True)
         lr_x2, lr_y2 = ct2(lr_x, lr_y, inverse=True)
@@ -936,6 +1012,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         dtypelst=[]
         xsizelst=[]
         ysizelst=[]
+        formatlst=[]
+        stackable = False
 
         for item in filelist:
             ds = gdal.Open(item)
@@ -944,6 +1022,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             dtypelst.append("{dtype}".format( dtype = ds.GetRasterBand(1).DataType))
             xsizelst.append("{xsize}".format( xsize = ds.RasterXSize))
             ysizelst.append("{ysize}".format( ysize = ds.RasterYSize))
+            formatlst.append(os.path.splitext(item)[1])
 
 
         result_proj = False
@@ -966,11 +1045,14 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         if len(ysizelst) > 0 :
             result_ysize = all(elem == ysizelst[0] for elem in ysizelst)
 
-        if result_proj and result_gt and result_dtype and result_xsize and result_ysize:
+        result_format = True
+        if '.png' in formatlst:
+            result_format = False
 
-            return True
-        else:
-            return False
+        if result_proj and result_gt and result_dtype and result_xsize and result_ysize and result_format:
+            stackable = True
+
+        return stackable
 
 
     def pack_zipfile(self, zipfilename, output_dir, variables=None):
@@ -1652,3 +1734,31 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         dst.close
         return outfile
 
+
+def main():
+    """
+    Parses command line arguments and invokes the appropriate method to respond to them
+
+    Returns
+    -------
+    None
+    """
+
+    parser = argparse.ArgumentParser(
+        prog='harmony-gdal', description='Run the GDAL service'
+    )
+
+    harmony.setup_cli(parser)
+    args = parser.parse_args()
+
+    if (harmony.is_harmony_cli(args)):
+        harmony.run_cli(parser, args, HarmonyAdapter)
+    else:
+        parser.error("Only --harmony CLIs are supported")
+
+
+if __name__ == "__main__":
+    #os.environ["FALLBACK_AUTHN_ENABLED"] = 'true'
+    os.environ["BUFFER"] = '{"degree":0.0001, "meter":10.0}'
+
+    main()
