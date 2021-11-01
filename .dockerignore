@@ -1,5 +1,7 @@
 example
-test
+tests
+.pytest_cache
+.git
 spec
 **/*.log
 **/tmp

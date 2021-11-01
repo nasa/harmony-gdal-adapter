@@ -1,6 +1,10 @@
 FROM osgeo/gdal:ubuntu-full-3.3.1
 
-RUN ln -sf /usr/bin/python3 /usr/bin/python && apt-get update && apt-get install -y python3-pip nco && pip3 --no-cache-dir install boto3
+RUN ln -sf /usr/bin/python3 /usr/bin/python \
+    && apt-get update \
+    && apt-get install -y python3-pip nco \
+    && pip3 --no-cache-dir install boto3 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR "/home"
 
