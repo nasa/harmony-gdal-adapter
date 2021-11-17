@@ -294,6 +294,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
                 filelist.append(filename)
 
+                # Include wld file if png or jpeg
+                if 'png' in self.message.format.mime:
+                    filelist.append(filename.replace('.png', '.wld'))
+                if 'jpeg' in self.message.format.mime:
+                    filelist.append(filename.replace('.jpeg', '.wld'))
+
         result = self.add_to_result(filelist, output_dir)
         
         if result:
