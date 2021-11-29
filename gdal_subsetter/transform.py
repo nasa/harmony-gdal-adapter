@@ -55,7 +55,7 @@ mime_to_extension = {
 }
 
 mime_to_options = {
-    "image/tiff": ["-co", "COMPRESS=LZW"]
+    "image/tiff": ['-co', 'TILED=YES', '-co', 'COPY_SRC_OVERVIEWS=YES', '-co', 'COMPRESS=DEFLATE']
 }
 
 process_flags = {
