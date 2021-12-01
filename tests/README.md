@@ -23,20 +23,20 @@ bin/build_image
 
 ### Run
 
-First, edit `unittest/run-interactive.bash` and set `gdalsubsetter` to the absolute filepath on the host that contains the source code
+First, edit `tests/run-interactive.bash` and set `gdalsubsetter` to the absolute filepath on the host that contains the source code
 Then, from host
 
 ```
-cd unittest
+cd tests
 ./run-interactive.bash
 ```
 
 This brings you in to the docker container.
 
-Then from insdier the container,
+Then from inside the container,
 
 ```
 pip install -r requirements_dev.txt
-cd /home/unittest
+cd /home/tests
 pytest
 ```
