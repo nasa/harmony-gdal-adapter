@@ -18,7 +18,7 @@ def uavsar_info():
     'gcs_epsg': '4326',
     'subset': [63.7, 64.1, -145.9, -145.7],
     'bands': 1,
-    'variables': ['djNEON_00101_17095_012_170910_L090_CX_01_pauli_Band1_subsetted__Band1__resized-1', 
+    'variables': ['djNEON_00101_17095_012_170910_L090_CX_01_pauli_Band1_subsetted__Band1__subsetted_band_1', 
                   'NA', 'NA', 'NA', 'NA', 'NA', 'NA'],
     'xy_size':[1800, 7200]
     },
@@ -40,7 +40,7 @@ def uavsar_info():
     'gcs_epsg': '4326',
     'subset': [63.75, 64.1, -146.07, -145.8],
     'bands': 1,
-    'variables': ['djNEON_00101_17095_012_170910_L090_CX_01_pauli_Band2_subsetted__Band2__resized-1',
+    'variables': ['djNEON_00101_17095_012_170910_L090_CX_01_pauli_Band2_subsetted__Band2__subsetted_band_1',
                   'NA', 'NA', 'NA', 'NA', 'NA', 'NA'],
     'xy_size':[2430, 6300]
     },
@@ -62,7 +62,7 @@ def uavsar_info():
     'gcs_epsg': '4326',
     'subset': [63.85, 64.15, -145.9, -145.8],
     'bands': 1,
-    'variables': ['djNEON_00101_17095_012_170910_L090_CX_01_pauli_Band3_subsetted__Band3__resized-1',
+    'variables': ['djNEON_00101_17095_012_170910_L090_CX_01_pauli_Band3_subsetted__Band3__subsetted_band_1',
                   'NA', 'NA', 'NA', 'NA', 'NA', 'NA'],
     'xy_size':[900, 5400]
     },
@@ -84,8 +84,8 @@ def uavsar_info():
     'gcs_epsg': '4326',
     'subset': [40.05, 40.06, -123.39, -123.34],
     'bands': 2,
-    'variables': ['eelriv_06508_16103_002_161206_L090_CX_02_pauli_subsetted__Band1__resized-1',
-                  'eelriv_06508_16103_002_161206_L090_CX_02_pauli_subsetted__Band2__resized-1',
+    'variables': ['eelriv_06508_16103_002_161206_L090_CX_02_pauli_subsetted__Band1__subsetted_band_1',
+                  'eelriv_06508_16103_002_161206_L090_CX_02_pauli_subsetted__Band2__subsetted_band_1',
                   'NA', 'NA', 'NA', 'NA', 'NA'],
     'xy_size':[900, 180]
     },
@@ -107,9 +107,9 @@ def uavsar_info():
     'gcs_epsg': '4326',
     'subset': [39.95, 40.0, -123.69, -123.59],
     'bands': 3,
-    'variables': ['eelriv_06508_16103_002_161206_L090_CX_02_pauli_subsetted__all__resized-1',
-                  'eelriv_06508_16103_002_161206_L090_CX_02_pauli_subsetted__all__resized-2',
-                  'eelriv_06508_16103_002_161206_L090_CX_02_pauli_subsetted__all__resized-3',
+    'variables': ['eelriv_06508_16103_002_161206_L090_CX_02_pauli_subsetted__all__subsetted_band_1',
+                  'eelriv_06508_16103_002_161206_L090_CX_02_pauli_subsetted__all__subsetted_band_2',
+                  'eelriv_06508_16103_002_161206_L090_CX_02_pauli_subsetted__all__subsetted_band_3',
                   'NA', 'NA', 'NA', 'NA'],
     'xy_size':[1800, 900]
     },
@@ -131,13 +131,13 @@ def uavsar_info():
     'gcs_epsg': '4326',
     'subset': [-.03, 0.09, 11.57, 11.6],
     'bands': 3,
-    'variables': ['eighty_14047_16008_006_160225_L090_CX_01_pauli_subsetted__all__resized-1',
-                  'eighty_14047_16008_006_160225_L090_CX_01_pauli_subsetted__all__resized-2',
-                  'eighty_14047_16008_006_160225_L090_CX_01_pauli_subsetted__all__resized-3',
+    'variables': ['eighty_14047_16008_006_160225_L090_CX_01_pauli_subsetted__all__subsetted_band_1',
+                  'eighty_14047_16008_006_160225_L090_CX_01_pauli_subsetted__all__subsetted_band_2',
+                  'eighty_14047_16008_006_160225_L090_CX_01_pauli_subsetted__all__subsetted_band_3',
                   'NA', 'NA', 'NA', 'NA'],
     'xy_size':[540, 2232]
     },
-    # Query 7
+     # Query 7
     {
     'q_num':'7',
     'reference_image':'uavsar_query7_reference.tiff',
@@ -155,9 +155,9 @@ def uavsar_info():
     'gcs_epsg': '4326',
     'subset': [61.57, 61.76, -138.36, -137.85],
     'bands': 3,
-    'variables': ['kluane_01902_17064_005_170615_L090_CX_01_pauli_subsetted__all__resized-1',
-                  'kluane_01902_17064_005_170615_L090_CX_01_pauli_subsetted__all__resized-2',
-                  'kluane_01902_17064_005_170615_L090_CX_01_pauli_subsetted__all__resized-3',
+    'variables': ['kluane_01902_17064_005_170615_L090_CX_01_pauli_subsetted__all__subsetted_band_1',
+                  'kluane_01902_17064_005_170615_L090_CX_01_pauli_subsetted__all__subsetted_band_2',
+                  'kluane_01902_17064_005_170615_L090_CX_01_pauli_subsetted__all__subsetted_band_3',
                   'NA', 'NA', 'NA', 'NA'],
     'xy_size':[4514, 3477]
     },
@@ -179,7 +179,7 @@ def uavsar_info():
     'gcs_epsg': '4326',
     'subset': [-40.02, -39.9, -72.17, -71.98],
     'bands': 1,
-    'variables': ['ChiVol_00700_15030_010_150330_L090_CX_01_pauli_Band2_subsetted__Band2__resized-1',
+    'variables': ['ChiVol_00700_15030_010_150330_L090_CX_01_pauli_Band2_subsetted__Band2__subsetted_band_1',
                   'NA', 'NA', 'NA', 'NA', 'NA', 'NA'],
     'xy_size':[3364, 2159]
     },
@@ -201,9 +201,9 @@ def uavsar_info():
     'gcs_epsg': '4326',
     'subset': [28.9, 29.0, -89.1, -88.9],
     'bands': 3,
-    'variables': ['gulfco_27086_16101_004_161117_L090_CX_01_pauli_subsetted__all__resized-1',
-                  'gulfco_27086_16101_004_161117_L090_CX_01_pauli_subsetted__all__resized-2',
-                  'gulfco_27086_16101_004_161117_L090_CX_01_pauli_subsetted__all__resized-3',
+    'variables': ['gulfco_27086_16101_004_161117_L090_CX_01_pauli_subsetted__all__subsetted_band_1',
+                  'gulfco_27086_16101_004_161117_L090_CX_01_pauli_subsetted__all__subsetted_band_2',
+                  'gulfco_27086_16101_004_161117_L090_CX_01_pauli_subsetted__all__subsetted_band_3',
                   'NA', 'NA', 'NA', 'NA'],
     'xy_size':[3600, 1800]
     },

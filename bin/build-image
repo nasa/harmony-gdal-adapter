@@ -5,16 +5,4 @@ set -e
 image="asfdataservices/gdal-subsetter"
 tag=${1:-latest}
 
-for dep in harmony-service-lib-py; do
-  if [ -d "../$dep" ]; then
-    rm -rf deps/$dep
-    mkdir -p deps
-    cp -R ../$dep deps/
-    rm -rf deps/$dep/.git
-    (cd deps/$dep && make clean)
-  else
-    [ ! -d "deps/$dep" ] && git clone https://git.earthdata.nasa.gov/scm/harmony/$dep.git deps/$dep && rm -rf ../deps/harmony-service-lib-py/.git
-  fi
-done
-
 docker build -t ${image}:${tag} .

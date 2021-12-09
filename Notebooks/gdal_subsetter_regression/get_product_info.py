@@ -1,7 +1,9 @@
 def get_product_info(collection, infile):
     from osgeo import gdal, osr
     from pyproj import Transformer
-    ds = gdal.Open(infile)
+    ds = gdal.Open(infile, gdal.GA_ReadOnly)
+    if not ds:
+        raise Exception("Unable to read the data file")
     proj = osr.SpatialReference(wkt=ds.GetProjection())
     width = ds.RasterXSize
     height = ds.RasterYSize
@@ -45,8 +47,8 @@ def get_product_info(collection, infile):
             if "NETCDF" in item:
                 var_list[var_count] = item.strip().partition("=")[2]
                 var_count += 1
-    # UAVSAR and AVNIR
-    elif collection == 'uavsar' or collection == 'avnir' or collection == 'alos_rt2' or collection == 'alos_rt2':
+    # UAVSAR ALOS PALSAR and AVNIR
+    elif collection == 'uavsar' or collection == 'avnir' or collection == 'alos_rt2' or collection == 'alos_rt2' or collection=='alos_l22':
         for item in gdi.split("\n"):
             if "Description" in item:
                 var_list[var_count] = item.strip().partition("= ")[2]
