@@ -1,0 +1,42 @@
+name: Run Python unit tests
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+jobs:
+  build_and_test:
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ 3.8 ]
+
+    steps:
+      - name: Checkout harmony-gdal-adapter repository
+        uses: actions/checkout@v2
+        with:
+          lfs: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Build test image
+        run: ./bin/build-test
+
+      - name: Run test image
+        run: ./bin/run-test
+
+      - name: Archive test results
+        uses: actions/upload-artifact@v2
+        with:
+          name: Test results for Python ${{ matrix.python-version }}
+          path: test-reports/
+
+      - name: Archive coverage report
+        uses: actions/upload-artifact@v2
+        with:
+          name: Coverage report for Python ${{ matrix.python-version }}
+          path: coverage/*

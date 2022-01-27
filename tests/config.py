@@ -1,18 +1,18 @@
+from datetime import datetime
+from os.path import abspath, dirname, join as join_path
 import json
-import os
 import sys
 import pystac
-from datetime import datetime
 
-sys.path.append(os.path.dirname(
-    os.path.abspath(__file__)) + '/../gdal_subsetter/'
-                )
-from transform import HarmonyAdapter
-
-import harmony
 from harmony.message import Message
 from harmony.logging import setup_stdout_log_formatting
-from harmony.util import (CanceledException, config, create_decrypter)
+from harmony.util import config, Config, create_decrypter
+from osgeo import gdal
+from osgeo.osr import SpatialReference
+
+sys.path.append(dirname(abspath(__file__)) + '/../gdal_subsetter/')
+from transform import HarmonyAdapter
+
 
 
 class UnittestAdapter(HarmonyAdapter):
@@ -34,6 +34,16 @@ class UnittestAdapter(HarmonyAdapter):
 
 class UnittestAdapterNoDownload(HarmonyAdapter):
     def __init__(self, message_string):
+        self.granules_directory = join_path(dirname(abspath(__file__)),
+                                            'data', 'granules')
+
+        self.granules = {
+            'ALAV2A104483330': f'file://{self.granules_directory}/anvir2/ALAV2A104483330-OORIRFU.zip',
+            'S1-GUNW-D-R-083-tops-20141116_20141023-095646-360325S_38126S-PP-24b3-v2_0_2': f'file://{self.granules_directory}/gfrn/S1-GUNW-D-R-083-tops-20141116_20141023-095646-360325S_38126S-PP-24b3-v2_0_2.nc',
+            'UA_gulfco_32010_09045_001_090617_L090_CX_01-PAULI': f'file://{self.granules_directory}/uavsar/gulfco_32010_09045_001_090617_L090_CX_01_pauli.tif',
+            '20211017090000-JPL-L4_GHRSST-SSTfnd-MUR-GLOB-v02.0-fv04.1': f'file://{self.granules_directory}/mur/20211017090000-JPL-L4_GHRSST-SSTfnd-MUR-GLOB-v02.0-fv04.1.nc',
+        }
+
         cfg = UnittestAdapterNoDownload.config_fixture()
         setup_stdout_log_formatting(cfg)
         message_data = json.loads(message_string)
@@ -43,20 +53,13 @@ class UnittestAdapterNoDownload(HarmonyAdapter):
         item = pystac.Item('1', {}, [0, 0, 1, 1], datetime(2020, 1, 1, 0, 0, 0), {})
         catalog.add_item(item)
         granule = message.granules[0]
-        if granule.name == 'ALAV2A104483330':
-            granule.local_filename = 'file://./data/granules/anvir2/ALAV2A104483330-OORIRFU.zip'
-            item.add_asset('data', pystac.Asset(granule.local_filename, roles=['data']))
-        elif granule.name == 'S1-GUNW-D-R-083-tops-20141116_20141023-095646-360325S_38126S-PP-24b3-v2_0_2':
-            granule.local_filename = 'file://./data/granules/gfrn/S1-GUNW-D-R-083-tops-20141116_20141023-095646-360325S_38126S-PP-24b3-v2_0_2.nc'
-            item.add_asset('data', pystac.Asset(granule.local_filename, roles=['data']))
-        elif granule.name == 'UA_gulfco_32010_09045_001_090617_L090_CX_01-PAULI':
-            granule.local_filename = 'file://./data/granules/uavsar/gulfco_32010_09045_001_090617_L090_CX_01_pauli.tif'
-            item.add_asset('data', pystac.Asset(granule.local_filename, roles=['data']))
-        elif granule.name == '20211017090000-JPL-L4_GHRSST-SSTfnd-MUR-GLOB-v02.0-fv04.1':
-            granule.local_filename = 'file://./data/granules/mur/20211017090000-JPL-L4_GHRSST-SSTfnd-MUR-GLOB-v02.0-fv04.1.nc'
-            item.add_asset('data', pystac.Asset(granule.local_filename, roles=['data']))
+        granule.local_filename = self.granules.get(granule.name)
+
+        if granule.local_filename is not None:
+            item.add_asset('data', pystac.Asset(granule.local_filename,
+                                                roles=['data']))
         else:
-            assert False, f'Unkown granule {granule.name}, add new case to UnittestAdapterNoDownload'
+            assert False, f'Unknown granule {granule.name}, add new case to UnittestAdapterNoDownload'
 
         self.adapter = HarmonyAdapter(message, catalog=catalog, config=cfg)
         self.adapter.get_version = lambda: "unittest" \
@@ -77,8 +80,8 @@ class UnittestAdapterNoDownload(HarmonyAdapter):
                        oauth_client_id=None,
                        user_agent=None,
                        app_name=None):
-        c = harmony.util.config(validate=False)
-        return harmony.util.Config(
+        c = config(validate=False)
+        return Config(
             # Override
             fallback_authn_enabled=fallback_authn_enabled,
             edl_username=edl_username,
@@ -106,17 +109,14 @@ class UnittestAdapterNoDownload(HarmonyAdapter):
 
 
 def get_file_info(infile):
-    from osgeo import gdal
-    import osr
     ds = gdal.Open(infile)
     proj_wkt = ds.GetProjection()
-    proj = osr.SpatialReference(wkt=proj_wkt)
+    proj = SpatialReference(wkt=proj_wkt)
     gcs = proj.GetAttrValue('GEOGCS', 0)
     authority = proj.GetAttrValue('AUTHORITY', 0)
     epsg = proj.GetAttrValue('AUTHORITY', 1)
     width = ds.RasterXSize
     height = ds.RasterYSize
-    xy_size = [width, height]
     bands = ds.RasterCount
     meta = ds.GetMetadata()
     gt = ds.GetGeoTransform()
@@ -127,20 +127,18 @@ def get_file_info(infile):
     extent = [miny, maxy, minx, maxx]
     ds = None
 
-    return {
-        'proj_wkt': proj_wkt,
-        'gcs': gcs,
-        'authority': authority,
-        'epsg': epsg,
-        'width': width,
-        'height': height,
-        'xy_size': [width, height],
-        'bands': bands,
-        'meta': meta,
-        'gt': gt,
-        'minx': minx,
-        'miny': miny,
-        'maxx': maxx,
-        'maxy': maxy,
-        'extent': extent
-    }
+    return {'proj_wkt': proj_wkt,
+            'gcs': gcs,
+            'authority': authority,
+            'epsg': epsg,
+            'width': width,
+            'height': height,
+            'xy_size': [width, height],
+            'bands': bands,
+            'meta': meta,
+            'gt': gt,
+            'minx': minx,
+            'miny': miny,
+            'maxx': maxx,
+            'maxy': maxy,
+            'extent': extent}
