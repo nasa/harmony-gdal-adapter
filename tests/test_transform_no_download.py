@@ -13,32 +13,44 @@ Returns:
 None
 
 """
-import unittest.mock
+from os.path import abspath, dirname, join as join_path
 from pathlib import Path
+import unittest.mock
 
 import pytest
 
-from config import UnittestAdapterNoDownload, get_file_info
+from tests.config import UnittestAdapterNoDownload, get_file_info
 
 
-@pytest.fixture()
-def output_dir():
-    return 'data/results'
+@pytest.fixture
+def data_dir():
+    """ A test fixture pointing at the directory containing test data. """
+    return join_path(dirname(abspath(__file__)), 'data')
 
 
-@pytest.fixture()
-def message_files():
-    message_path = './data/messages/prod'
+@pytest.fixture
+def output_dir(data_dir):
+    """ A test fixture pointing to an output directory for test restults. """
+    return join_path(data_dir, 'results')
 
-    return list(Path(message_path).rglob("*.msg"))
+
+@pytest.fixture
+def messages_dir(data_dir):
+    """ A test fixture pointing to a directory containing Harmony messages. """
+    return join_path(data_dir, 'messages/prod')
+
+@pytest.fixture
+def message_files(messages_dir):
+    """ A test fixture returning a list of Harmony message files. """
+    return list(Path(messages_dir).rglob("*.msg"))
 
 
-@pytest.fixture()
+@pytest.fixture
 def adapters(message_files):
     unittest_adapters = []
 
     for message_file in message_files:
-        with open(message_file) as msg_file:
+        with open(message_file, 'r') as msg_file:
             messagestr = msg_file.read().rstrip()
 
         unittest_adapters.append(UnittestAdapterNoDownload(messagestr))
@@ -47,21 +59,29 @@ def adapters(message_files):
 
 
 @unittest.mock.patch('harmony.aws.stage')
-def test_message(stage, adapters, output_dir):
+def test_message(stage, adapters, output_dir, message_files):
     # Instead of staging to aws, just return the local filename
     stage.side_effect = lambda config, local_filename, remote_filename, mime, logger, location=None: local_filename
 
-    for unittest_adapter in adapters:
-        subsetter(unittest_adapter)
-        subset_result(unittest_adapter, output_dir)
+    for adapter_index, unittest_adapter in enumerate(adapters):
+        # Omit MUR test, as it takes too long
+        print(message_files[adapter_index].name)
+        if not message_files[adapter_index].name.endswith('G2145874703-POCLOUD.msg'):
+            print('Running test')
+            subsetter(unittest_adapter)
+            subset_result(unittest_adapter, output_dir)
 
 
+@pytest.mark.skip(reason='MUR tests currently take too long')
 @unittest.mock.patch('harmony.aws.stage')
-def test_world_file_in_output(stage, output_dir):
+def test_world_file_in_output(stage, output_dir, messages_dir):
     # Instead of staging to aws, just return the local filename
     stage.side_effect = lambda config, local_filename, remote_filename, mime, logger, location=None: local_filename
 
-    adapter = UnittestAdapterNoDownload(open('./data/messages/prod/mur/G2145874703-POCLOUD.msg').read().rstrip())
+    with open(join_path(messages_dir, 'mur/G2145874703-POCLOUD.msg')) as file_handler:
+        message = file_handler.read().rstrip()
+
+    adapter = UnittestAdapterNoDownload(message)
 
     result = subsetter(adapter)
 

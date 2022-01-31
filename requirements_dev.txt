@@ -1,8 +1,4 @@
+pylint~=2.12.2
 pytest==6.1.2
 python-dotenv
 pytest-cov
-
-
-
-
-

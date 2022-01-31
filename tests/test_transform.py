@@ -14,31 +14,28 @@ Returns:
 None
 
 """
-import argparse
-import pytest
-import os
 from pathlib import Path
-import sys
-from harmony.util import stage, bbox_to_geometry, download, generate_output_filename
-from config import UnittestAdapter, get_file_info
-from dotenv import load_dotenv
+import os
+import pytest
 
-load_dotenv()
+from harmony.util import download
+
+from tests.config import UnittestAdapter, get_file_info
 
 
-@pytest.fixture()
+@pytest.fixture
 def output_dir():
     return 'data/results'
 
 
-@pytest.fixture()
+@pytest.fixture
 def message_files():
     message_path = './data/messages/prod'
 
     return list(Path(message_path).rglob("*.msg"))
 
 
-@pytest.fixture()
+@pytest.fixture
 def adapters(message_files):
     unittest_adapters = []
 
@@ -100,11 +97,9 @@ def subsetter(unittest_adapter, output_dir):
     basename = os.path.basename(input_filename)
     layernames = []
 
-    operations = dict(
-        is_variable_subset=True,
-        is_regridded=bool(message.format.crs),
-        is_subsetted=bool(message.subset and message.subset.bbox)
-    )
+    operations = {'is_variable_subset': True,
+                  'is_regridded': bool(message.format.crs),
+                  'is_subsetted': bool(message.subset and message.subset.bbox)}
 
     result = None
     file_type = adapter.get_filetype(input_filename)
