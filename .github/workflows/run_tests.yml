@@ -1,9 +1,9 @@
 name: Run Python unit tests
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches: [ DAS-1383 ]
+#  pull_request:
+#    branches: [ main ]
 jobs:
   build_and_test:
     runs-on: ubuntu-20.04
