@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [ 3.7, 3.8 ]
+        python-version: [ 3.8 ]
 
     steps:
       - name: Checkout harmony-gdal-adapter repository
@@ -21,8 +21,7 @@ jobs:
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
         with:
-          python-version: ${{ matrix.python-version }}
-          architecture: x64
+          python-version: ${{ matrix.python-version }
 
       - name: Build test image
         run: ./bin/build-test
@@ -42,9 +41,14 @@ jobs:
           name: Coverage report for Python ${{ matrix.python-version }}
           path: coverage/*
 
+  security:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@master
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/node@v2
+        uses: snyk/actions/python-3.8@DAS-1383
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          command: test
+          with:
+            command: test
+
