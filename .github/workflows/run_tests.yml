@@ -41,13 +41,10 @@ jobs:
         with:
           name: Coverage report for Python ${{ matrix.python-version }}
           path: coverage/*
-security:
-  runs-on: ubuntu-20.04
-  steps:
-    - uses: actions/checkout@v2
-    - name: Run Snyk to check for vulnerabilities
-      uses: snyk/actions/node@v2
-      env:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      with:
-        command: test
+
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/node@v2
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: test
