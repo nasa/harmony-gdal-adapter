@@ -26,5 +26,5 @@ RUN pip install -r requirements.txt
 # Copy service code into image
 COPY gdal_subsetter gdal_subsetter
 
-# Set entrypoint to run test script.
-ENTRYPOINT ["/home/tests/run_tests.sh"]
+# Set entrypoint to invoke service
+ENTRYPOINT ["python3", "-m", "gdal_subsetter"]
