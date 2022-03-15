@@ -1,6 +1,6 @@
 #!/bin/bash
 
-image="harmonyservices/harmony-gdal-adapter-test"
+image="nasa/harmony-gdal-adapter-test"
 tag=${1:-latest}
 
 
