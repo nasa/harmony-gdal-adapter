@@ -2,7 +2,7 @@
 
 set -e
 
-image="asfdataservices/gdal-subsetter"
+image="nasa/harmony-gdal-adapter"
 tag=${1:-latest}
 
 docker build -t ${image}:${tag} .

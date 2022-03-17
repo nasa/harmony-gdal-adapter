@@ -12,5 +12,7 @@ pip3 install ../harmony-service-lib-py/ --target deps/harmony
 ## Build image
 bin/build-image
 
-## Deploy image
-bin/push-image
+## To run tests
+bin/build-test
+
+bin/run-test

@@ -26,4 +26,4 @@ mkdir -p coverage
 docker run --rm \
 	-v $(pwd)/test-reports:/home/tests/reports \
 	-v $(pwd)/coverage:/home/tests/coverage \
-	harmonyservices/harmony-gdal-adapter-test "$@"
+	nasa/harmony-gdal-adapter-test "$@"
