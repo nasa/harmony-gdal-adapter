@@ -26,5 +26,8 @@ RUN pip install -r requirements.txt
 # Copy service code into image
 COPY gdal_subsetter gdal_subsetter
 
+# Copy version file into image - for use in logging
+COPY version.txt .
+
 # Set entrypoint to invoke service
 ENTRYPOINT ["python3", "-m", "gdal_subsetter"]

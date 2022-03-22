@@ -5,4 +5,4 @@ set -e
 image="nasa/harmony-gdal-adapter"
 tag=${1:-latest}
 
-docker build -t ${image}:${tag} .
+docker build -t ${image}:${tag} -f docker/service.Dockerfile .

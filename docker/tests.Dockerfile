@@ -25,6 +25,9 @@ RUN pip install -r requirements.txt -r requirements_dev.txt
 # Copy service code into image
 COPY gdal_subsetter gdal_subsetter
 
+# Copy version file into image - for use in logging
+COPY version.txt .
+
 # Copy test directory into image
 COPY tests tests
 
