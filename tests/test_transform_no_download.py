@@ -19,6 +19,7 @@ import unittest.mock
 
 import pytest
 
+from gdal_subsetter.utilities import get_file_type
 from tests.config import UnittestAdapterNoDownload, get_file_info
 
 
@@ -129,19 +130,20 @@ def subset_result(unittest_adapter, output_dir):
         variables = None
 
     # compare output file if it is geotiff
-    if adapter.get_filetype(unittest_adapter.subsetted_file) != "tif":
+    downloaded_file_type = get_file_type(unittest_adapter.downloaded_file)
+    subsetted_file_type = get_file_type(unittest_adapter.subsetted_file)
+
+    if subsetted_file_type != 'tif':
         assert True
         return
 
-    downloaded_file = unittest_adapter.downloaded_file
-    subsetted_file = unittest_adapter.subsetted_file
-    file_type = adapter.get_filetype(downloaded_file)
-
-    if file_type == 'zip':
-        [tiffile, ncfile] = adapter.pack_zipfile(downloaded_file, output_dir)
+    if downloaded_file_type == 'zip':
+        [tiffile, ncfile] = adapter.pack_zipfile(
+            unittest_adapter.downloaded_file, output_dir
+        )
 
         if tiffile:
-            compare_files(message, tiffile, subsetted_file)
+            compare_files(message, tiffile, unittest_adapter.subsetted_file)
 
         if ncfile:
             for variable in variables:
@@ -156,9 +158,10 @@ def subset_result(unittest_adapter, output_dir):
 
                 layer_id = granule.id + '__' + variable.name
                 tifffile = adapter.nc2tiff(layer_id, filename, output_dir)
-                compare_files(message, tifffile, subsetted_file)
+                compare_files(message, tifffile,
+                              unittest_adapter.subsetted_file)
 
-    elif file_type == "nc":
+    elif downloaded_file_type == 'nc':
         for variable in variables:
             layer_format = adapter.read_layer_format(
                 granule.collection,
@@ -171,12 +174,13 @@ def subset_result(unittest_adapter, output_dir):
 
             layer_id = granule.id + '__' + variable.name
             tifffile = adapter.nc2tiff(layer_id, filename, output_dir)
-            compare_files(message, tifffile, subsetted_file)
+            compare_files(message, tifffile, unittest_adapter.subsetted_file)
 
-    elif file_type == "tif":
-        compare_files(message, downloaded_file, subsetted_file)
+    elif downloaded_file_type == 'tif':
+        compare_files(message, unittest_adapter.downloaded_file,
+                      unittest_adapter.subsetted_file)
     else:
-        assert False
+        assert False, 'Unexpected download type'
 
 
 def compare_files(message, downloaded_file, subsetted_file):

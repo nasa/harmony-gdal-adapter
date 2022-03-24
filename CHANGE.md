@@ -1,3 +1,8 @@
+[version 1.1.1] 2022-03-23
+Input files with `.nc4` extensions are now recognised as NetCDF-4 files. An
+exception is raised for unknown input file formats. Download error messages are
+propagated more transparently to the end-user in cases of failure.
+
 [version 1.1.0] 2021-12-09
 New functionality added for being able to produce PNG output from NetCDF input
 
