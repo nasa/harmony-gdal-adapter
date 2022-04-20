@@ -1,18 +1,25 @@
-# harmony-gdal
+# harmony-gdal-adapter
 
 ![](https://data-services-github-badges.s3.amazonaws.com/cov.svg?dummy=true)
 
-<img src="https://data-services-github-badges.s3.amazonaws.com/cov.svg?dummy=hello" />
+A demonstration of a subsetter capability to be used with Harmomy.
 
-A demonstration of a subsetter capability to be used with Harmomy. Deployed on [dockerhub](https://hub.docker.com/repository/docker/asfdataservices/gdal-subsetter/general)
+Deployed on [ghcr.io](https://github.com/nasa/harmony-gdal-adapter/pkgs/container/harmony-gdal-adapter) GitHub's Container registry.
 
-## Installing dependencies - make sure to clone harmony-service-lib-py locally
-pip3 install ../harmony-service-lib-py/ --target deps/harmony
 
 ## Build image
 bin/build-image
 
-## To run tests
+## Build Tests
 bin/build-test
 
+## Run Tests
 bin/run-test
+
+## Developing
+
+Make sure to clone `harmony-service-lib-py` locally
+
+```bash
+pip3 install ../harmony-service-lib-py/ --target deps/harmony
+```
