@@ -92,7 +92,7 @@ class ObjectView(object):
 
 class HarmonyAdapter(BaseHarmonyAdapter):
     """
-    See https://git.earthdata.nasa.gov/projects/HARMONY/repos/harmony-service-lib-py/browse
+    See https://github.com/nasa/harmony-service-lib-py
     for documentation and examples.
     """
 
