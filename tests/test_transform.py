@@ -57,11 +57,12 @@ def test_message(adapters, output_dir):
 
 def download_file(unittest_adapter, output_dir):
     """
-    This function test if the file pointed by url is downloaded successfully
-    to the local space. The url is in the message, which is an attribute in
-    the object adapter. This object is created with message file as a global
-    object before this function is called. At the last of this function,
-    use assert to check if the file is downloaded.
+    This function tests that the file pointed to by url is downloaded
+    successfully to the local space. The url is in the message, which is an
+    attribute in the object adapter. This object is created with message file
+    as a global object before this function is called. At the last of this
+    function, use assert to check if the file is downloaded.
+
     """
     adapter = unittest_adapter.adapter
     message = adapter.message
