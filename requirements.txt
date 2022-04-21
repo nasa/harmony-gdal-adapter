@@ -9,11 +9,12 @@ geopandas==0.9.0
 harmony-service-lib==1.0.12
 munch==2.5.0
 netCDF4==1.5.5.1
-pandas==1.1.2
+pandas==1.4.2
+numpy==1.22.3
 pyproj==3.1.0
 pystac ~= 0.5.3
 pytz==2020.1
 PyCRS==1.0.2
-rasterio==1.1.5
+rasterio==1.2.10
 Shapely==1.7.1
 snuggs==1.4.7
