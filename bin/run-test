@@ -12,9 +12,6 @@
 
 set -ex
 
-# Remove cached bytecode Python files, to ensure latest code is used
-find . | grep -E "(__pycache__|\.pyc|\.pyo$)" | xargs rm -rf
-
 # Make the directory into which XML format test reports will be saved
 mkdir -p test-reports
 
@@ -26,4 +23,4 @@ mkdir -p coverage
 docker run --rm \
 	-v $(pwd)/test-reports:/home/tests/reports \
 	-v $(pwd)/coverage:/home/tests/coverage \
-	nasa/harmony-gdal-adapter-test "$@"
+	nasa/harmony-gdal-adapter-test
