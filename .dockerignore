@@ -4,3 +4,6 @@ example
 spec
 **/*.log
 **/tmp
+
+**/__pycache__
+**/*.py[co]

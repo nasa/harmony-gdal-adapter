@@ -2,6 +2,10 @@
 
 set -e
 
+# Remove cached bytecode Python files, to ensure latest code is used
+find . | grep -E "(__pycache__|\.pyc|\.pyo$)" | xargs rm -rf
+
+
 image="ghcr.io/nasa/harmony-gdal-adapter"
 tag=${1:-latest}
 
