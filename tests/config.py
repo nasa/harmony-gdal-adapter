@@ -26,7 +26,7 @@ class UnittestAdapter(HarmonyAdapter):
         self.adapter.set_config(cfg)
 
         self.downloaded_file = None
-        self.downloaded_succes = False
+        self.downloaded_success = False
         self.subsetted_file = None
         self.subsetted_success = False
         self.var_basename = None
@@ -62,10 +62,9 @@ class UnittestAdapterNoDownload(HarmonyAdapter):
             assert False, f'Unknown granule {granule.name}, add new case to UnittestAdapterNoDownload'
 
         self.adapter = HarmonyAdapter(message, catalog=catalog, config=cfg)
-        self.adapter.get_version = lambda: "unittest" \
-                                           ""
+        self.adapter.get_version = lambda: "unittest"
         self.downloaded_file = None
-        self.downloaded_succes = False
+        self.downloaded_success = False
         self.subsetted_file = None
         self.subsetted_success = False
         self.var_basename = None
