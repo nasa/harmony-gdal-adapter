@@ -74,7 +74,7 @@ class TestEndToEnd(TestCase):
 
         stac_catalog = Catalog('input catalog', 'description')
         stac_item = Item('input', {}, [0, 0, 1, 1], datetime(2020, 1, 1), {})
-        stac_item.add_asset('data', Asset('url.com/file.xyx', roles=['data']))
+        stac_item.add_asset('data', Asset('url.com/file.xyz', roles=['data']))
         stac_catalog.add_item(stac_item)
 
         harmony_message = Message({'accessToken': 'fake-token',
