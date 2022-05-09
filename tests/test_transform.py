@@ -1,6 +1,6 @@
 """
 Description:
-This script does units test for transform.py. It includes three tests:
+This script does unit tests for transform.py. It includes three tests:
 test if download is success, if subset is success, and if subsetted file
 agrees with downloaded file. This script limits to test the message
 with the first variable and the first granule and the tiff format output.

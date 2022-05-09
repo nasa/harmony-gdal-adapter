@@ -1,3 +1,7 @@
+[version 1.1.3] 2022-05-09
+
+* Renames some code variables and functions, there should be no changes to the functionality of the service.
+
 [version 1.1.2] 2022-04-21
 * Updates service library dependencies.
 
