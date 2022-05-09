@@ -1,7 +1,5 @@
 """ CLI for adapting a Harmony operation to GDAL
 
-If you have harmony in a peer folder with this repo, then you can run the following for an example
-python3 -m gdal_subsetter --harmony-action invoke --harmony-input "$(cat ../harmony/example/service-operation.json)"
 """
 from argparse import ArgumentParser
 from datetime import datetime
