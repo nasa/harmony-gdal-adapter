@@ -1,7 +1,5 @@
 """ CLI for adapting a Harmony operation to GDAL
 
-If you have harmony in a peer folder with this repo, then you can run the following for an example
-python3 -m harmony_gdal --harmony-action invoke --harmony-input "$(cat ../harmony/example/service-operation.json)"
 """
 from argparse import ArgumentParser
 from datetime import datetime
@@ -321,7 +319,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         variableslist =[item.name for item in variables]
 
-        [is_tif, tiffile, msg_tif, is_nc, ncfile, msg_nc] = self.pack_zipfile(input_filename, output_dir, variableslist)
+        [is_tif, tiffile, msg_tif, is_nc, ncfile, msg_nc] = self.unpack_zipfile(input_filename, output_dir, variableslist)
 
         if is_tif:
             if tiffile:
@@ -400,7 +398,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
     def cmd3(self, *args):
         '''
-        This is used to execuate cli commands without output login info.
+        This is used to execute cli commands without output login info.
         '''
         result_str = check_output(args).decode("utf-8")
         return result_str.split("\n")
@@ -1047,7 +1045,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return stackable
 
 
-    def pack_zipfile(self, zipfilename, output_dir, variables=None):
+    def unpack_zipfile(self, zipfilename, output_dir, variables=None):
         '''
         inputs:zipfilename, output_dir, variables which is the list of variable names.
         '''
@@ -1055,7 +1053,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             zip_ref.extractall(output_dir+'/unzip')
 
         tmptif = None
-        filelist_tif = self.get_file_from_unzipfiles(f'{output_dir}/unzip', 'tif', variables)
+        filelist_tif = self.get_files_from_unzipfiles(f'{output_dir}/unzip', 'tif', variables)
         is_tif = bool(filelist_tif)
         if filelist_tif:
             if self.checkstackable(filelist_tif):
@@ -1068,7 +1066,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             msg_tif ="no available data for the variables in the granule, not process."
 
         tmpnc = None
-        filelist_nc = self.get_file_from_unzipfiles(f'{output_dir}/unzip', 'nc')
+        filelist_nc = self.get_files_from_unzipfiles(f'{output_dir}/unzip', 'nc')
         is_nc = bool(filelist_nc)
         if filelist_nc:
             tmpnc = filelist_nc
@@ -1078,7 +1076,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return is_tif, tmptif, msg_tif, is_nc, tmpnc, msg_nc
 
-    def get_file_from_unzipfiles(self, extract_dir, filetype, variables=None):
+    def get_files_from_unzipfiles(self, extract_dir, filetype, variables=None):
         '''
         inputs: extract_dir which include geotiff files, filetype is
         either 'tif' or 'nc', variables is the list of variable names.

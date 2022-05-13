@@ -6,24 +6,31 @@ A Harmony (https://harmony.earthdata.nasa.gov/) backend service that transforms 
 
 The harmony-gdal-adapter is deployed to [ghcr.io](https://github.com/nasa/harmony-gdal-adapter/pkgs/container/harmony-gdal-adapter) GitHub's Container registry.
 
+The harmony-gdal-adapter is invoked by [harmony](https://github.com/nasa/harmony) when the harmony server is configured, via harmony's [service.yml](https://github.com/nasa/harmony/blob/main/config/services.yml) or by UMM-S/C associations in CMR, to handle an incoming request for the collection. You can see examples of requests that harmony dispatches to the harmony-gdal-adapter by examining the [regression test notebook for hga](https://github.com/nasa/harmony-regression-tests/blob/main/test/hga/HGA_regression.ipynb).
 
-## Run with Docker
-### Build image
+
+## Test with Docker
+
+### Build harmony-gdal-adapter image
 ```bash
 bin/build-image
 ```
+Creates the image `ghcr.io/nasa/harmony-gdal-adapter`.
 
 ### Build Tests
 ```bash
 bin/build-test
 ```
+Creates the `nasa/harmony-gdal-adapter-test` test image.
 
 ### Run Tests
 ```bash
 bin/run-test
 ```
+The `run-test` script mounts `test-reports` and `coverage` directories and run the test script `tests/run_tests.sh` inside of a docker test container.
 
-## Run Locally
+
+## Test Locally
 
 ### Create isolated environment
 
@@ -44,3 +51,4 @@ pip install -r requirements.txt -r requirements_dev.txt
 ```bash
 ./tests/run_tests.sh
 ```
+This script runs pytest on the `./tests` directory.

@@ -93,9 +93,9 @@ def test_world_file_in_output(stage, output_dir, messages_dir):
 
 def subsetter(unittest_adapter):
     """
-    This function test the subset process. It use the functions in
+    This function tests the subset process. It uses the functions in
     the global object adapter to do the subset process. At the end
-    of this function, use assert to check if the subsetted file exist.
+    of this function,  assert to check if the subsetted file exist.
     """
 
     adapter = unittest_adapter.adapter
@@ -134,6 +134,7 @@ def subset_result(unittest_adapter, output_dir):
     subsetted_file_type = get_file_type(unittest_adapter.subsetted_file)
 
     if subsetted_file_type != 'tif':
+        # this test only checks tif files everything else passes.
         assert True
         return
 
