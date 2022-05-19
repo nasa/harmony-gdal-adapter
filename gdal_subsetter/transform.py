@@ -668,23 +668,25 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def recolor(self, layerid, srcfile, dstdir):
         fmt = self.message.format
         dstfile = srcfile  # passthrough if no colormap
-        # colormap = fmt.colormap
+        colormap = None
+        variable = layerid.split('__')[1]
 
-        # Use hard coded colormaps that match layerid
-        colormaps_dir = os.path.dirname(os.path.realpath(__file__)) + '/colormaps/'
-        if 'ECCO' in srcfile:
-            colormap = colormaps_dir + 'MedspirationIndexed.txt'
-            discrete = True
-        elif 'analysed_sst' in srcfile:
-            colormap = colormaps_dir + 'GHRSST_Sea_Surface_Temperature.txt'
-            discrete = True
-        elif 'sst_anomaly' in srcfile:
-            colormap = colormaps_dir + 'GHRSST_Sea_Surface_Temperature_Anomalies.txt'
-            discrete = True
-        elif 'sea_ice_fraction' in srcfile:
-            colormap = colormaps_dir + 'GHRSST_Sea_Ice_Concentration.txt'
-            discrete = True
-        else:
+        # Find the colormap URL from relatedUrls in matching variable
+        if '__all' not in layerid:  # '__all' tells us that there are no variables
+            variables = self.message.sources[0].variables
+            for var in variables:
+                # In case of multiple variables, we need to find the one that matches the layer
+                if var.name == variable:
+                    if hasattr(var, 'relatedUrls'):
+                        # Make sure that we have relatedUrls
+                        for relatedUrl in var.relatedUrls:
+                            # Use the Color Map related URL
+                            if relatedUrl.type == 'Color Map':
+                                colormap = '/vsicurl/' + relatedUrl.url
+                                discrete = True
+        if colormap is None and ('png' in fmt.mime or 'jpeg' in fmt.mime):
+            # Use a grayscale colormap if nothing is available
+            colormaps_dir = os.path.dirname(os.path.realpath(__file__)) + '/colormaps/'
             colormap = colormaps_dir + 'Gray.txt'
             discrete = False
 
