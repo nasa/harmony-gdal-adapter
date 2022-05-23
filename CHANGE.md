@@ -1,3 +1,7 @@
+[version 1.1.4] 2022-05-20
+
+* Change to GDAL subsetter to use colormap URLs found in Harmony message instead of hard coded ones.
+
 [version 1.1.3] 2022-05-09
 
 * Renames some code variables and functions, there should be no changes to the functionality of the service.

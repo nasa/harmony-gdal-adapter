@@ -34,7 +34,16 @@
                 {
                     "fullPath": "analysed_sst",
                     "id": "V2028632042-POCLOUD",
-                    "name": "analysed_sst"
+                    "name": "analysed_sst",
+                    "relatedUrls": [{
+                        "description": "Colormap that can be used for this variable in GDAL-compatable text format.",
+                        "urlContentType": "VisualizationURL",
+                        "type": "Color Map",
+                        "subtype": "Harmony GDAL",
+                        "url": "https://gibs.earthdata.nasa.gov/colormaps/txt/GHRSST_Sea_Surface_Temperature.txt",
+                        "mimeType": "text/plain",
+                        "format": "Text File"
+                    }]
                 }
             ]
         }
