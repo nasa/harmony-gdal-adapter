@@ -666,6 +666,18 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return dstfile
 
     def recolor(self, layerid, srcfile, dstdir):
+        """
+        Applies a colormap to output image
+
+        Parameters
+        ----------
+        layerid : string
+            The layer identifier
+        srcfile : string
+            The filename of the source image
+        dstdir: string
+            The output destination directior
+        """
         fmt = self.message.format
         dstfile = srcfile  # passthrough if no colormap
         colormap = None
@@ -686,8 +698,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                                 discrete = True
         if colormap is None and ('png' in fmt.mime or 'jpeg' in fmt.mime):
             # Use a grayscale colormap if nothing is available
-            colormaps_dir = os.path.dirname(os.path.realpath(__file__)) + '/colormaps/'
-            colormap = colormaps_dir + 'Gray.txt'
+            colormap = os.path.dirname(os.path.realpath(__file__)) + '/colormaps/Gray.txt'
             discrete = False
 
         if colormap:
