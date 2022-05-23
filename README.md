@@ -1,4 +1,4 @@
-# harmony-gdal-adapter
+# harmony-gdal-adapter (HGA)
 
 ![](https://data-services-github-badges.s3.amazonaws.com/cov.svg?dummy=true)
 
@@ -52,3 +52,15 @@ pip install -r requirements.txt -r requirements_dev.txt
 ./tests/run_tests.sh
 ```
 This script runs pytest on the `./tests` directory.
+
+## Contributions:
+
+Contributions to HGA can be made via submitting a pull request to this
+repository. When doing so, it is important to make updates to `version.txt`
+and `CHANGE.md`. Every time code is merged to the `main` branch, a Docker image
+is published to [ghcr.io](https://github.com/nasa/harmony-gdal-adapter/pkgs/container/harmony-gdal-adapter). The semantic version number listed in `version.txt` must be iterated to
+avoid overwriting an existing Docker image.
+
+When writing or updating service code, please also update the existing test
+suite with unit tests to ensure the new functionality performs as expected, and
+continues to do so following subsequent development.
