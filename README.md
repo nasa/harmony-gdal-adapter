@@ -55,12 +55,49 @@ This script runs pytest on the `./tests` directory.
 
 ## Contributions:
 
-Contributions to HGA can be made via submitting a pull request to this
-repository. When doing so, it is important to make updates to `version.txt`
-and `CHANGE.md`. Every time code is merged to the `main` branch, a Docker image
-is published to [ghcr.io](https://github.com/nasa/harmony-gdal-adapter/pkgs/container/harmony-gdal-adapter). The semantic version number listed in `version.txt` must be iterated to
-avoid overwriting an existing Docker image.
+### Pull requests:
+
+Contributions to HGA can be made via submitting a pull request (PR) to this
+repository. Developers with contributor privileges to the Harmony team within
+the NASA GitHub organisation should have the ability to create a PR directly
+within this repository. Other developers will need to follow the
+[fork-and-pull model](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/getting-started/about-collaborative-development-models#fork-and-pull-model).
+
+In addition to any DAAC stakeholders, please add members of the EED Data
+Services team (currently: David Auty, Ken Cockerill, Owen Littlejohns and Matt
+Savoie) as PR reviewers. One of these developers must approve the PR before
+it is merged.
+
+NASA GitHub contributers will have the required GitHub permissions to merge
+their PRs after the peer review is complete. Please consider using the
+[squash-and-merge option](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/incorporating-changes-from-a-pull-request/about-pull-request-merges#squash-and-merge-your-pull-request-commits) when merging a PR to maintain a clean Git history.
+
+The EED Data Services team will merge approved PRs for developers without write
+access to the HGA repository.
+
+### Semantic versioning:
+
+When making changes to the HGA service code, it is important to make updates to
+`version.txt` and `CHANGE.md`. Every time code is merged to the `main` branch,
+a Docker image is published to [ghcr.io](https://github.com/nasa/harmony-gdal-adapter/pkgs/container/harmony-gdal-adapter). The semantic version number listed in `version.txt` must
+be iterated to avoid overwriting an existing Docker image.
 
 When writing or updating service code, please also update the existing test
 suite with unit tests to ensure the new functionality performs as expected, and
 continues to do so following subsequent development.
+
+## Deployment of new HGA versions:
+
+After a new Docker image has been published, it will need to be deployed as
+part of the Harmony Kubernetes cluster. The EED Data Services team will
+coordinate with Harmony to ensure HGA is updated. If there are specific
+deployment requirements, such as test data only being available in UAT or time
+constraints, please communicate these to the Data Services team.
+
+Initial deployment will be to test environments (SIT, then UAT), to allow
+changes to be tested by all DAACs that are using HGA with their data
+collections.
+
+It is possible to determine the version of HGA that is deployed to a given
+Harmony environment via the `/versions` endpoint, e.g.:
+<https://harmony.earthdata.nasa.gov/versions>.
