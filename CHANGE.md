@@ -1,3 +1,7 @@
+[version 1.1.4] 2022-06-13
+
+* Update transform.py to add a default greyscale colormap to image-type tiff. Fixes a regression introduced in 1.1.4.
+
 [version 1.1.4] 2022-05-20
 
 * Change to GDAL subsetter to use colormap URLs found in Harmony message instead of hard coded ones.
