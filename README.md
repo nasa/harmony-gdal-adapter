@@ -79,7 +79,7 @@ Basic steps for debugging are:
 
      -  requirements.txt diff:
           ```diff
-          +git+https://github.com/microsoft/debugpy.git@b4cee28d7
+          +git+https://github.com/microsoft/debugpy.git@0a9b01b0
           ```
 
 1. Edit your harmony `.env` file to use
