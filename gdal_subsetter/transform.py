@@ -696,8 +696,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                             if relatedUrl.type == 'Color Map':
                                 colormap = '/vsicurl/' + relatedUrl.url
                                 discrete = True
-        image_types = ['png', 'jpeg', 'tiff']
-        if colormap is None and any(i_type for i_type in image_types if i_type in fmt.mime):
+        colorable_mime_types = ['image/png', 'image/jpeg', 'image/tiff', 'image/tif']
+        if colormap is None and fmt.mime.lower() in colorable_mime_types:
             # Use a grayscale colormap if nothing is available
             colormap = os.path.dirname(os.path.realpath(__file__)) + '/colormaps/Gray.txt'
             discrete = False
