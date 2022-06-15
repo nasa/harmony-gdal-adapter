@@ -107,9 +107,9 @@ Basic steps for debugging are:
      ```
 
 1. Submit a harmony client command that will trigger this service.
-    - The first time after restart the harmony services, you might not have to
-     submit a command because harmony submits a fake request to prime the
-     system and that priming request should be waiting for a debugger to
+    - The first time after a restart of the harmony services, you might not
+     have to submit a command because harmony submits a fake request to prime
+     the system and that priming request should be waiting for a debugger to
      attach.
 
 1. Attach your debugger using a `launch.json` file like this one
