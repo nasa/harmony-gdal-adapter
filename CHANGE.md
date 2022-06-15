@@ -1,4 +1,4 @@
-[version 1.1.4] 2022-06-13
+[version 1.1.5] 2022-06-13
 
 * Update transform.py to add a default greyscale colormap to image-type tiff. Fixes a regression introduced in 1.1.4.
 
