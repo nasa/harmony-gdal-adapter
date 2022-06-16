@@ -18,10 +18,12 @@ class TestRecolor(TestCase):
             }]
         })
         test_adapter = HarmonyAdapter(test_message, '', None)
+
+        src_file = 'sourcefile';
         with patch.object(test_adapter, 'cmd') as mock_cmd:
-            result = test_adapter.recolor('granId__subsetted', 'srcfile',
+            result = test_adapter.recolor('granId__subsetted', src_file,
                                           'dstdir')
-            self.assertEqual(result, 'srcfile', 'file has changed')
+            self.assertEqual(result, src_file, 'file has changed')
             mock_cmd.assert_not_called()
 
     @patch('gdal_subsetter.transform.copyfile')
@@ -37,11 +39,13 @@ class TestRecolor(TestCase):
         })
         test_adapter = HarmonyAdapter(test_message, '', None)
 
-        expected_outfile = 'dstdir/granId__subsetted__colored.png'
+        layer_id = 'granId__subsetted'
+        dest_dir = 'destdir'
+        expected_outfile = f'{dest_dir}/{layer_id}__colored.png'
 
         with patch.object(test_adapter, 'cmd') as cmd_mock:
-            result = test_adapter.recolor('granId__subsetted', 'srcfile',
-                                          'dstdir')
+            result = test_adapter.recolor(layer_id, 'srcfile',
+                                          dest_dir)
             self.assertEqual(result, expected_outfile,
                              'incorrect output file generated')
             cmd_mock.assert_called_once_with('gdaldem', 'color-relief',
@@ -50,6 +54,6 @@ class TestRecolor(TestCase):
                                              expected_outfile)
 
             copyfile_mock.assert_any_call(expected_outfile,
-                                          'dstdir/result.png')
+                                          f'{dest_dir}/result.png')
             copyfile_mock.assert_any_call(
-                expected_outfile.replace('.png', '.wld'), 'dstdir/result.wld')
+                expected_outfile.replace('.png', '.wld'), f'{dest_dir}/result.wld')
