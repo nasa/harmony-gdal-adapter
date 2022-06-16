@@ -53,6 +53,90 @@ pip install -r requirements.txt -r requirements_dev.txt
 ```
 This script runs pytest on the `./tests` directory.
 
+## Debugging
+
+It is possible to debug this service for development by attaching a debugger
+that follows the
+[debugger-adapter-protocol](https://microsoft.github.io/debug-adapter-protocol/)
+to a harmony stack running in a local kubernetes cluster.  These instructions
+are for developers of this service in order to help them understand the code.
+
+Basic steps for debugging are:
+
+1. Add [debugpy](https://github.com/microsoft/debugpy) to `requirements.txt` file and reubild this image `./bin/build-image`.
+     - Generally this would just be adding a line to the end of the file that
+       says `debugpy==1.6.0` But there is a bug in that version and you need to
+       install from github directly until debugpy > 1.6 exists.  So for now,
+       you must install a specific version of `debugpy` and add `git` to the
+       service.Dockerfile
+
+     - docker/service.Dockerfile diff:
+
+         ```diff
+         -    && apt-get install -y python3-pip
+         +    && apt-get install -y python3-pip git
+         ```
+
+     -  requirements.txt diff:
+          ```diff
+          +git+https://github.com/microsoft/debugpy.git@0a9b01b0
+          ```
+
+1. Edit your harmony `.env` file to use
+ `debugpy` and relaunch harmony services
+ to enable this change.  The default invocation args are for this service are
+ `python -m gdal_subsetter` and you must change the default params to run
+ through debugpy listening on all interfaces at port 5678.
+
+    ```sh
+    HARMONY_GDAL_ADAPTER_INVOCATION_ARGS='python -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m gdal_subsetter'
+    ```
+1. Determine the name of your service pod in kubernetes, finding the one that
+   is named like `harmony-gdal-adapter-58b6f98b57-sv5vm` with different
+   trailing hashes.
+
+     ```sh
+     kubectl get pods -n harmony
+     ```
+1. Open a port from your local machine to the kubernetes pod, subsituting your
+   pod's name. This allows your local debugger to attach to the running process
+   on the pod.
+
+     ```sh
+     kubectl port-forward harmony-gdal-adapter-58b6f98b57-sv5vm -n harmony 5678:5678
+     ```
+
+1. Submit a harmony client command that will trigger this service.
+    - The first time after a restart of the harmony services, you might not
+     have to submit a command because harmony submits a fake request to prime
+     the system and that priming request should be waiting for a debugger to
+     attach.
+
+1. Attach your debugger using a `launch.json` file like this one
+
+     ```json
+        {
+          "name": "Harmony GDAL Adapter Attach",
+          "type": "python",
+          "request": "attach",
+          "connect": {
+            "host": "localhost",
+            "port": 5678
+          },
+          "pathMappings": [
+            {
+            "localRoot": "${workspaceFolder}",
+            "remoteRoot": "/home/"
+            }
+          ]
+        }
+     ```
+
+
+
+
+
+
 ## Contributions:
 
 ### Pull requests:
