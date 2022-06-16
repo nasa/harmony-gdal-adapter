@@ -1,6 +1,7 @@
 [version 1.1.5] 2022-06-13
 
 * Update transform.py to add a default greyscale colormap to image-type tiff. Fixes a regression introduced in 1.1.4.
+* TIFF files are no longer colored with gdaldem (as of 1.1.4), but a test has been added to make that expectation explicit.
 
 [version 1.1.4] 2022-05-20
 
