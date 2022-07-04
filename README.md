@@ -1,17 +1,23 @@
-# harmony-gdal-adapter (HGA)
+# harmony GDAL Adapter (HGA)
 
 ![](https://data-services-github-badges.s3.amazonaws.com/cov.svg?dummy=true)
 
-A Harmony (https://harmony.earthdata.nasa.gov/) backend service that transforms input images using GDAL.
+A Harmony (https://harmony.earthdata.nasa.gov/) backend service that transforms
+input images using GDAL.
 
-The harmony-gdal-adapter is deployed to [ghcr.io](https://github.com/nasa/harmony-gdal-adapter/pkgs/container/harmony-gdal-adapter) GitHub's Container registry.
+HGA is published to [ghcr.io](https://github.com/nasa/harmony-gdal-adapter/pkgs/container/harmony-gdal-adapter)
+GitHub's Container registry.
 
-The harmony-gdal-adapter is invoked by [harmony](https://github.com/nasa/harmony) when the harmony server is configured, via harmony's [service.yml](https://github.com/nasa/harmony/blob/main/config/services.yml) or by UMM-S/C associations in CMR, to handle an incoming request for the collection. You can see examples of requests that harmony dispatches to the harmony-gdal-adapter by examining the [regression test notebook for hga](https://github.com/nasa/harmony-regression-tests/blob/main/test/hga/HGA_regression.ipynb).
+HGA is invoked by [harmony](https://github.com/nasa/harmony)
+when the harmony server is configured, via Harmony's [service.yml](https://github.com/nasa/harmony/blob/main/config/services.yml)
+or by UMM-S/C associations in CMR, to handle an incoming request for the
+collection. You can see examples of requests that harmony dispatches to the
+harmony-gdal-adapter by examining the [regression test notebook for hga](https://github.com/nasa/harmony-regression-tests/blob/main/test/hga/HGA_regression.ipynb).
 
 
 ## Test with Docker
 
-### Build harmony-gdal-adapter image
+### Build HGA image
 ```bash
 bin/build-image
 ```
@@ -27,7 +33,8 @@ Creates the `nasa/harmony-gdal-adapter-test` test image.
 ```bash
 bin/run-test
 ```
-The `run-test` script mounts `test-reports` and `coverage` directories and run the test script `tests/run_tests.sh` inside of a docker test container.
+The `run-test` script mounts `test-reports` and `coverage` directories and run
+the test script `tests/run_tests.sh` inside of a Docker test container.
 
 
 ## Test Locally
@@ -162,9 +169,11 @@ access to the HGA repository.
 ### Semantic versioning:
 
 When making changes to the HGA service code, it is important to make updates to
-`version.txt` and `CHANGE.md`. Every time code is merged to the `main` branch,
-a Docker image is published to [ghcr.io](https://github.com/nasa/harmony-gdal-adapter/pkgs/container/harmony-gdal-adapter). The semantic version number listed in `version.txt` must
-be iterated to avoid overwriting an existing Docker image.
+`version.txt` and `CHANGE.md`. Every time code is merged to the `main` branch
+and the merged commits contain changes to `version.txt`, a Docker image is
+published to [ghcr.io](https://github.com/nasa/harmony-gdal-adapter/pkgs/container/harmony-gdal-adapter).
+By only triggering image publication when `version.txt` is incremented, the
+existing Docker images for HGA will not be overwritten.
 
 When writing or updating service code, please also update the existing test
 suite with unit tests to ensure the new functionality performs as expected, and
