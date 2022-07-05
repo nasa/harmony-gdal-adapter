@@ -1,4 +1,4 @@
-# harmony GDAL Adapter (HGA)
+# Harmony GDAL Adapter (HGA)
 
 ![](https://data-services-github-badges.s3.amazonaws.com/cov.svg?dummy=true)
 
