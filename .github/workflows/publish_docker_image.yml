@@ -1,8 +1,9 @@
-name: Deploy Harmony GDAL Adapter Docker image
+name: Publish Harmony GDAL Adapter Docker image
 
 on:
   push:
     branches: [ main ]
+    paths: version.txt
 
 env:
   IMAGE_NAME: ${{ github.repository }}
@@ -45,7 +46,7 @@ jobs:
           name: Coverage report for Python ${{ matrix.python-version }}
           path: coverage/*
 
-  build_and_deploy_image:
+  build_and_publish_image:
     needs: run_tests
     runs-on: ubuntu-20.04
     strategy:
