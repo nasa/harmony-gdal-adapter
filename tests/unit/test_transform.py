@@ -120,3 +120,51 @@ class TestAddToList(TestCase):
         self.assertEqual(
             str(error.exception),
             'Request cannot be completed: the datasets cannot be stacked.')
+
+    def test_add_to_result_stacks_with_png(self):
+
+        filelist = [random_file(), random_file()]
+        dstdir = random_file()
+        dstfile = f'{dstdir}/result.png'
+
+        test_adapter = HarmonyAdapter(
+            Message({"format": {
+                "mime": "png"
+            }}), '', None)
+
+        stack_mock = Mock()
+
+        checkstackable_mock = Mock()
+        checkstackable_mock.return_value = False
+
+        test_adapter.stack_multi_file_with_metadata = stack_mock
+        test_adapter.checkstackable = checkstackable_mock
+
+        result = test_adapter.add_to_result(filelist, dstdir)
+
+        stack_mock.assert_not_called()
+        self.assertEqual(result, dstfile)
+
+    def test_add_to_result_stacks_with_jpeg(self):
+
+        filelist = [random_file(), random_file()]
+        dstdir = random_file()
+        dstfile = f'{dstdir}/result.jpeg'
+
+        test_adapter = HarmonyAdapter(
+            Message({"format": {
+                "mime": "jpeg"
+            }}), '', None)
+
+        stack_mock = Mock()
+
+        checkstackable_mock = Mock()
+        checkstackable_mock.return_value = False
+
+        test_adapter.stack_multi_file_with_metadata = stack_mock
+        test_adapter.checkstackable = checkstackable_mock
+
+        result = test_adapter.add_to_result(filelist, dstdir)
+
+        stack_mock.assert_not_called()
+        self.assertEqual(result, dstfile)
