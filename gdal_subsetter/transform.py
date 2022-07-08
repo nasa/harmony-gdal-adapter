@@ -16,7 +16,7 @@ import re
 from affine import Affine
 from geopandas import GeoDataFrame
 from harmony import is_harmony_cli, run_cli, setup_cli
-from harmony.adapter import BaseHarmonyAdapter, util
+from harmony.adapter import BaseHarmonyAdapter
 from harmony.util import (bbox_to_geometry, download, generate_output_filename,
                           stage)
 from netCDF4 import Dataset
@@ -31,7 +31,10 @@ from shapely.ops import cascaded_union
 import fiona
 import numpy as np
 
-from gdal_subsetter.exceptions import DownloadError, UnknownFileFormatError
+from gdal_subsetter.exceptions import (DownloadError,
+                                       HGAException,
+                                       UnknownFileFormatError,
+                                       IncompatibleVariablesError)
 from gdal_subsetter.utilities import get_file_type
 
 mime_to_gdal = {
@@ -221,8 +224,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     )
                 return stac_record
             else:
-                self.logger.warning(process_msg)
-                return None
+                exception = HGAException(f'No stac_record created: {process_msg}')
+                self.logger.exception(exception)
+                raise exception
+
+        except Exception as exception:
+            self.logger.exception(exception)
+            raise exception
 
         finally:
             rmtree(output_dir)
@@ -304,10 +312,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         result = self.add_to_result(filelist, output_dir)
 
         if result:
-
             process_msg = "OK"
         else:
-            process_msg = "subsets in the nc file are not stackable, not process."
+            process_msg = "subsets in the nc file are not stackable, not processed."
 
         return layernames, result, process_msg
 
@@ -434,8 +441,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             self.cmd(*command)
 
             return dstfile
-        except:
-            return None
+        except Exception as error:
+            self.log.exception(error)
+            raise HGAException('Could not convert NetCDF-4 to GeoTIFF')
 
     def varsubset(self, srcfile, dstfile, band=None):
         if not band:
@@ -743,6 +751,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             dstfile += '.tif'
             if filelist and self.checkstackable(filelist):
                 output = self.stack_multi_file_with_metadata(filelist, dstfile)
+            else:
+                raise IncompatibleVariablesError(
+                    'Request cannot be completed: datasets are incompatible and cannot be combined.'
+                )
         return output
 
     def stack_multi_file_with_metadata(self, infilelist, outfile):
@@ -1617,7 +1629,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
                 else:
                     if key not in ('_FillValue', 'Conventions'):
-                            dst.setncattr(key, glb_attrs[key].rstrip("\n"))
+                        dst.setncattr(key, glb_attrs[key].rstrip("\n"))
 
             # create georeference variable
             crs_name = "latitude_longitude"

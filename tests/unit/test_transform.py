@@ -1,8 +1,15 @@
+from string import ascii_letters, digits
+from random import choice
 from unittest import TestCase
 from unittest.mock import patch, ANY
 from gdal_subsetter.transform import HarmonyAdapter
+from gdal_subsetter.exceptions import IncompatibleVariablesError
 
 from harmony.message import Message
+
+
+def random_file(size=6, chars=ascii_letters + digits):
+    return ''.join(choice(chars) for _ in range(size))
 
 
 class TestRecolor(TestCase):
@@ -19,11 +26,11 @@ class TestRecolor(TestCase):
         })
         test_adapter = HarmonyAdapter(test_message, '', None)
 
-        src_file = 'sourcefile';
+        expected = 'sourcefile'
         with patch.object(test_adapter, 'cmd') as mock_cmd:
-            result = test_adapter.recolor('granId__subsetted', src_file,
+            actual = test_adapter.recolor('granId__subsetted', expected,
                                           'dstdir')
-            self.assertEqual(result, src_file, 'file has changed')
+            self.assertEqual(expected, actual, 'file has changed')
             mock_cmd.assert_not_called()
 
     @patch('gdal_subsetter.transform.copyfile')
@@ -44,9 +51,8 @@ class TestRecolor(TestCase):
         expected_outfile = f'{dest_dir}/{layer_id}__colored.png'
 
         with patch.object(test_adapter, 'cmd') as cmd_mock:
-            result = test_adapter.recolor(layer_id, 'srcfile',
-                                          dest_dir)
-            self.assertEqual(result, expected_outfile,
+            actual = test_adapter.recolor(layer_id, 'srcfile', dest_dir)
+            self.assertEqual(expected_outfile, actual,
                              'incorrect output file generated')
             cmd_mock.assert_called_once_with('gdaldem', 'color-relief',
                                              '-alpha', '-of', 'PNG', '-co',
@@ -56,4 +62,90 @@ class TestRecolor(TestCase):
             copyfile_mock.assert_any_call(expected_outfile,
                                           f'{dest_dir}/result.png')
             copyfile_mock.assert_any_call(
-                expected_outfile.replace('.png', '.wld'), f'{dest_dir}/result.wld')
+                expected_outfile.replace('.png', '.wld'),
+                f'{dest_dir}/result.wld')
+
+
+class TestAddToList(TestCase):
+
+    @patch.object(HarmonyAdapter, 'stack_multi_file_with_metadata')
+    @patch.object(HarmonyAdapter, 'checkstackable')
+    def test_add_to_result_stacks_if_stackable_with_netcdf(self, checkstackable_mock, stack_multi_mock):
+
+        filelist = [random_file(), random_file()]
+        dstdir = random_file()
+        expected = f'{dstdir}/result.tif'
+
+        test_adapter = HarmonyAdapter(
+            Message({"format": {"mime": "application/x-netcdf4"}}), '', None
+        )
+
+        stack_multi_mock.return_value = expected
+        checkstackable_mock.return_value = True
+
+        actual = test_adapter.add_to_result(filelist, dstdir)
+
+        stack_multi_mock.assert_called_once_with(filelist, expected)
+        self.assertEqual(expected, actual)
+
+    @patch.object(HarmonyAdapter, 'stack_multi_file_with_metadata')
+    @patch.object(HarmonyAdapter, 'checkstackable')
+    def test_add_to_result_raises_if_unstackable_with_netcdf(self, checkstackable_mock, stack_multi_mock):
+
+        filelist = [random_file(), random_file()]
+        dstdir = random_file()
+        dstfile = f'{dstdir}/result.tif'
+
+        test_adapter = HarmonyAdapter(
+            Message({"format": {"mime": "application/x-netcdf4"}}), '', None
+        )
+
+        stack_multi_mock.return_value = dstfile
+        checkstackable_mock.return_value = False
+
+        with self.assertRaises(IncompatibleVariablesError) as error:
+            test_adapter.add_to_result(filelist, dstdir)
+
+        stack_multi_mock.assert_not_called()
+        self.assertEqual(
+            'Request cannot be completed: datasets are incompatible and cannot be combined.',
+            str(error.exception)
+        )
+
+    @patch.object(HarmonyAdapter, 'stack_multi_file_with_metadata')
+    @patch.object(HarmonyAdapter, 'checkstackable')
+    def test_add_to_result_stacks_with_png(self, checkstackable_mock, stack_multi_mock):
+
+        filelist = [random_file(), random_file()]
+        dstdir = random_file()
+        expected = f'{dstdir}/result.png'
+
+        test_adapter = HarmonyAdapter(
+            Message({"format": {"mime": "png"}}), '', None
+        )
+
+        checkstackable_mock.return_value = False
+
+        actual = test_adapter.add_to_result(filelist, dstdir)
+
+        stack_multi_mock.assert_not_called()
+        self.assertEqual(expected, actual)
+
+    @patch.object(HarmonyAdapter, 'stack_multi_file_with_metadata')
+    @patch.object(HarmonyAdapter, 'checkstackable')
+    def test_add_to_result_stacks_with_jpeg(self, checkstackable_mock, stack_multi_mock):
+
+        filelist = [random_file(), random_file()]
+        dstdir = random_file()
+        expected = f'{dstdir}/result.jpeg'
+
+        test_adapter = HarmonyAdapter(
+            Message({"format": {"mime": "jpeg"}}), '', None
+        )
+
+        checkstackable_mock.return_value = False
+
+        actual = test_adapter.add_to_result(filelist, dstdir)
+
+        stack_multi_mock.assert_not_called()
+        self.assertEqual(expected, actual)
