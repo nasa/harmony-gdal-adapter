@@ -1,6 +1,6 @@
 [version 1.2.0] 2022-07-08
 
-* Modify transform.py to throw errors when the set of requested variables is
+* Modify transform.py to raise an exception when the set of requested variables is
   incompatible. e.g. they have different geocordinates, geotransforms, x or y
   dimensions, or different data types.
 * Changes behavior of process_item to raise HGAException when a stac\_record is
