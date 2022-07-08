@@ -34,7 +34,7 @@ import numpy as np
 from gdal_subsetter.exceptions import (DownloadError,
                                        HGAException,
                                        UnknownFileFormatError,
-                                       UnstackableVariablesError)
+                                       IncompatibleVariablesError)
 from gdal_subsetter.utilities import get_file_type
 
 mime_to_gdal = {
@@ -751,8 +751,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             if filelist and self.checkstackable(filelist):
                 output = self.stack_multi_file_with_metadata(filelist, dstfile)
             else:
-                raise UnstackableVariablesError(
-                    'Request cannot be completed: the datasets cannot be stacked.'
+                raise IncompatibleVariablesError(
+                    'Request cannot be completed: datasets are incompatible and cannot be combined.'
                 )
         return output
 

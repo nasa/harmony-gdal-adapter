@@ -3,7 +3,7 @@ from random import choice
 from unittest import TestCase
 from unittest.mock import patch, ANY, Mock
 from gdal_subsetter.transform import HarmonyAdapter
-from gdal_subsetter.exceptions import UnstackableVariablesError
+from gdal_subsetter.exceptions import IncompatibleVariablesError
 
 from harmony.message import Message
 
@@ -113,12 +113,12 @@ class TestAddToList(TestCase):
         test_adapter.stack_multi_file_with_metadata = stack_mock
         test_adapter.checkstackable = checkstackable_mock
 
-        with self.assertRaises(UnstackableVariablesError) as error:
+        with self.assertRaises(IncompatibleVariablesError) as error:
             test_adapter.add_to_result(filelist, dstdir)
 
         stack_mock.assert_not_called()
         self.assertEqual(
-            'Request cannot be completed: the datasets cannot be stacked.',
+            'Request cannot be completed: datasets are incompatible and cannot be combined.',
             str(error.exception)
         )
 

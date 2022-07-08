@@ -35,7 +35,7 @@ class UnknownFileFormatError(HGAException):
                          f'"{file_format}"')
 
 
-class UnstackableVariablesError(HGAException):
+class IncompatibleVariablesError(HGAException):
     """This exception is raised when the dataset variables requested are not
     stackable, i.e. they have different projections, geotransforms, sizes or
     data types.
