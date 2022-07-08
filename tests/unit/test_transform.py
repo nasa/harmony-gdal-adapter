@@ -1,7 +1,7 @@
 from string import ascii_letters, digits
 from random import choice
 from unittest import TestCase
-from unittest.mock import patch, ANY, Mock
+from unittest.mock import patch, ANY
 from gdal_subsetter.transform import HarmonyAdapter
 from gdal_subsetter.exceptions import IncompatibleVariablesError
 
