@@ -441,8 +441,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             self.cmd(*command)
 
             return dstfile
-        except:
-            return None
+        except Exception as error:
+            self.log.exception(error)
+            raise HGAException('Could not convert NetCDF-4 to GeoTIFF')
 
     def varsubset(self, srcfile, dstfile, band=None):
         if not band:
