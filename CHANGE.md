@@ -1,10 +1,10 @@
 [version 1.2.0] 2022-07-08
 
 * Modify transform.py to raise an exception when the set of requested variables is
-  incompatible. e.g. they have different geocordinates, geotransforms, x or y
+  incompatible. e.g. they have different geocoordinates, geotransforms, x or y
   dimensions, or different data types.
 * Changes behavior of process_item to raise HGAException when a stac\_record is
-  not created. Previously the code quietly logged a warning and succeed.
+  not created. Previously the code quietly logged a warning and succeeded.
 
 [version 1.1.5] 2022-06-13
 

@@ -314,7 +314,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         if result:
             process_msg = "OK"
         else:
-            process_msg = "subsets in the nc file are not stackable, not process."
+            process_msg = "subsets in the nc file are not stackable, not processed."
 
         return layernames, result, process_msg
 

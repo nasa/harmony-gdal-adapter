@@ -100,9 +100,7 @@ class TestAddToList(TestCase):
         dstfile = f'{dstdir}/result.tif'
 
         test_adapter = HarmonyAdapter(
-            Message({"format": {
-                "mime": "application/x-netcdf4"
-            }}), '', None)
+            Message({"format": {"mime": "application/x-netcdf4"}}), '', None)
 
         stack_mock = Mock()
         stack_mock.return_value = dstfile
@@ -129,9 +127,7 @@ class TestAddToList(TestCase):
         expected = f'{dstdir}/result.png'
 
         test_adapter = HarmonyAdapter(
-            Message({"format": {
-                "mime": "png"
-            }}), '', None)
+            Message({"format": {"mime": "png"}}), '', None)
 
         stack_mock = Mock()
 
@@ -153,9 +149,7 @@ class TestAddToList(TestCase):
         expected = f'{dstdir}/result.jpeg'
 
         test_adapter = HarmonyAdapter(
-            Message({"format": {
-                "mime": "jpeg"
-            }}), '', None)
+            Message({"format": {"mime": "jpeg"}}), '', None)
 
         stack_mock = Mock()
 
