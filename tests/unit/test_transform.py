@@ -26,11 +26,11 @@ class TestRecolor(TestCase):
         })
         test_adapter = HarmonyAdapter(test_message, '', None)
 
-        src_file = 'sourcefile'
+        expected = 'sourcefile'
         with patch.object(test_adapter, 'cmd') as mock_cmd:
-            result = test_adapter.recolor('granId__subsetted', src_file,
+            actual = test_adapter.recolor('granId__subsetted', expected,
                                           'dstdir')
-            self.assertEqual(result, src_file, 'file has changed')
+            self.assertEqual(expected, actual, 'file has changed')
             mock_cmd.assert_not_called()
 
     @patch('gdal_subsetter.transform.copyfile')
@@ -51,8 +51,8 @@ class TestRecolor(TestCase):
         expected_outfile = f'{dest_dir}/{layer_id}__colored.png'
 
         with patch.object(test_adapter, 'cmd') as cmd_mock:
-            result = test_adapter.recolor(layer_id, 'srcfile', dest_dir)
-            self.assertEqual(result, expected_outfile,
+            actual = test_adapter.recolor(layer_id, 'srcfile', dest_dir)
+            self.assertEqual(expected_outfile, actual,
                              'incorrect output file generated')
             cmd_mock.assert_called_once_with('gdaldem', 'color-relief',
                                              '-alpha', '-of', 'PNG', '-co',
@@ -72,7 +72,7 @@ class TestAddToList(TestCase):
 
         filelist = [random_file(), random_file()]
         dstdir = random_file()
-        dstfile = f'{dstdir}/result.tif'
+        expected = f'{dstdir}/result.tif'
 
         test_adapter = HarmonyAdapter(
             Message({"format": {
@@ -80,7 +80,7 @@ class TestAddToList(TestCase):
             }}), '', None)
 
         stack_mock = Mock()
-        stack_mock.return_value = dstfile
+        stack_mock.return_value = expected
 
         checkstackable_mock = Mock()
         checkstackable_mock.return_value = True
@@ -88,10 +88,10 @@ class TestAddToList(TestCase):
         test_adapter.stack_multi_file_with_metadata = stack_mock
         test_adapter.checkstackable = checkstackable_mock
 
-        result = test_adapter.add_to_result(filelist, dstdir)
+        actual = test_adapter.add_to_result(filelist, dstdir)
 
-        stack_mock.assert_called_once_with(filelist, dstfile)
-        self.assertEqual(result, dstfile)
+        stack_mock.assert_called_once_with(filelist, expected)
+        self.assertEqual(expected, actual)
 
     def test_add_to_result_raises_if_unstackable_with_netcdf(self):
 
@@ -118,14 +118,15 @@ class TestAddToList(TestCase):
 
         stack_mock.assert_not_called()
         self.assertEqual(
-            str(error.exception),
-            'Request cannot be completed: the datasets cannot be stacked.')
+            'Request cannot be completed: the datasets cannot be stacked.',
+            str(error.exception)
+        )
 
     def test_add_to_result_stacks_with_png(self):
 
         filelist = [random_file(), random_file()]
         dstdir = random_file()
-        dstfile = f'{dstdir}/result.png'
+        expected = f'{dstdir}/result.png'
 
         test_adapter = HarmonyAdapter(
             Message({"format": {
@@ -140,16 +141,16 @@ class TestAddToList(TestCase):
         test_adapter.stack_multi_file_with_metadata = stack_mock
         test_adapter.checkstackable = checkstackable_mock
 
-        result = test_adapter.add_to_result(filelist, dstdir)
+        actual = test_adapter.add_to_result(filelist, dstdir)
 
         stack_mock.assert_not_called()
-        self.assertEqual(result, dstfile)
+        self.assertEqual(expected, actual)
 
     def test_add_to_result_stacks_with_jpeg(self):
 
         filelist = [random_file(), random_file()]
         dstdir = random_file()
-        dstfile = f'{dstdir}/result.jpeg'
+        expected = f'{dstdir}/result.jpeg'
 
         test_adapter = HarmonyAdapter(
             Message({"format": {
@@ -164,7 +165,7 @@ class TestAddToList(TestCase):
         test_adapter.stack_multi_file_with_metadata = stack_mock
         test_adapter.checkstackable = checkstackable_mock
 
-        result = test_adapter.add_to_result(filelist, dstdir)
+        actual = test_adapter.add_to_result(filelist, dstdir)
 
         stack_mock.assert_not_called()
-        self.assertEqual(result, dstfile)
+        self.assertEqual(expected, actual)
