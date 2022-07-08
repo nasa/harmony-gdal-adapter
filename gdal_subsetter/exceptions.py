@@ -37,9 +37,9 @@ class UnknownFileFormatError(HGAException):
 
 class IncompatibleVariablesError(HGAException):
     """This exception is raised when the dataset variables requested are not
-    stackable, i.e. they have different projections, geotransforms, sizes or
+    compatible, i.e. they have different projections, geotransforms, sizes or
     data types.
 
     """
     def __init__(self, message):
-        super().__init__(f'cannot stack variables: {message}')
+        super().__init__(f'Incompatible variables: {message}')
