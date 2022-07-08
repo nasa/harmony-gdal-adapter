@@ -1,3 +1,11 @@
+[version 1.2.0] 2022-07-08
+
+* Modify transform.py to throw errors when the set of requested variables is
+  incompatible. e.g. they have different geocordinates, geotransforms, x or y
+  dimensions, or different data types.
+* Changes behavior of process_item to raise HGAException when a stac\_record is
+  not created. Previously the code quietly logged a warning and succeed.
+
 [version 1.1.5] 2022-06-13
 
 * Update transform.py to add a default greyscale colormap to image-type tiff. Fixes a regression introduced in 1.1.4.
