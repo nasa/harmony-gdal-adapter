@@ -103,7 +103,8 @@ class UnittestAdapterNoDownload(HarmonyAdapter):
             health_check_path=c.health_check_path,
             shared_secret_key=c.shared_secret_key,
             # Override if provided, else default
-            user_agent=c.user_agent if user_agent is None else user_agent
+            user_agent=c.user_agent if user_agent is None else user_agent,
+            max_download_retries=c.max_download_retries
         )
 
 
