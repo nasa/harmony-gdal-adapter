@@ -1,3 +1,6 @@
+[version 1.2.1] 2022-07-11
+* Fix logging command so that correct exception is raised.
+
 [version 1.2.0] 2022-07-08
 
 * Modify transform.py to raise an exception when the set of requested variables is
