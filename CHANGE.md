@@ -1,3 +1,6 @@
+[version 1.2.2] 2022-07-11
+* Update harmony-service-library-py to 1.0.20
+
 [version 1.2.1] 2022-07-11
 * Fix logging command so that correct exception is raised.
 
