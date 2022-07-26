@@ -49,7 +49,7 @@ conda activate hga
 ### Install requirements
 
 ```bash
-conda install gdal==3.4.2
+conda install gdal==3.4.3
 pip install -r requirements.txt -r requirements_dev.txt
 ```
 
