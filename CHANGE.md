@@ -1,3 +1,6 @@
+[version 1.2.4] 2022-08-01
+* removes logging that is interfering with exception handling.
+
 [version 1.2.3] 2022-07-25
 * Update GDAL to version 3.4.3
 * Remove unused tests and code.
