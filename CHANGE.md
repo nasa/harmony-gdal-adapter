@@ -1,5 +1,10 @@
+[version 1.2.5] 2022-08-05
+* Updates `harmony-service-lib` dependency to 1.0.21, to ensure correct
+  propagation of error messages to Harmony core.
+* Reimplements logging statements removed in HGA v1.2.4.
+
 [version 1.2.4] 2022-08-01
-* removes logging that is interfering with exception handling.
+* Removes logging that is interfering with exception handling.
 
 [version 1.2.3] 2022-07-25
 * Update GDAL to version 3.4.3
