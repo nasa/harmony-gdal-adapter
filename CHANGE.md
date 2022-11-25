@@ -1,3 +1,8 @@
+[version 1.2.6] 2022-11-25
+* Improved detection of NetCDF-4 subdatasets.
+* Update harmony-service-lib-py to 1.0.22.
+* General code linting clean-up.
+
 [version 1.2.5] 2022-08-05
 * Updates `harmony-service-lib` dependency to 1.0.21, to ensure correct
   propagation of error messages to Harmony core.
