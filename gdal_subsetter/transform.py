@@ -571,7 +571,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         # convert into multi-polygon feature file
         fileprex = os.path.splitext(shapefile)[0]
-        tmpfile_geojson = fileprex+"_tmp.geojson"
+        tmpfile_geojson = f'{fileprex}_tmp.geojson'
 
         # check BUFFER environment to get buf from message passed by harmony
         buffer_string = os.environ.get('BUFFER')
@@ -579,7 +579,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             buffer_dic = eval(buffer_string)
 
             if unit and 'Polygon' not in geometry:
-                if "degree" in unit.lower():
+                if 'degree' in unit.lower():
                     buf = buffer_dic['degree']
                 else:
                     buf = buffer_dic['meter']
@@ -593,7 +593,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             shapefile, tmpfile_geojson, buf=buf)
 
         # convert into ESRI shapefile
-        outfile = fileprex+".shp"
+        outfile = f'{fileprex}.shp'
         command = ['ogr2ogr', '-f', 'ESRI Shapefile']
         command.extend([outfile, tmpfile_geojson])
         self.cmd(*command)
@@ -633,7 +633,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         if interpolation in resampling_methods:
             resample_method = interpolation
         else:
-            resample_method = "bilinear"
+            resample_method = 'bilinear'
         if not crs:
             return srcfile
 
@@ -658,7 +658,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             command=['gdalwarp','-of', 'GTiff',  '-overwrite', '-r', resampling_mode]
             if ref_crs:  #proj, box, xres/yres
                 command.extend([ '-t_srs', ref_crs])
-                #command.extend([ '-t_srs', "'{ref_crs}'".format(ref_crs=ref_crs)])
+                # command.extend([ '-t_srs', "'{ref_crs}'".format(ref_crs=ref_crs)])
             if ref_box:
                 box = [str(x) for x in ref_box]
                 command.extend(['-te', box[0], box[1], box[2], box[3],
@@ -889,7 +889,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         gdalinfo_lines = self.cmd('gdalinfo', filename)
 
         layer_line = next((line for line in gdalinfo_lines
-                           if re.search(f'SUBDATASET.*:*{layer_id}$', line)
+                           if re.search(f'SUBDATASET.*{layer_id}$', line)
                            is not None), None)
 
         if layer_line is None:
@@ -1012,7 +1012,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         ds = None
         return bbox
 
-    def is_stackable(self, files_to_stack: str) -> bool:
+    def is_stackable(self, files_to_stack: List[str]) -> bool:
         """ Returns a boolean value indicating if all files in the input list
             can be stacked. This is indicated by whether they have the same
             projection, geotransform and raster sizes. PNG files cannot be
@@ -1209,7 +1209,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         urxy = ct(ur_lon, ur_lat)
         ulxy = ct(ul_lon, ul_lat)
 
-        boxproj = {"llxy": llxy, "lrxy": lrxy, "urxy": urxy, "ulxy": ulxy}
+        boxproj = {'llxy': llxy, 'lrxy': lrxy, 'urxy': urxy, 'ulxy': ulxy}
 
         return boxproj, projection
 
@@ -1226,7 +1226,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 ds: the reference dataset
                 box: Defined as:
 
-                    {"llxy":llxy, "lrxy":lrxy, "urxy":urxy, "ulxy":ulxy},
+                    {'llxy':llxy, 'lrxy':lrxy, 'urxy':urxy, 'ulxy':ulxy},
 
                     where llxy,lrxy, urxy, and ulxy are coordinate pairs in projection
                 delt: the number of deltax and deltay to extend the subsetting
@@ -1383,13 +1383,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         geometry = feature.GetGeometryRef()
         geometryname = geometry.GetGeometryName()
         # Extent[lon_min,lon_max,lat_min,lat_max]
-        #boxproj={"llxy":llxy, "lrxy":lrxy, "urxy":urxy, "ulxy":ulxy}
+        # boxproj={'llxy': llxy, 'lrxy': lrxy, 'urxy': urxy, 'ulxy': ulxy}
         # where llxy,lrxy, urxy, and ulxy are coordinate pairs in projection
         llxy = (lyrextent[0], lyrextent[2])
         lrxy = (lyrextent[1], lyrextent[2])
         urxy = (lyrextent[1], lyrextent[3])
         ulxy = (lyrextent[0], lyrextent[3])
-        boxproj = {"llxy": llxy, "lrxy": lrxy, "urxy": urxy, "ulxy": ulxy}
+        boxproj = {'llxy': llxy, 'lrxy': lrxy, 'urxy': urxy, 'ulxy': ulxy}
         return boxproj, ref_proj, outputfile, geometryname
 
     def mask_via_combined(self, inputfile, shapefile, outputfile):
@@ -1405,12 +1405,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         # define temporary file name
         tmpfile = f'{os.path.splitext(inputfile)[0]}-tmp.tif'
         self.cmd2(*['cp', '-f', inputfile, tmpfile])
-        #cmd = " ".join(['cp', '-f', inputfile, tmpfile])
-        #os.system(cmd)
+        # cmd = ' '.join(['cp', '-f', inputfile, tmpfile])
+        # os.system(cmd)
 
         self.cmd2(*['cp', '-f', inputfile, outputfile])
-        #cmd = " ".join(['cp', '-f', inputfile, outputfile])
-        #os.system(cmd)
+        # cmd = ' '.join(['cp', '-f', inputfile, outputfile])
+        # os.system(cmd)
 
         # read shapefile info
         shp = ogr.Open(shapefile)
@@ -1499,7 +1499,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 else:
                     if attribute_name not in ('_FillValue', 'Conventions'):
                         dst.setncattr(attribute_name,
-                                      attribute_value.rstrip("\n"))
+                                      attribute_value.rstrip('\n'))
 
             # create georeference variable
             crs_name = crs.proj.name.ogc_wkt.lower()
@@ -1651,7 +1651,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 geovar.inverse_flattening = crs.datum.ellips.inv_flat.value
 
             geovar.spatial_ref = ds_in.GetProjectionRef()
-            geovar.GeoTransform = " ".join(map(str, list(gt)))
+            geovar.GeoTransform = ' '.join(map(str, list(gt)))
             # create coordinate variables if the geotiff is a non-rotated image
             if gt[2] == 0.0 and gt[4] == 0.0:
                 lon_array = gt[0] + gt[1] * (np.arange(ds_in.RasterXSize) + 0.5)
