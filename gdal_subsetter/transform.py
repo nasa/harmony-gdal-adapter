@@ -315,7 +315,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         variables = source.process('variables')
 
-        variableslist =[item.name for item in variables]
+        variableslist = [item.name for item in variables]
 
         [is_tif, tiffile, msg_tif, is_nc, ncfile, msg_nc] = self.unpack_zipfile(input_filename, output_dir, variableslist)
 
@@ -495,13 +495,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             return dstfile
 
     def convert2multipolygon(self, infile: str, outfile: str, buf=None):
-        """ Convert point or line feature geojson file to multi-polygon feature
+        """ Convert point or line feature GeoJSON file to multi-polygon feature
             GeoJSON file
 
             input:
-                infile - point or line feature geojson file name
+                infile - point or line feature GeoJSON file name
                 buf - buffer defined in degree or meter for geographic or
-                      projected coordinaters for line or point features GeoJSON
+                      projected coordinates for line or point features GeoJSON
                       file.
             return:
                 outfile - multi-polygon feature ESRI shapefile directory name
@@ -655,9 +655,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         def _regrid(infile, outfile, resampling_mode='bilinear', ref_crs=None,
                     ref_box=None, ref_xres=None, ref_yres=None):
-            command=['gdalwarp','-of', 'GTiff',  '-overwrite', '-r', resampling_mode]
-            if ref_crs:  #proj, box, xres/yres
-                command.extend([ '-t_srs', ref_crs])
+            command = ['gdalwarp', '-of', 'GTiff',  '-overwrite',
+                       '-r', resampling_mode]
+
+            if ref_crs:  # proj, box, xres/yres
+                command.extend(['-t_srs', ref_crs])
                 # command.extend([ '-t_srs', "'{ref_crs}'".format(ref_crs=ref_crs)])
             if ref_box:
                 box = [str(x) for x in ref_box]
@@ -666,7 +668,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 # command.extend(['-te', box[0], box[1], box[2], box[3],
                 #                 '-te_srs', "'{ref_crs`}'".format(ref_crs=ref_crs)])
             if ref_xres and ref_yres:
-                command.extend(['-tr', str(ref_xres), str(ref_yres) ])
+                command.extend(['-tr', str(ref_xres), str(ref_yres)])
 
             command.extend([infile, outfile])
             self.cmd(*command)
@@ -700,10 +702,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 if var.name == variable:
                     if hasattr(var, 'relatedUrls'):
                         # Make sure that we have relatedUrls
-                        for relatedUrl in var.relatedUrls:
+                        for related_url in var.relatedUrls:
                             # Use the Color Map related URL
-                            if relatedUrl.type == 'Color Map':
-                                colormap = f'/vsicurl/{relatedUrl.url}'
+                            if related_url.type == 'Color Map':
+                                colormap = f'/vsicurl/{related_url.url}'
                                 discrete = True
 
         # Don't color tiffs
@@ -776,10 +778,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             filename = ds.GetDescription()
             filestr = os.path.splitext(os.path.basename(filename))[0]
             if id == 1:
-                proj=ds.GetProjection()
-                geot=ds.GetGeoTransform()
-                cols=ds.RasterXSize
-                rows=ds.RasterYSize
+                proj = ds.GetProjection()
+                geot = ds.GetGeoTransform()
+                cols = ds.RasterXSize
+                rows = ds.RasterYSize
                 gtyp = ds.GetRasterBand(1).DataType
                 md = ds.GetMetadata()
 
@@ -884,7 +886,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             self.cmd(*command)
             return dstfile
 
-
     def read_layer_format(self, collection, filename, layer_id):
         gdalinfo_lines = self.cmd('gdalinfo', filename)
 
@@ -916,8 +917,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             # for subdataset in filter((lambda line: re.match(r"^Band", line)), gdalinfo_lines):
             #     tmpline = re.split(r" ", subdataset)
             #     result.append(ObjectView({"name": tmpline[0].strip()+tmpline[1].strip()}))
-            dataset =gdal.Open(filename)
-            result={}
+            dataset = gdal.Open(filename)
+            result = {}
             for band_index in range(1, dataset.RasterCount + 1):
                 band = dataset.GetRasterBand(band_index)
                 bmd = band.GetMetadata()
@@ -1089,7 +1090,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         """
         tmpexp = os.path.join(extract_dir, f'*.{filetype}')
         filelist = sorted(glob(tmpexp))
-        ch_filelist =[]
+        ch_filelist = []
         if filelist:
             if variables:
                 if 'Band' not in variables[0]:
@@ -1157,7 +1158,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             else:
                 shapefile_out = f'{os.path.dirname(outputfile)}/tmpshapefile'
                 boxproj, proj, shapefile_out, geometryname = self.shapefile_boxproj(
-                shapefile, ref_ds, shapefile_out)
+                    shapefile, ref_ds, shapefile_out
+                )
 
             ul_x, ul_y, ul_i, ul_j, cols, rows = self.calc_subset_envelopwindow(
                 ref_ds, boxproj)
@@ -1425,7 +1427,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         # update tmpfile (used as a mask file)
         tmp_ds = gdal.Open(tmpfile, GA_Update)
         num = tmp_ds.RasterCount
+
         # define inner function
+
         def _mask_band(tmp_ds, band_sn, dst_ds):
             tmp_band = tmp_ds.GetRasterBand(band_sn)
             tmp_data = tmp_band.ReadAsArray()
@@ -1434,7 +1438,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             tmp_nodata_pre = tmp_band.GetNoDataValue()
             np_dt = gdal_array.GDALTypeCodeToNumericTypeCode(tmp_band.DataType)
             tmp_band.WriteArray(np.zeros(tmp_data.shape, np_dt))
-            #this flushCache() changes the all values in the maskband data to 255.
+            # this flushCache() changes the all values in the maskband data to 255.
             tmp_band.FlushCache()
             bands = [band_sn]
             burn_value = 1
@@ -1444,7 +1448,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             err = gdal.RasterizeLayer(tmp_ds, bands, ly, burn_values=burns,
                                       options=['ALL_TOUCHED=TRUE'])
             tmp_ds.FlushCache()
-            #combine original tmp mask band with tmp_data
+            # combine original tmp mask band with tmp_data
             tmp_band = tmp_ds.GetRasterBand(band_sn)
             # tmp_data includes 0 and 1 values, where 0 indicates no valid pixels, and 1 indicates valid pixels.
             tmp_data = tmp_band.ReadAsArray()
@@ -1464,7 +1468,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             out_mskband.FlushCache()
             out_band.FlushCache()
 
-        for band_sn in range(1,num+1):
+        for band_sn in range(1, num + 1):
             _mask_band(tmp_ds, band_sn, dst_ds)
 
         dst_ds.FlushCache()
@@ -1483,7 +1487,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 outfile - netcdf file name
         """
         def _process_projected(ds_in, dst):
-            gt =ds_in.GetGeoTransform()
+            gt = ds_in.GetGeoTransform()
             crs = parse_crs_from_ogc_wkt(ds_in.GetProjectionRef())
             unitname = crs.unit.unitname.proj4
             # define dimensions
@@ -1503,7 +1507,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
             # create georeference variable
             crs_name = crs.proj.name.ogc_wkt.lower()
-            geovar = dst.createVariable(crs_name,'S1')
+            geovar = dst.createVariable(crs_name, 'S1')
             geovar.grid_mapping_name = crs_name
             geovar.long_name = 'CRS definition'
             for item in crs.params:
@@ -1562,7 +1566,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 lat_var.standard_name = 'latitude'
                 lat_var.long_name = 'latitude'
 
-            #create data variables
+            # create data variables
             for band_index in range(1, ds_in.RasterCount + 1):
                 band = ds_in.GetRasterBand(band_index)
                 meta = band.GetMetadata()
@@ -1618,7 +1622,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 if not lst:
                     datavar.standard_name = varname
 
-                #add units attr
+                # add units attr
                 if 'units' not in datavar.ncattrs():
                     datavar.setncattr('units', '1')
 
