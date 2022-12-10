@@ -1,3 +1,9 @@
+[version 1.2.7] 2022-12-10
+* Migration of static methods from HarmonyAdapter class to utility modules.
+* Implementation of Python native function to copy, move and delete files or
+  directories.
+* General linting clean-up.
+
 [version 1.2.6] 2022-11-25
 * Improved detection of NetCDF-4 subdatasets.
 * Update harmony-service-lib-py to 1.0.22.

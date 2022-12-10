@@ -1,21 +1,14 @@
-""" CLI for adapting a Harmony operation to GDAL
-
-"""
+""" CLI for adapting a Harmony operation to GDAL. """
 from argparse import ArgumentParser
 from datetime import datetime
-from glob import glob
-from math import isinf
 from shutil import copyfile, rmtree
 from subprocess import check_output
 from tempfile import mkdtemp
 from typing import List
 from zipfile import ZipFile
-import json
 import os
 import re
 
-from affine import Affine
-from geopandas import GeoDataFrame
 from harmony import is_harmony_cli, run_cli, setup_cli
 from harmony.adapter import BaseHarmonyAdapter
 from harmony.util import (bbox_to_geometry, download, generate_output_filename,
@@ -25,41 +18,25 @@ from numpy.ma import masked_array
 from osgeo import gdal, osr, ogr, gdal_array
 from osgeo.gdalconst import GA_ReadOnly, GA_Update, GMF_PER_DATASET
 from pycrs.parse import from_ogc_wkt as parse_crs_from_ogc_wkt
-from pyproj import CRS, Proj
+from pyproj import Proj
 from pystac import Asset
-from shapely.geometry import shape, mapping
-from shapely.ops import cascaded_union
-import fiona
 import numpy as np
 
+from gdal_subsetter.coordinate_utilities import (boxwrs84_boxproj,
+                                                 calc_coord_ij, calc_ij_coord,
+                                                 get_bbox, lonlat_to_projcoord)
 from gdal_subsetter.exceptions import (DownloadError,
                                        HGAException,
                                        UnknownFileFormatError,
                                        IncompatibleVariablesError)
-from gdal_subsetter.utilities import get_file_type
-
-
-mime_to_gdal = {'image/tiff': 'GTiff',
-                'image/png': 'PNG',
-                'image/gif': 'GIF',
-                'application/x-netcdf4': 'NETCDF',
-                'application/x-zarr': 'zarr'}
-
-mime_to_extension = {'image/tiff': 'tif',
-                     'image/png': 'png',
-                     'image/gif': 'gif',
-                     'application/x-netcdf4': 'nc',
-                     'application/x-zarr': 'nc'}
-
-mime_to_options = {'image/tiff': ['-co', 'TILED=YES',
-                                  '-co', 'COPY_SRC_OVERVIEWS=YES',
-                                  '-co', 'COMPRESS=DEFLATE']}
-
-process_flags = {'subset': False,
-                 'maskband': False}
-
-resampling_methods = ['nearest', 'bilinear', 'cubic', 'cubicspline', 'lanczos',
-                      'average', 'rms', 'mode']
+from gdal_subsetter.shape_file_utilities import (create_shapefile_with_box,
+                                                 convert_to_multipolygon,
+                                                 get_coordinates_unit,
+                                                 shapefile_boxproj)
+from gdal_subsetter.utilities import (get_file_type, get_files_from_unzipfiles,
+                                      get_version, mime_to_extension,
+                                      mime_to_gdal, process_flags,
+                                      rename_file, resampling_methods)
 
 
 class ObjectView(object):
@@ -91,18 +68,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     See https://github.com/nasa/harmony-service-lib-py
     for documentation and examples.
     """
-
-    def get_version(self):
-        with open('version.txt', mode='r', encoding='utf-8') as file_version:
-            version = ','.join(file_version.readlines())
-
-        return version
-
-    def rename_file(self, input_filename, href):
-        output_filename = os.path.join(os.path.dirname(input_filename),
-                                       generate_output_filename(href))
-        os.rename(input_filename, output_filename)
-        return output_filename
 
     def process_item(self, item, source):
         """
@@ -154,7 +119,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             except Exception as exception:
                 raise DownloadError(asset.href, str(exception)) from exception
 
-            input_filename = self.rename_file(temporary_filename, asset.href)
+            input_filename = rename_file(temporary_filename, asset.href)
 
             basename = os.path.splitext(os.path.basename(
                 generate_output_filename(asset.href, **operations))
@@ -360,14 +325,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         result_str = check_output(args).decode('utf-8')
         return result_str.split('\n')
 
-    def is_rotated_geotransform(self, srcfile: str) -> bool:
-        dataset = gdal.Open(srcfile)
-        geo_transform = dataset.GetGeoTransform()
-        check = geo_transform[2] != 0.0 or geo_transform[4] != 0
-        dataset = None
-
-        return check
-
     def nc2tiff(self, layerid, filename, dstdir):
 
         def search(input_dict, lookup_key):
@@ -417,15 +374,15 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             return dstfile
 
         if subset.bbox:
-            [left, bottom, right, top] = self.get_bbox(srcfile)
+            [left, bottom, right, top] = get_bbox(srcfile)
 
             # subset.bbox is defined as [left/west,low/south,right/east,upper/north]
             subsetbbox = subset.process('bbox')
 
-            [b0, b1], transform = self.lonlat2projcoord(
-                srcfile, subsetbbox[0], subsetbbox[1])
-            [b2, b3], transform = self.lonlat2projcoord(
-                srcfile, subsetbbox[2], subsetbbox[3])
+            [b0, b1], transform = lonlat_to_projcoord(srcfile, subsetbbox[0],
+                                                      subsetbbox[1])
+            [b2, b3], transform = lonlat_to_projcoord(srcfile, subsetbbox[2],
+                                                      subsetbbox[3])
 
             if any(x is None for x in [b0, b1, b2, b3]):
                 dstfile = os.path.join(
@@ -458,64 +415,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                                    band=band)
             return dstfile
 
-    def convert2multipolygon(self, infile: str, outfile: str, buf=None):
-        """ Convert point or line feature GeoJSON file to multi-polygon feature
-            GeoJSON file
-
-            input:
-                infile - point or line feature GeoJSON file name
-                buf - buffer defined in degree or meter for geographic or
-                      projected coordinates for line or point features GeoJSON
-                      file.
-            return:
-                outfile - multi-polygon feature ESRI shapefile directory name
-        """
-        if not buf:
-            return infile
-
-        fd_infile = fiona.open(infile)
-        # get feature type of infile
-        featype = fd_infile.schema.get('geometry')
-        # prepare meta for polygon file
-        meta = fd_infile.meta
-        meta['schema']['geometry'] = 'Polygon'
-        meta['schema']['properties'] = {'id': 'int'}
-        meta['driver'] = 'GeoJSON'
-        with fiona.open(outfile, 'w', **meta) as fd_outfile:
-            poly_lst = []
-            for index_point, point in enumerate(fd_infile):
-                pt = shape(point['geometry'])
-                polygon = pt.buffer(buf)
-                poly_lst.append(polygon)
-
-            polygons = cascaded_union(poly_lst)
-            if polygons.geometryType() == 'Polygon':
-                fd_outfile.write({
-                    'geometry': mapping(polygons),
-                    'properties': {'id': 0},
-                })
-            else:
-                for index_polygon, polygon in enumerate(polygons):
-                    fd_outfile.write({
-                        'geometry': mapping(polygon),
-                        'properties': {'id': index_polygon},
-                    })
-
-        return outfile
-
-    def get_coord_unit(self, geojsonfile):
-        try:
-            # get unit of the feature in the shapefile
-            fd_infile = fiona.open(geojsonfile)
-            geometry = fd_infile.schema.get('geometry')
-            proj = CRS(fd_infile.crs_wkt)
-            proj_json = json.loads(proj.to_json())
-            unit = proj_json['coordinate_system']['axis'][0]['unit']
-        except Exception:
-            unit = None
-
-        return geometry, unit
-
     def get_shapefile(self, subsetshape, dstdir):
         """
         read the shapefile passing from harmony, it is geojson file, if it is
@@ -531,7 +430,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                              access_token=self.message.accessToken)
 
         # get unit of the feature in the shapefile
-        geometry, unit = self.get_coord_unit(shapefile)
+        geometry, unit = get_coordinates_unit(shapefile)
 
         # convert into multi-polygon feature file
         fileprex = os.path.splitext(shapefile)[0]
@@ -553,8 +452,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             buf = None
 
         # convert to a new multipolygon file
-        tmpfile_geojson = self.convert2multipolygon(
-            shapefile, tmpfile_geojson, buf=buf)
+        tmpfile_geojson = convert_to_multipolygon(shapefile, tmpfile_geojson,
+                                                  buf=buf)
 
         # convert into ESRI shapefile
         outfile = f'{fileprex}.shp'
@@ -813,7 +712,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return outfile
 
     def reformat(self, srcfile, dstdir):
-        gdal_subsetter_version = 'gdal_subsetter_version={self.get_version()}'
+        gdal_subsetter_version = f'gdal_subsetter_version={get_version()}'
         output_mime = self.message.format.process('mime')
         if not output_mime == 'image/png' or output_mime == 'image/jpeg':
             command = ['gdal_edit.py',  '-mo', gdal_subsetter_version, srcfile]
@@ -899,22 +798,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return layer_id, filename, output_dir
 
-    def get_bbox(self, filename):
-        """
-        input: the geotif file
-        return: bbox[left,low,right,upper] of the file
-        """
-        ds = gdal.Open(filename)
-        gt = ds.GetGeoTransform()
-        cols = ds.RasterXSize
-        rows = ds.RasterYSize
-        ul_x, ul_y = self.calc_ij_coord(gt, 0, 0)
-        ur_x, ur_y = self.calc_ij_coord(gt, cols, 0)
-        lr_x, lr_y = self.calc_ij_coord(gt, cols, rows)
-        ll_x, ll_y = self.calc_ij_coord(gt, 0, rows)
-
-        return [min(ul_x, ll_x), min(ll_y, lr_y), max(lr_x, ur_x), max(ul_y, ur_y)]
-
     def get_bbox_lonlat(self, filename):
         """ Get the bbox in longitude and latitude of the raster file, and
             update the bbox and extent for the file, and return bbox.
@@ -938,10 +821,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         gt = ds.GetGeoTransform()
         cols = ds.RasterXSize
         rows = ds.RasterYSize
-        ul_x, ul_y = self.calc_ij_coord(gt, 0, 0)
-        ur_x, ur_y = self.calc_ij_coord(gt, cols, 0)
-        lr_x, lr_y = self.calc_ij_coord(gt, cols, rows)
-        ll_x, ll_y = self.calc_ij_coord(gt, 0, rows)
+        ul_x, ul_y = calc_ij_coord(gt, 0, 0)
+        ur_x, ur_y = calc_ij_coord(gt, cols, 0)
+        lr_x, lr_y = calc_ij_coord(gt, cols, rows)
+        ll_x, ll_y = calc_ij_coord(gt, 0, rows)
         ul_x2, ul_y2 = ct2(ul_x, ul_y, inverse=True)
         ur_x2, ur_y2 = ct2(ur_x, ur_y, inverse=True)
         lr_x2, lr_y2 = ct2(lr_x, lr_y, inverse=True)
@@ -1014,8 +897,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             zip_ref.extractall(output_dir+'/unzip')
 
         tmptif = None
-        filelist_tif = self.get_files_from_unzipfiles(f'{output_dir}/unzip',
-                                                      'tif', variables)
+        filelist_tif = get_files_from_unzipfiles(f'{output_dir}/unzip',
+                                                 'tif', variables)
         is_tif = bool(filelist_tif)
         if filelist_tif:
             if self.is_stackable(filelist_tif):
@@ -1028,7 +911,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             msg_tif = 'no available data for the variables in the granule, not process.'
 
         tmpnc = None
-        filelist_nc = self.get_files_from_unzipfiles(f'{output_dir}/unzip', 'nc')
+        filelist_nc = get_files_from_unzipfiles(f'{output_dir}/unzip', 'nc')
         is_nc = bool(filelist_nc)
         if filelist_nc:
             tmpnc = filelist_nc
@@ -1037,58 +920,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             msg_nc = 'no available data for the variables, not process.'
 
         return is_tif, tmptif, msg_tif, is_nc, tmpnc, msg_nc
-
-    def get_files_from_unzipfiles(self, extract_dir, filetype, variables=None):
-        """
-        inputs: extract_dir which include geotiff files, filetype is
-        either 'tif' or 'nc', variables is the list of variable names.
-        return: filelist for variables.
-        """
-        tmpexp = os.path.join(extract_dir, f'*.{filetype}')
-        filelist = sorted(glob(tmpexp))
-        ch_filelist = []
-        if filelist:
-            if variables:
-                if 'Band' not in variables[0]:
-                    for variable in variables:
-                        variable_tmp = variable.replace('-', '_')
-                        variable_raw =fr'{variable_tmp}'
-                        for filename in filelist:
-                            if re.search(variable_raw, filename.replace('-', '_')):
-                                ch_filelist.append(filename)
-                                break
-                else:
-                    ch_filelist = filelist
-            else:
-                ch_filelist = filelist
-        return ch_filelist
-
-    def lonlat2projcoord(self, srcfile, lon, lat):
-        dataset = gdal.Open(srcfile)
-        transform = dataset.GetGeoTransform()
-        projection = dataset.GetProjection()
-        dst = osr.SpatialReference(projection)
-        dstproj4 = dst.ExportToProj4()
-        ct2 = Proj(dstproj4)
-        xy = ct2(lon, lat)
-
-        if isinf(xy[0]) or isinf(xy[1]):
-            xy = [None, None]
-
-        return [xy[0], xy[1]], transform
-
-    def projcoord2lonlat(self, srcfile, x, y):
-        """ Convert dataset (x, y) to (longitude, latitude). """
-        dataset = gdal.Open(srcfile)
-        transform = dataset.GetGeoTransform()
-        projection = dataset.GetProjection()
-        dst = osr.SpatialReference(projection)
-        dstproj4 = dst.ExportToProj4()
-        ct2 = Proj(dstproj4)
-        lon, lat = ct2(x, y, inverse=True)
-        dataset = None
-
-        return [lon, lat], transform
 
     def subset2(self, tiffile, outputfile, bbox=None, band=None, shapefile=None):
         """
@@ -1110,10 +941,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         if bbox or shapefile:
             if bbox:
                 shapefile_out = self.box2shapefile(tiffile, bbox)
-                boxproj, proj = self.boxwrs84_boxproj(bbox, ref_ds)
+                boxproj, proj = boxwrs84_boxproj(bbox, ref_ds)
             else:
                 shapefile_out = f'{os.path.dirname(outputfile)}/tmpshapefile'
-                boxproj, proj, shapefile_out, geometryname = self.shapefile_boxproj(
+                boxproj, proj, shapefile_out, geometryname = shapefile_boxproj(
                     shapefile, ref_ds, shapefile_out
                 )
 
@@ -1134,50 +965,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             copyfile(tiffile, outputfile)
 
         return outputfile
-
-    def boxwrs84_boxproj(self, boxwrs84, ref_ds):
-        """ Convert the box define in lon/lat to box in projection coordinates
-            defined in red_ds
-
-            inputs:
-                boxwrs84, which is defined as [left,low,right,upper] in lon/lat
-                ref_ds is reference dataset
-
-            returns:
-                boxprj, which is also defined as:
-
-                {"llxy": llxy, "lrxy": lrxy, "urxy": urxy, "ulxy": ulxy},
-
-                where llxy,lrxy, urxy, and ulxy are coordinate pairs in projection
-                projection, which is the projection of ref_ds
-        """
-        projection = ref_ds.GetProjection()
-        dst = osr.SpatialReference(projection)
-
-        # get coordinates of four corners of the boxwrs84
-        ll_lon, ll_lat = boxwrs84[0], boxwrs84[1]
-        lr_lon, lr_lat = boxwrs84[2], boxwrs84[1]
-        ur_lon, ur_lat = boxwrs84[2], boxwrs84[3]
-        ul_lon, ul_lat = boxwrs84[0], boxwrs84[3]
-
-        # convert all four corners
-        dstproj4 = dst.ExportToProj4()
-        ct = Proj(dstproj4)
-        llxy = ct(ll_lon, ll_lat)
-        lrxy = ct(lr_lon, lr_lat)
-        urxy = ct(ur_lon, ur_lat)
-        ulxy = ct(ul_lon, ul_lat)
-
-        boxproj = {'llxy': llxy, 'lrxy': lrxy, 'urxy': urxy, 'ulxy': ulxy}
-
-        return boxproj, projection
-
-    def calc_coord_ij(self, gt, x, y):
-        transform = Affine.from_gdal(*gt)
-        rev_transform = ~transform
-        cols, rows = rev_transform*(x, y)
-
-        return int(cols), int(rows)
 
     def calc_subset_envelopwindow(self, ds, box, delt=0):
         """
@@ -1202,10 +989,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         # get (i, j) coordinates in the array of 4 corners of the box
         gt = ds.GetGeoTransform()
-        ul_i, ul_j = self.calc_coord_ij(gt, ul[0], ul[1])
-        ur_i, ur_j = self.calc_coord_ij(gt, ur[0], ur[1])
-        ll_i, ll_j = self.calc_coord_ij(gt, ll[0], ll[1])
-        lr_i, lr_j = self.calc_coord_ij(gt, lr[0], lr[1])
+        ul_i, ul_j = calc_coord_ij(gt, ul[0], ul[1])
+        ur_i, ur_j = calc_coord_ij(gt, ur[0], ur[1])
+        ll_i, ll_j = calc_coord_ij(gt, ll[0], ll[1])
+        lr_i, lr_j = calc_coord_ij(gt, lr[0], lr[1])
 
         # adjust box in array coordinates
         ul_i = ul_i - delt
@@ -1232,61 +1019,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         lr_j = min(rows_img, lr_j)
         cols = lr_i-ul_i
         rows = lr_j-ul_j
-        ul_x, ul_y = self.calc_ij_coord(gt, ul_i, ul_j)
+        ul_x, ul_y = calc_ij_coord(gt, ul_i, ul_j)
 
         return ul_x, ul_y, ul_i, ul_j, cols, rows
 
-    def calc_ij_coord(self, gt, col, row):
-        transform = Affine.from_gdal(*gt)
-        x, y = transform * (col, row)
-
-        return x, y
-
-    def create_shapefile_with_box(self, box, projection, shapefile):
-        """
-            input: box {ll, lr, ur, ul} in projection coordinates, where:
-
-            ll = (ll_lon, ll_lat)
-            lr = (lr_lon, lr_lat)
-            ur = (ur_lon, ur_lat)
-            ul = (ul_lon, ul_lat)
-
-        """
-
-        # output: polygon geometry
-        llxy = box.get('llxy')
-        lrxy = box.get('lrxy')
-        urxy = box.get('urxy')
-        ulxy = box.get('ulxy')
-        ring = ogr.Geometry(ogr.wkbLinearRing)
-        ring.AddPoint(llxy[0], llxy[1])
-        ring.AddPoint(lrxy[0], lrxy[1])
-        ring.AddPoint(urxy[0], urxy[1])
-        ring.AddPoint(ulxy[0], ulxy[1])
-        ring.AddPoint(llxy[0], llxy[1])
-        polygon = ogr.Geometry(ogr.wkbPolygon)
-        polygon.AddGeometry(ring)
-
-        # create output file
-        out_driver = ogr.GetDriverByName('ESRI Shapefile')
-
-        if os.path.isfile(shapefile):
-            os.remove(shapefile)
-        elif os.path.isdir(shapefile):
-            rmtree(shapefile)
-
-        out_data_source = out_driver.CreateDataSource(shapefile)
-        out_spatial_ref = osr.SpatialReference(projection)
-        out_layer = out_data_source.CreateLayer('boundingbox', out_spatial_ref,
-                                                geom_type=ogr.wkbPolygon)
-        feature_definition = out_layer.GetLayerDefn()
-
-        # add new geom to layer
-        out_feature = ogr.Feature(feature_definition)
-        out_feature.SetGeometry(polygon)
-        out_layer.CreateFeature(out_feature)
-        out_feature.Destroy()
-        out_data_source.Destroy()
 
     def box2shapefile(self, inputfile, box):
         """
@@ -1300,7 +1036,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         in_ds = gdal.Open(inputfile)
         in_gt = in_ds.GetGeoTransform()
         inv_gt = gdal.InvGeoTransform(in_gt)
-        boxproj, proj = self.boxwrs84_boxproj(box, in_ds)
+        boxproj, proj = boxwrs84_boxproj(box, in_ds)
 
         if inv_gt is None:
             raise RuntimeError('Inverse geotransform failed')
@@ -1314,43 +1050,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         elif os.path.isdir(shapefile):
             rmtree(shapefile)
 
-        self.create_shapefile_with_box(boxproj, proj, shapefile)
+        create_shapefile_with_box(boxproj, proj, shapefile)
 
         return shapefile
-
-    def shapefile_boxproj(self, shapefile, ref_ds, outputfile):
-        """ Convert shape file and calculate the envelop box in the projection
-            defined in ref_ds
-
-            inputs:
-                shapefile - used to define the AOI
-                ref_ds - dataset associate with the reference geotiff file
-                outputfile - output shapefile anme
-            returns:
-                boxproj - extent of the outputfile
-                ref_proj - projection of the ref_ds
-                outputfile - output shapefile name
-                geometryname - geometry name of the features in the outputfile
-        """
-        ref_proj = ref_ds.GetProjection()
-        tmp = GeoDataFrame.from_file(shapefile)
-        tmpproj = tmp.to_crs(ref_proj)
-        tmpproj.to_file(outputfile)
-        shp = ogr.Open(outputfile)
-        lyr = shp.GetLayer()
-        lyrextent = lyr.GetExtent()
-        feature = lyr.GetNextFeature()
-        geometry = feature.GetGeometryRef()
-        geometryname = geometry.GetGeometryName()
-        # Extent[lon_min,lon_max,lat_min,lat_max]
-        # boxproj={'llxy': llxy, 'lrxy': lrxy, 'urxy': urxy, 'ulxy': ulxy}
-        # where llxy,lrxy, urxy, and ulxy are coordinate pairs in projection
-        llxy = (lyrextent[0], lyrextent[2])
-        lrxy = (lyrextent[1], lyrextent[2])
-        urxy = (lyrextent[1], lyrextent[3])
-        ulxy = (lyrextent[0], lyrextent[3])
-        boxproj = {'llxy': llxy, 'lrxy': lrxy, 'urxy': urxy, 'ulxy': ulxy}
-        return boxproj, ref_proj, outputfile, geometryname
 
     def mask_via_combined(self, inputfile, shapefile, outputfile):
         """ Calculates the maskbands and set databands with nodata value for
