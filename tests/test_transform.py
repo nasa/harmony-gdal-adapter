@@ -15,6 +15,7 @@ None
 
 """
 from pathlib import Path
+from shutil import rmtree
 import os
 import pytest
 
@@ -64,10 +65,14 @@ def download_file(unittest_adapter, output_dir):
     function, use assert to check if the file is downloaded.
 
     """
+    if os.path.isdir(output_dir):
+        rmtree(output_dir)
+
+    os.makedirs(output_dir)
+
     adapter = unittest_adapter.adapter
     message = adapter.message
     granule = message.granules[0]
-    adapter.prepare_output_dir(output_dir)
 
     url = granule.url
 

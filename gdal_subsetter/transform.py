@@ -218,8 +218,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     )
                 return stac_record
             else:
-                exception = HGAException(f'No stac_record created: {process_msg}')
-                raise exception
+                raise HGAException(f'No stac_record created: {process_msg}')
 
         except Exception as exception:
             self.logger.exception(exception)
@@ -353,46 +352,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         dataset = None
 
-    def prepare_output_dir(self, output_dir):
-        """
-        Deletes (if present) and recreates the given output_dir, ensuring it exists
-        and is empty
-
-        Parameters
-        ----------
-        output_dir : string
-            the directory to delete and recreate
-        """
-        self.cmd2('rm', '-rf', output_dir)
-        self.cmd2('mkdir', '-p', output_dir)
-
-    def cmd2(self, *args) -> str:
-        """
-        This is used to execute the OS commands, such as cp, mv, and rm.
-        """
+    def execute_gdal_command(self, *args) -> List[str]:
+        """ This is used to execute gdal* commands. """
         self.logger.info(
             args[0] + ' ' + ' '.join(["'{}'".format(arg) for arg in args[1:]])
         )
-        # result_str = check_output(args).decode('utf-8')
-        command = ' '.join(args)
-        exit_code=os.system(command)
-        if exit_code == 0:
-            exit_state = 'successfully'
-        else:
-            exit_state = 'failed'
-
-        return f'{command} executes {exit_state}.'
-
-    def cmd(self, *args) -> List[str]:
-        """ This is used to execuate gdal* commands. """
-        self.logger.info(
-            args[0] + ' ' + ' '.join(["'{}'".format(arg) for arg in args[1:]])
-        )
-        result_str = check_output(args).decode('utf-8')
-        return result_str.split('\n')
-
-    def cmd3(self, *args) -> List[str]:
-        """ This is used to execute cli commands without output login info. """
         result_str = check_output(args).decode('utf-8')
         return result_str.split('\n')
 
@@ -425,7 +389,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             command = ['gdal_translate', '-a_srs']
             command.extend([crs_wkt])
             command.extend([filename, dstfile])
-            self.cmd(*command)
+            self.execute_gdal_command(*command)
 
             return dstfile
         except Exception as error:
@@ -439,7 +403,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         command = ['gdal_translate']
         command.extend(['-b', str(band)])
         command.extend([srcfile, dstfile])
-        self.cmd(*command)
+        self.execute_gdal_command(*command)
 
         return dstfile
 
@@ -596,7 +560,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         outfile = f'{fileprex}.shp'
         command = ['ogr2ogr', '-f', 'ESRI Shapefile']
         command.extend([outfile, tmpfile_geojson])
-        self.cmd(*command)
+        self.execute_gdal_command(*command)
 
         return outfile
 
@@ -622,7 +586,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             command.extend(['-outsize', str(width), str(height)])
             command.extend(['-r', resample_method])
             command.extend([srcfile, dstfile])
-            self.cmd(*command)
+            self.execute_gdal_command(*command)
             return dstfile
         else:
             return srcfile
@@ -671,7 +635,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 command.extend(['-tr', str(ref_xres), str(ref_yres)])
 
             command.extend([infile, outfile])
-            self.cmd(*command)
+            self.execute_gdal_command(*command)
             return outfile
 
         return _regrid(srcfile, dstfile, resampling_mode=resample_method,
@@ -732,7 +696,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 dstfile += '.tif'
 
             command.extend([srcfile, colormap, dstfile])
-            self.cmd(*command)
+            self.execute_gdal_command(*command)
             if 'png' in fmt.mime or 'jpeg' in fmt.mime:
                 dstfile_basename, dstfile_ext = os.path.splitext(dstfile)
                 copyfile(dstfile,
@@ -848,20 +812,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         dst_ds = None
         return outfile
 
-    def rename_to_result(self, layerid, srcfile, dstdir):
-        dstfile = os.path.join(dstdir, 'result.tif')
-
-        if not os.path.exists(dstfile):
-            self.cmd2('mv', srcfile, dstfile)
-
-        return dstfile
-
     def reformat(self, srcfile, dstdir):
         gdal_subsetter_version = 'gdal_subsetter_version={self.get_version()}'
         output_mime = self.message.format.process('mime')
         if not output_mime == 'image/png' or output_mime == 'image/jpeg':
             command = ['gdal_edit.py',  '-mo', gdal_subsetter_version, srcfile]
-            self.cmd(*command)
+            self.execute_gdal_command(*command)
         if output_mime not in mime_to_gdal:
             raise Exception(f'Unrecognized output format: {output_mime}')
         if output_mime == 'image/tiff':
@@ -883,11 +839,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
             command = ['gdal_translate', '-of', mime_to_gdal[output_mime],
                        '-scale', srcfile, dstfile]
-            self.cmd(*command)
+            self.execute_gdal_command(*command)
             return dstfile
 
     def read_layer_format(self, collection, filename, layer_id):
-        gdalinfo_lines = self.cmd('gdalinfo', filename)
+        gdalinfo_lines = self.execute_gdal_command('gdalinfo', filename)
 
         layer_line = next((line for line in gdalinfo_lines
                            if re.search(f'SUBDATASET.*{layer_id}$', line)
@@ -902,16 +858,16 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
     def get_variables(self, filename):
         """ filename is either nc or tif. """
-        gdalinfo_lines = self.cmd3('gdalinfo', filename)
-        drivertype = gdalinfo_lines[0]
+        gdalinfo_lines = gdal.Info(filename).splitlines()
+
         result = []
-        if 'netCDF' in drivertype or 'HDF' in drivertype:
+        if 'netCDF' in gdalinfo_lines[0] or 'HDF' in gdalinfo_lines[0]:
             # netCDF/Network Common Data Format, HDF5/Hierarchical Data Format
             # Release 5
             # Normal case of NetCDF / HDF, where variables are subdatasets
             for subdataset in filter((lambda line: re.match(r'^\s*SUBDATASET_\d+_NAME=', line)), gdalinfo_lines):
                 result.append(ObjectView({'name': re.split(r':', subdataset)[-1]}))
-        elif 'GTiff' in drivertype:
+        elif 'GTiff' in gdalinfo_lines[0]:
             #  GTiff/GeoTIFF
             # GeoTIFFs, directly use Band # as the variables.
             # for subdataset in filter((lambda line: re.match(r"^Band", line)), gdalinfo_lines):
@@ -931,7 +887,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return result
 
     def is_geotiff(self, filename):
-        gdalinfo_lines = self.cmd('gdalinfo', filename)
+        gdalinfo_lines = self.execute_gdal_command('gdalinfo', filename)
 
         return gdalinfo_lines[0] == 'Driver: GTiff/GeoTIFF'
 
@@ -1168,13 +1124,14 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             if band:
                 command.extend(['-b', str(band)])
 
-            command.extend(
-                ['-srcwin', str(ul_i), str(ul_j), str(cols), str(rows)])
+            command.extend(['-srcwin', str(ul_i), str(ul_j), str(cols),
+                            str(rows)])
+
             command.extend([tiffile, tmpfile])
-            self.cmd(*command)
+            self.execute_gdal_command(*command)
             self.mask_via_combined(tmpfile, shapefile_out, outputfile)
         else:
-            self.cmd2(*['cp', tiffile, outputfile])
+            copyfile(tiffile, outputfile)
 
         return outputfile
 
@@ -1313,11 +1270,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         # create output file
         out_driver = ogr.GetDriverByName('ESRI Shapefile')
 
-        if os.path.exists(shapefile):
-            if os.path.isfile(shapefile):
-                os.remove(shapefile)
-            else:
-                rmtree(shapefile)
+        if os.path.isfile(shapefile):
+            os.remove(shapefile)
+        elif os.path.isdir(shapefile):
+            rmtree(shapefile)
 
         out_data_source = out_driver.CreateDataSource(shapefile)
         out_spatial_ref = osr.SpatialReference(projection)
@@ -1353,8 +1309,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         basename = os.path.splitext(os.path.basename(inputfile))[0]
         shapefile = f'{inputdir}/{basename}-shapefile'
 
-        if os.path.isfile(shapefile) or os.path.isdir(shapefile):
-            self.cmd2(*['rm', '-rf', shapefile])
+        if os.path.isfile(shapefile):
+            os.remove(shapefile)
+        elif os.path.isdir(shapefile):
+            rmtree(shapefile)
 
         self.create_shapefile_with_box(boxproj, proj, shapefile)
 
@@ -1406,13 +1364,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         """
         # define temporary file name
         tmpfile = f'{os.path.splitext(inputfile)[0]}-tmp.tif'
-        self.cmd2(*['cp', '-f', inputfile, tmpfile])
-        # cmd = ' '.join(['cp', '-f', inputfile, tmpfile])
-        # os.system(cmd)
-
-        self.cmd2(*['cp', '-f', inputfile, outputfile])
-        # cmd = ' '.join(['cp', '-f', inputfile, outputfile])
-        # os.system(cmd)
+        copyfile(inputfile, tmpfile)
+        copyfile(inputfile, outputfile)
 
         # read shapefile info
         shp = ogr.Open(shapefile)
@@ -1615,7 +1568,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
                 datavar.grid_mapping = crs_name
 
-                # add standard_name no standard_mame in datavar
+                # add standard_name no standard_name in datavar
                 lst = [attr for attr in datavar.ncattrs()
                        if attr in ['standard_name', 'long_name']]
 
