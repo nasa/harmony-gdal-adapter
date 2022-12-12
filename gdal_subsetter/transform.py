@@ -742,7 +742,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             return dstfile
 
     def read_layer_format(self, collection, filename, layer_id):
-        gdalinfo_lines = self.execute_gdal_command('gdalinfo', filename)
+        gdalinfo_lines = gdal.Info(filename).splitlines()
 
         layer_line = next((line for line in gdalinfo_lines
                            if re.search(f'SUBDATASET.*{layer_id}$', line)
@@ -786,8 +786,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return result
 
     def is_geotiff(self, filename):
-        gdalinfo_lines = self.execute_gdal_command('gdalinfo', filename)
-
+        gdalinfo_lines = gdal.Info(filename).splitlines()
         return gdalinfo_lines[0] == 'Driver: GTiff/GeoTIFF'
 
     def combin_transfer(self, layer_id, filename, output_dir, band):
