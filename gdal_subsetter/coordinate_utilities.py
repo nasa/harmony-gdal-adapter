@@ -9,6 +9,8 @@ from affine import Affine
 from osgeo import gdal, osr
 from pyproj import Proj
 
+from gdal_subsetter.utilities import OpenGDAL
+
 
 def boxwrs84_boxproj(boxwrs84, ref_ds):
     """ Convert the box defined in lon/lat to box in projection coordinates
@@ -73,11 +75,11 @@ def get_bbox(filename: str) -> List[float]:
     input: the GeoTIFF file
     return: bbox[left,low,right,upper] of the file
     """
-    ds = gdal.Open(filename)
-    geotransform = ds.GetGeoTransform()
-    cols = ds.RasterXSize
-    rows = ds.RasterYSize
-    ds = None
+    with OpenGDAL(filename) as dataset:
+        geotransform = dataset.GetGeoTransform()
+        cols = dataset.RasterXSize
+        rows = dataset.RasterYSize
+
     ul_x, ul_y = calc_ij_coord(geotransform, 0, 0)
     ur_x, ur_y = calc_ij_coord(geotransform, cols, 0)
     lr_x, lr_y = calc_ij_coord(geotransform, cols, rows)
@@ -92,10 +94,10 @@ def is_rotated_geotransform(srcfile: str) -> bool:
         of that geotransform.
 
     """
-    dataset = gdal.Open(srcfile)
-    geo_transform = dataset.GetGeoTransform()
+    with OpenGDAL(srcfile) as dataset:
+        geo_transform = dataset.GetGeoTransform()
+
     check = geo_transform[2] != 0.0 or geo_transform[4] != 0
-    dataset = None
 
     return check
 
@@ -105,9 +107,10 @@ def lonlat_to_projcoord(srcfile, lon, lat):
         in the input GeoTIFF.
 
     """
-    dataset = gdal.Open(srcfile)
-    transform = dataset.GetGeoTransform()
-    projection = dataset.GetProjection()
+    with OpenGDAL(srcfile) as dataset:
+        geotransform = dataset.GetGeoTransform()
+        projection = dataset.GetProjection()
+
     dst = osr.SpatialReference(projection)
     dstproj4 = dst.ExportToProj4()
     ct2 = Proj(dstproj4)
@@ -116,4 +119,4 @@ def lonlat_to_projcoord(srcfile, lon, lat):
     if isinf(xy[0]) or isinf(xy[1]):
         xy = [None, None]
 
-    return [xy[0], xy[1]], transform
+    return [xy[0], xy[1]], geotransform
