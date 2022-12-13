@@ -1,3 +1,6 @@
+[version 1.2.8] 2022-12-13
+* Implement `OpenGDAL` context manager for `osgeo.gdal.Open`.
+
 [version 1.2.7] 2022-12-10
 * Migration of static methods from HarmonyAdapter class to utility modules.
 * Implementation of Python native function to copy, move and delete files or
