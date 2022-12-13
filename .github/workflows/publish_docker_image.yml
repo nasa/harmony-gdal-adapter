@@ -19,12 +19,12 @@ jobs:
 
     steps:
       - name: Checkout harmony-gdal-adapter repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           lfs: true
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -35,13 +35,13 @@ jobs:
         run: ./bin/run-test
 
       - name: Archive test results
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: Test results for Python ${{ matrix.python-version }}
           path: test-reports/
 
       - name: Archive coverage report
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: Coverage report for Python ${{ matrix.python-version }}
           path: coverage/*
@@ -54,7 +54,7 @@ jobs:
 
     steps:
       - name: Checkout harmony-gdal-adapter repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           lfs: true
 
