@@ -8,7 +8,7 @@
 # 2022-01-27: Dockerfile created.
 #
 ###############################################################################
-FROM osgeo/gdal:ubuntu-full-3.4.3
+FROM osgeo/gdal:ubuntu-full-3.6.0
 
 WORKDIR "/home"
 
