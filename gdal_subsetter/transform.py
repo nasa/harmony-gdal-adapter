@@ -1410,8 +1410,10 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 if gt[2] == 0.0 and gt[4] == 0.0:
                     datavar.coordinates = 'lon lat'
 
-        with OpenGDAL(infile) as input_geotiff, \
-            Dataset(outfile, mode='w', format='NETCDF4') as output_netcdf4:
+        with (
+            OpenGDAL(infile) as input_geotiff,
+            Dataset(outfile, mode='w', format='NETCDF4') as output_netcdf4
+        ):
             # define global attributes
             output_netcdf4.title = ''
             output_netcdf4.institution = 'Alaska Satellite Facility'

@@ -1,3 +1,7 @@
+[version 1.2.9] 2022-12-14
+* Update base Docker image to `osgeo/gdal:ubuntu-full-3.6.0` (GDAL 3.6.0).
+* Update geospatial Python packages to support GDAL upgrade.
+
 [version 1.2.8] 2022-12-13
 * Implement `OpenGDAL` context manager for `osgeo.gdal.Open`.
 
