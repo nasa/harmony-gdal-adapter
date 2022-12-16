@@ -1,3 +1,7 @@
+[version 1.2.10] 2022-12-16
+* Migrate `calc_subset_envelope_window` and `box_to_shapefile` out of HarmonyAdapter.
+* Increased unit test coverage.
+
 [version 1.2.9] 2022-12-14
 * Update base Docker image to `osgeo/gdal:ubuntu-full-3.6.0` (GDAL 3.6.0).
 * Update geospatial Python packages to support GDAL upgrade.
@@ -7,7 +11,7 @@
 
 [version 1.2.7] 2022-12-10
 * Migration of static methods from HarmonyAdapter class to utility modules.
-* Implementation of Python native function to copy, move and delete files or
+* Implementation of Python native functions to copy, move and delete files or
   directories.
 * General linting clean-up.
 

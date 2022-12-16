@@ -3,16 +3,54 @@
 
 """
 from os import remove as remove_file
-from os.path import isdir, isfile
+from os.path import (basename, dirname, isdir, isfile, join as path_join,
+                     splitext)
 from shutil import rmtree
+from typing import Dict, List, Tuple
 import json
 
 from geopandas import GeoDataFrame
-from osgeo import ogr, osr
+from osgeo import gdal, ogr, osr
 from pyproj import CRS
 from shapely.geometry import shape, mapping
 from shapely.ops import cascaded_union
 import fiona
+
+from gdal_subsetter.coordinate_utilities import boxwrs84_boxproj
+from gdal_subsetter.utilities import OpenGDAL
+
+
+def box_to_shapefile(input_file: str, box: List[float]) -> str:
+    """
+    inputs:
+        inputfile: the geotiff file, box[minlon, minlat, maxlon, maxlat] is
+                   in lon/lat.
+    return:
+        shapefile: path to the created shape file.
+
+    """
+    with OpenGDAL(input_file) as input_dataset:
+        input_geotransform = input_dataset.GetGeoTransform()
+
+    boxproj, proj = boxwrs84_boxproj(box, input_file)
+
+    inverse_geotransform = gdal.InvGeoTransform(input_geotransform)
+
+    if inverse_geotransform is None:
+        raise RuntimeError('Inverse geotransform failed')
+
+    input_dir = dirname(input_file)
+    input_basename = splitext(basename(input_file))[0]
+    shapefile = path_join(input_dir, f'{input_basename}-shapefile')
+
+    if isfile(shapefile):
+        remove_file(shapefile)
+    elif isdir(shapefile):
+        rmtree(shapefile)
+
+    create_shapefile_with_box(boxproj, proj, shapefile)
+
+    return shapefile
 
 
 def create_shapefile_with_box(box, projection, shapefile):
@@ -119,37 +157,37 @@ def get_coordinates_unit(geojson_file: str):
     return geometry, unit
 
 
-def shapefile_boxproj(shapefile, ref_ds, outputfile):
+def shapefile_boxproj(shapefile: str, input_file: str,
+                      outputfile: str) -> Dict[str, Tuple[float]]:
     """ Convert shape file and calculate the envelop box in the projection
-        defined in ref_ds
+        defined in input_file.
 
         inputs:
-            shapefile - used to define the AOI
-            ref_ds - dataset associate with the reference geotiff file
-            outputfile - output shapefile anme
+            shapefile - Used to define the Area of Interest
+            input_file - Reference GeoTIFF file defining the geotransform.
+            outputfile - Output shape file name
         returns:
-            boxproj - extent of the outputfile
-            ref_proj - projection of the ref_ds
-            outputfile - output shapefile name
-            geometryname - geometry name of the features in the outputfile
+            boxproj - extent of the output file. A dictionary with structure:
+
+            boxproj = {'llxy': (x_ll, y_ll),
+                       'lrxy': (x_lr, y_lr),
+                       'urxy': (x_ur, y_ur),
+                       'ulxy': (x_ul, y_ul)}
 
     """
-    ref_proj = ref_ds.GetProjection()
+    with OpenGDAL(input_file) as input_dataset:
+        ref_proj = input_dataset.GetProjection()
+
     tmp = GeoDataFrame.from_file(shapefile)
     tmpproj = tmp.to_crs(ref_proj)
     tmpproj.to_file(outputfile)
     shp = ogr.Open(outputfile)
     lyr = shp.GetLayer()
     lyrextent = lyr.GetExtent()
-    feature = lyr.GetNextFeature()
-    geometry = feature.GetGeometryRef()
-    geometryname = geometry.GetGeometryName()
     # Extent[lon_min, lon_max, lat_min, lat_max]
-    # boxproj={'llxy': llxy, 'lrxy': lrxy, 'urxy': urxy, 'ulxy': ulxy}
     # where llxy, lrxy, urxy, and ulxy are coordinate pairs in projection
     llxy = (lyrextent[0], lyrextent[2])
     lrxy = (lyrextent[1], lyrextent[2])
     urxy = (lyrextent[1], lyrextent[3])
     ulxy = (lyrextent[0], lyrextent[3])
-    boxproj = {'llxy': llxy, 'lrxy': lrxy, 'urxy': urxy, 'ulxy': ulxy}
-    return boxproj, ref_proj, outputfile, geometryname
+    return {'llxy': llxy, 'lrxy': lrxy, 'urxy': urxy, 'ulxy': ulxy}
