@@ -11,6 +11,7 @@ import re
 
 from harmony import is_harmony_cli, run_cli, setup_cli
 from harmony.adapter import BaseHarmonyAdapter
+from harmony.message import Variable as HarmonyVariable
 from harmony.util import (bbox_to_geometry, download, generate_output_filename,
                           stage)
 from netCDF4 import Dataset
@@ -24,12 +25,13 @@ import numpy as np
 
 from gdal_subsetter.coordinate_utilities import (boxwrs84_boxproj,
                                                  calc_coord_ij, calc_ij_coord,
+                                                 calc_subset_envelope_window,
                                                  get_bbox, lonlat_to_projcoord)
 from gdal_subsetter.exceptions import (DownloadError,
                                        HGAException,
                                        UnknownFileFormatError,
                                        IncompatibleVariablesError)
-from gdal_subsetter.shape_file_utilities import (create_shapefile_with_box,
+from gdal_subsetter.shape_file_utilities import (box_to_shapefile,
                                                  convert_to_multipolygon,
                                                  get_coordinates_unit,
                                                  shapefile_boxproj)
@@ -37,30 +39,6 @@ from gdal_subsetter.utilities import (get_file_type, get_files_from_unzipfiles,
                                       get_version, mime_to_extension,
                                       mime_to_gdal, OpenGDAL, process_flags,
                                       rename_file, resampling_methods)
-
-
-class ObjectView(object):
-    """
-    Simple class to make a dict look like an object.
-
-    Example
-    --------
-        >>> o = ObjectView({ "key": "value" })
-        >>> o.key
-        'value'
-    """
-
-    def __init__(self, d):
-        """
-        Allows accessing the keys of dictionary d as though they
-        are properties on an object
-
-        Parameters
-        ----------
-        d : dict
-            a dictionary whose keys we want to access as object properties
-        """
-        self.__dict__ = d
 
 
 class HarmonyAdapter(BaseHarmonyAdapter):
@@ -760,7 +738,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             # Release 5
             # Normal case of NetCDF / HDF, where variables are subdatasets
             for subdataset in filter((lambda line: re.match(r'^\s*SUBDATASET_\d+_NAME=', line)), gdalinfo_lines):
-                result.append(ObjectView({'name': re.split(r':', subdataset)[-1]}))
+                result.append(HarmonyVariable({'name': re.split(r':', subdataset)[-1]}))
         elif 'GTiff' in gdalinfo_lines[0]:
             #  GTiff/GeoTIFF
             # GeoTIFFs, directly use Band # as the variables.
@@ -920,13 +898,16 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return is_tif, tmptif, msg_tif, is_nc, tmpnc, msg_nc
 
-    def subset2(self, tiffile, outputfile, bbox=None, band=None, shapefile=None):
-        """
-        subset tiffile with bbox or shapefile. bbox ans shapefile are exclusive.
-        inputs: tiffile-geotif file
-                outputfile-subsetted file name
-                bbox - [left,low,right,upper] in lon/lat coordinates
-                shapefile - a shapefile directory in which multiple files exist
+    def subset2(self, tiffile: str, outputfile: str, bbox=None,
+                band=None, shapefile=None) -> str:
+        """ Subset a GeoTIFF with a bounding box or shapefile. Bounding box and
+            shapefile are exclusive.
+
+            inputs: tiffile: GeoTIFF file path
+                    outputfile: subsetted file name
+                    bbox: [left,low,right,upper] in lon/lat coordinates
+                    shapefile: a shapefile directory in which multiple files
+                        exist
         """
         process_flags['subset'] = True
         # covert to absolute path
@@ -935,20 +916,19 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         # RasterFormat = 'GTiff'
         tmpfile = f'{os.path.splitext(outputfile)[0]}-tmp.tif'
         if bbox or shapefile:
-            with OpenGDAL(tiffile) as ref_ds:
-                if bbox:
-                    shapefile_out = self.box2shapefile(tiffile, bbox)
-                    boxproj, _ = boxwrs84_boxproj(bbox, ref_ds)
-                else:
-                    shapefile_out = os.path.join(os.path.dirname(outputfile),
-                                                 'tmpshapefile')
-                    boxproj, proj, shapefile_out, geometryname = shapefile_boxproj(
-                        shapefile, ref_ds, shapefile_out
-                    )
+            if bbox:
+                shapefile_out = box_to_shapefile(tiffile, bbox)
+                boxproj, _ = boxwrs84_boxproj(bbox, tiffile)
+            else:
+                shapefile_out = os.path.join(os.path.dirname(outputfile),
+                                             'tmpshapefile')
+                boxproj = shapefile_boxproj(shapefile, tiffile,
+                                            shapefile_out)
 
-                ul_x, ul_y, ul_i, ul_j, cols, rows = self.calc_subset_envelopwindow(
-                    ref_ds, boxproj
-                )
+            ul_x, ul_y, ul_i, ul_j, cols, rows = calc_subset_envelope_window(
+                tiffile, boxproj
+            )
+
             command = ['gdal_translate']
 
             if band:
@@ -964,94 +944,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             copyfile(tiffile, outputfile)
 
         return outputfile
-
-    def calc_subset_envelopwindow(self, ds, box, delt=0):
-        """
-            inputs:
-                ds: the reference dataset
-                box: Defined as:
-
-                    {'llxy':llxy, 'lrxy':lrxy, 'urxy':urxy, 'ulxy':ulxy},
-
-                    where llxy,lrxy, urxy, and ulxy are coordinate pairs in projection
-                delt: the number of deltax and deltay to extend the subsetting
-                      array which represents the box
-            returns: ul_x, ul_y, ul_i, ul_j, cols, rows
-
-        """
-
-        # get 4 corners coordinate values in projection coordinates
-        ul = box.get('ulxy')
-        ur = box.get('urxy')
-        ll = box.get('llxy')
-        lr = box.get('lrxy')
-
-        # get (i, j) coordinates in the array of 4 corners of the box
-        geotransform = ds.GetGeoTransform()
-        ul_i, ul_j = calc_coord_ij(geotransform, ul[0], ul[1])
-        ur_i, ur_j = calc_coord_ij(geotransform, ur[0], ur[1])
-        ll_i, ll_j = calc_coord_ij(geotransform, ll[0], ll[1])
-        lr_i, lr_j = calc_coord_ij(geotransform, lr[0], lr[1])
-
-        # adjust box in array coordinates
-        ul_i = ul_i - delt
-        ul_j = ul_j - delt
-        ur_i = ur_i + delt
-        ur_j = ur_j - delt
-        lr_i = lr_i + delt
-        lr_j = lr_j + delt
-        ll_i = ll_i - delt
-        ll_j = ll_j + delt
-
-        # get the envelop of the box in array coordinates
-        ul_i = min(ul_i, ur_i, ll_i, lr_i)
-        ul_j = min(ul_j, ur_j, ll_j, lr_j)
-        lr_i = max(ul_i, ur_i, ll_i, lr_i)
-        lr_j = max(ul_j, ur_j, ll_j, lr_j)
-
-        # get the intersection between box and image in row, col coordinator
-        cols_img = ds.RasterXSize
-        rows_img = ds.RasterYSize
-        ul_i = max(0, ul_i)
-        ul_j = max(0, ul_j)
-        lr_i = min(cols_img, lr_i)
-        lr_j = min(rows_img, lr_j)
-        cols = lr_i-ul_i
-        rows = lr_j-ul_j
-        ul_x, ul_y = calc_ij_coord(geotransform, ul_i, ul_j)
-
-        return ul_x, ul_y, ul_i, ul_j, cols, rows
-
-
-    def box2shapefile(self, inputfile, box):
-        """
-        inputs:
-            inputfile: the geotiff file, box[minlon, minlat, maxlon, maxlat] is
-                       in lon/lat.
-        return:
-            shapefile.
-        """
-        with OpenGDAL(inputfile) as input_dataset:
-            input_geotransform = input_dataset.GetGeoTransform()
-            boxproj, proj = boxwrs84_boxproj(box, input_dataset)
-
-        inverse_geotransform = gdal.InvGeoTransform(input_geotransform)
-
-        if inverse_geotransform is None:
-            raise RuntimeError('Inverse geotransform failed')
-
-        inputdir = os.path.dirname(inputfile)
-        basename = os.path.splitext(os.path.basename(inputfile))[0]
-        shapefile = os.path.join(inputdir, f'{basename}-shapefile')
-
-        if os.path.isfile(shapefile):
-            os.remove(shapefile)
-        elif os.path.isdir(shapefile):
-            rmtree(shapefile)
-
-        create_shapefile_with_box(boxproj, proj, shapefile)
-
-        return shapefile
 
     def mask_via_combined(self, inputfile, shapefile, outputfile):
         """ Calculates the maskbands and set databands with nodata value for
