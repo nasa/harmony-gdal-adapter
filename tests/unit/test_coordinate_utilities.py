@@ -19,11 +19,11 @@ class TestCoordinateUtilities(TestCase):
                               (10, 20))
 
     def test_calc_ij_coord(self):
-        """ Ensure the expect values are retrieved for a given geotransform,
+        """ Ensure the expected values are retrieved for a given geotransform,
             row index and column index.
 
-            In the geotransform below, the corner coordinates is (10, 20),
-            each column is separated by 1 unit and each row by 2 unit.
+            In the geotransform below, the corner coordinates are (10, 20),
+            each column is separated by 1 unit and each row by 2 units.
 
         """
         self.assertTupleEqual(calc_ij_coord((10, 1, 0, 20, 0, 2), 10, 20),
