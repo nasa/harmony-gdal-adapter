@@ -6,7 +6,6 @@ from glob import glob
 from os import rename
 from os.path import dirname, exists, join as path_join, splitext
 from typing import List
-import re
 
 from harmony.util import generate_output_filename
 from osgeo import gdal
@@ -57,41 +56,69 @@ def get_version() -> str:
     return version
 
 
-def get_files_from_unzipfiles(extract_dir: str, filetype: str,
-                              variables=None) -> List[str]:
+def has_world_file(file_mime_type: str) -> bool:
+    """ Determine if the given MIME type for a transformed output is expected
+        to have an accompanying ESRI world file.
+
     """
-    inputs: extract_dir which include geotiff files, filetype is
-    either 'tif' or 'nc', variables is the list of variable names.
-    return: filelist for variables.
+    return any(world_mime in file_mime_type.lower()
+               for world_mime in ['png', 'jpeg'])
+
+
+def is_geotiff(file_name: str) -> bool:
+    """ Determine if the given file is a GeoTIFF via `gdalinfo`. """
+    gdalinfo_lines = gdal.Info(file_name).splitlines()
+    return gdalinfo_lines[0] == 'Driver: GTiff/GeoTIFF'
+
+
+def get_files_from_unzipfiles(extract_dir: str, file_type: str,
+                              variable_names: List[str] = []) -> List[str]:
+    """ Retrieve a filtered list of files that have been extracted from an
+        input zip file based on a specific file type ('nc' or 'tif').
+
+        If a list of variables names is specified, and the first variable name
+        does not include "Band", the list of extracted files with the expected
+        extension will be further filtered to only return those file names that
+        include one of the requested variable names.
+
+        As currently called, requests to determine NetCDF-4 files will not
+        include a filtering list of variable names.
+
     """
-    tmpexp = path_join(extract_dir, f'*.{filetype}')
-    filelist = sorted(glob(tmpexp))
-    ch_filelist = []
-    if filelist:
-        if variables:
-            if 'Band' not in variables[0]:
-                for variable in variables:
-                    variable_tmp = variable.replace('-', '_')
-                    variable_raw =fr'{variable_tmp}'
-                    for filename in filelist:
-                        if re.search(variable_raw, filename.replace('-', '_')):
-                            ch_filelist.append(filename)
-                            break
-            else:
-                ch_filelist = filelist
-        else:
-            ch_filelist = filelist
-    return ch_filelist
+    file_extensions = [file_extension for file_extension, known_file_type
+                       in known_file_types.items()
+                       if known_file_type == file_type]
+
+    files_with_type = []
+
+    for file_extension in file_extensions:
+        files_with_type.extend(glob(path_join(extract_dir,
+                                              f'*{file_extension}')))
+
+    files_with_type.sort()
+
+    if len(variable_names) > 0 and 'Band' not in variable_names[0]:
+        formatted_variable_names = [variable_name.replace('-', '_')
+                                    for variable_name in variable_names]
+
+        filtered_file_list = [
+            file_name for file_name in files_with_type
+            if any(variable_name in file_name.replace('-', '_')
+                   for variable_name in formatted_variable_names)
+        ]
+    else:
+        filtered_file_list = files_with_type
+
+    return filtered_file_list
 
 
 def rename_file(input_filename: str, stac_asset_href: str) -> str:
     """ Rename a given file to a name determined for the input STAC Asset
         by the harmony-service-lib Python library.
 
-        TODO: `generate_output_filename` should be called with appropriate
-              values for `variable_subset`, `is_regridded` and `is_subsetted`.
-              These kwargs allow the function to determine any required
-              suffices for the file, e.g., `<input_file>_subsetted.nc4`.
+        This function is used to rename the input file downloaded to the
+        Docker container from a randomly generated temporary file name, to one
+        that pertains to the original STAC asset URL.
 
     """
     output_filename = path_join(dirname(input_filename),
