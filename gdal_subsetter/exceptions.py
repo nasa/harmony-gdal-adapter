@@ -36,10 +36,19 @@ class UnknownFileFormatError(HGAException):
 
 
 class IncompatibleVariablesError(HGAException):
-    """This exception is raised when the dataset variables requested are not
+    """ This exception is raised when the dataset variables requested are not
     compatible, i.e. they have different projections, geotransforms, sizes or
     data types.
 
     """
     def __init__(self, message):
         super().__init__(f'Incompatible variables: {message}')
+
+
+class MultipleZippedNetCDF4FilesError(HGAException):
+    """ This exception is raised when the input file supplied to HGA is a zip
+        file containing multiple NetCDF-4 files, as these cannot be aggregated.
+
+    """
+    def __init__(self, zip_file):
+        super().__init__(f'Multiple NetCDF-4 files within input: {zip_file}.')

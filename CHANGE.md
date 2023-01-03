@@ -1,3 +1,14 @@
+[version 1.2.11] 2022-12-23
+* Refactor `HarmonyAdapter.process_item` to move staging and STAC record
+  generation to separate class method.
+* Refactor `HarmonyAdapter.process_zip` and `HarmonyAdapter.unpack_zipfile` to
+  remove redundant variables.
+* Refactor `get_files_fromunzipfiles` to capture all NetCDF-4 and GeoTIFF
+  extension options, while implementing list comprehensions for increased
+  readability.
+* Attempt to add more type hints and documentation strings, to enable better
+  understanding of the code.
+
 [version 1.2.10] 2022-12-16
 * Migrate `calc_subset_envelope_window` and `box_to_shapefile` out of HarmonyAdapter.
 * Increased unit test coverage.

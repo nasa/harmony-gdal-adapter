@@ -5,12 +5,28 @@ from shutil import rmtree
 from tempfile import mkdtemp
 from unittest import TestCase
 
-from gdal_subsetter.utilities import get_file_type, OpenGDAL, rename_file
+from gdal_subsetter.utilities import (get_file_type, get_files_from_unzipfiles,
+                                      has_world_file, is_geotiff, OpenGDAL,
+                                      rename_file)
 
 
 class TestUtilities(TestCase):
     """ A class to test the functions in the utilities.py module. """
+    @classmethod
+    def setUpClass(cls):
+        """ Define items that can be shared between tests. """
+        cls.granule_dir = 'tests/data/granules'
+        cls.uavsar_granule = path_join(
+            cls.granule_dir, 'uavsar',
+            'gulfco_32010_09045_001_090617_L090_CX_01_pauli.tif'
+        )
+        cls.sentinel_granule = path_join(
+            cls.granule_dir, 'gfrn',
+            'S1-GUNW-D-R-083-tops-20141116_20141023-095646-360325S_38126S-PP-24b3-v2_0_2.nc'
+        )
+
     def setUp(self):
+        """ Define items that need to be unique to each test. """
         self.temp_dir = mkdtemp()
 
     def tearDown(self):
@@ -76,10 +92,7 @@ class TestUtilities(TestCase):
             access to a GeoTIFF file.
 
         """
-        uavsar_granule = ('tests/data/granules/uavsar/'
-                          'gulfco_32010_09045_001_090617_L090_CX_01_pauli.tif')
-
-        with OpenGDAL(uavsar_granule) as uavsar_gdal_object:
+        with OpenGDAL(self.uavsar_granule) as uavsar_gdal_object:
             gdal_metadata = uavsar_gdal_object.GetMetadata()
 
         self.assertDictEqual(gdal_metadata,
@@ -87,3 +100,102 @@ class TestUtilities(TestCase):
                               'TIFFTAG_RESOLUTIONUNIT': '1 (unitless)',
                               'TIFFTAG_XRESOLUTION': '1',
                               'TIFFTAG_YRESOLUTION': '1'})
+
+    def test_is_geotiff(self):
+        """ Ensure that a file is correctly recognised as a GeoTIFF. """
+        with self.subTest('A GeoTIFF granule returns True'):
+            self.assertTrue(is_geotiff(self.uavsar_granule))
+
+        with self.subTest('A NetCDF-4 granules returns False'):
+            self.assertFalse(is_geotiff(self.sentinel_granule))
+
+    def test_get_files_from_unzipfiles(self):
+        """ Ensure that files extracted from a zip file can be filtered based
+            on their extensions. In addition, if variables are specified, and
+            are not "Band1", "Band2", etc, the output file list should be
+            further filtered to only those paths that match to a variable name.
+
+            The tests below verify that files with ".nc" and ".nc4" extensions
+            are both recognised as having type "nc", while files with ".tif"
+            and ".tiff" extensions are both recognised as GeoTIFFs.
+
+        """
+        netcdf4_files = [path_join(self.temp_dir, 'granule_amplitude.nc'),
+                         path_join(self.temp_dir, 'granule_coherence.nc4'),
+                         path_join(self.temp_dir, 'granule_variable-one.nc'),
+                         path_join(self.temp_dir, 'granule_variable_two.nc')]
+        geotiff_files = [path_join(self.temp_dir, 'granule_amplitude.tif'),
+                         path_join(self.temp_dir, 'granule_coherence.tiff')]
+
+        for netcdf4_file in netcdf4_files:
+            with open(netcdf4_file, 'a', encoding='utf-8') as file_handler:
+                file_handler.write(netcdf4_file)
+
+        for geotiff_file in geotiff_files:
+            with open(geotiff_file, 'a', encoding='utf-8') as file_handler:
+                file_handler.write(geotiff_file)
+
+        with self.subTest('No variables, all GeoTIFF files are retrieved.'):
+            self.assertListEqual(
+                get_files_from_unzipfiles(self.temp_dir, 'tif',
+                                          variable_names=[]),
+                geotiff_files
+            )
+
+        with self.subTest('No variables, all NetCDF-4 files are retrieved.'):
+            self.assertListEqual(
+                get_files_from_unzipfiles(self.temp_dir, 'nc'),
+                netcdf4_files
+            )
+
+        with self.subTest('Only files matching variable names are retrieved.'):
+            self.assertListEqual(
+                get_files_from_unzipfiles(self.temp_dir, 'nc',
+                                          variable_names=['amplitude']),
+                [netcdf4_files[0]]
+            )
+
+        with self.subTest('No files matching variables returns empty list.'):
+            self.assertListEqual(
+                get_files_from_unzipfiles(self.temp_dir, 'nc',
+                                          variable_names=['wind_speed']),
+                []
+            )
+
+        with self.subTest('Variable names are ignored if they contain "Band"'):
+            self.assertListEqual(
+                get_files_from_unzipfiles(self.temp_dir, 'tif',
+                                          variable_names=['Band1', 'Band2']),
+                geotiff_files
+            )
+
+        with self.subTest('Variable name hyphens converted to underscores.'):
+            self.assertListEqual(
+                get_files_from_unzipfiles(self.temp_dir, 'nc',
+                                          variable_names=['variable-two']),
+                [netcdf4_files[3]]
+            )
+
+        with self.subTest('File name hyphens converted to underscores.'):
+            self.assertListEqual(
+                get_files_from_unzipfiles(self.temp_dir, 'nc',
+                                          variable_names=['variable_one']),
+                [netcdf4_files[2]]
+            )
+
+    def test_has_world_file(self):
+        """ Ensure that files are correctly identified as having an associated
+            ESRI world file based on their MIME type.
+
+        """
+        with self.subTest('PNG returns True.'):
+            self.assertTrue(has_world_file('image/png'))
+
+        with self.subTest('JPEG returns True.'):
+            self.assertTrue(has_world_file('image/jpeg'))
+
+        with self.subTest('GeoTIFF returns False.'):
+            self.assertFalse(has_world_file('image/tiff'))
+
+        with self.subTest('NetCDF-4 returns False.'):
+            self.assertFalse(has_world_file('application/x-netcdf4'))
