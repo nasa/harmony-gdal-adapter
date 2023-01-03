@@ -29,8 +29,9 @@ from gdal_subsetter.coordinate_utilities import (boxwrs84_boxproj,
                                                  get_bbox, lonlat_to_projcoord)
 from gdal_subsetter.exceptions import (DownloadError,
                                        HGAException,
-                                       UnknownFileFormatError,
-                                       IncompatibleVariablesError)
+                                       IncompatibleVariablesError,
+                                       MultipleZippedNetCDF4FilesError,
+                                       UnknownFileFormatError)
 from gdal_subsetter.shape_file_utilities import (box_to_shapefile,
                                                  convert_to_multipolygon,
                                                  get_coordinates_unit,
@@ -54,9 +55,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         Parameters
         ----------
-        item : pystac.Item
+        input_item : pystac.Item
             the item that should be converted
-        source : harmony.message.Source
+        source : harmony.message.Source, imported as HarmonySource
             the input source defining the variables, if any, to subset from the item
 
         Returns
@@ -301,9 +302,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                                                       tiffile, output_dir,
                                                       layernames)
             message = msg_tif
-        elif len(ncfile) > 0:
+        elif len(ncfile) > 1:
+            raise MultipleZippedNetCDF4FilesError(zipfile_name)
+        elif len(ncfile) == 1:
             layernames, result = self.process_netcdf(source, basename,
-                                                     ncfile, output_dir,
+                                                     ncfile[0], output_dir,
                                                      layernames)
             message = msg_nc
         else:
