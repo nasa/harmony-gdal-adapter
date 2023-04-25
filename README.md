@@ -2,17 +2,16 @@
 
 ![](https://data-services-github-badges.s3.amazonaws.com/cov.svg?dummy=true)
 
-A Harmony (https://harmony.earthdata.nasa.gov/) backend service that transforms
+A [Harmony](https://harmony.earthdata.nasa.gov/) backend service that transforms
 input images using GDAL.
 
 HGA is published to [ghcr.io](https://github.com/nasa/harmony-gdal-adapter/pkgs/container/harmony-gdal-adapter)
-GitHub's Container registry.
+GitHub's Container Registry.
 
 HGA is invoked by [harmony](https://github.com/nasa/harmony)
-when the harmony server is configured, via Harmony's [service.yml](https://github.com/nasa/harmony/blob/main/config/services.yml)
-or by UMM-S/C associations in CMR, to handle an incoming request for the
-collection. You can see examples of requests that harmony dispatches to the
-harmony-gdal-adapter by examining the [regression test notebook for hga](https://github.com/nasa/harmony-regression-tests/blob/main/test/hga/HGA_regression.ipynb).
+when the harmony server is configured by UMM-Service UMM-Collection associations in CMR,
+to handle an incoming request for the collection. You can see examples of requests that harmony dispatches to the
+harmony-gdal-adapter by examining the [regression test notebook for hga](https://github.com/nasa/harmony-regression-tests/blob/main/test/hga/HGA_Regression.ipynb).
 
 
 ## Test with Docker
@@ -33,8 +32,9 @@ Creates the `nasa/harmony-gdal-adapter-test` test image.
 ```bash
 bin/run-test
 ```
-The `run-test` script mounts `test-reports` and `coverage` directories and run
-the test script `tests/run_tests.sh` inside of a Docker test container.
+
+The `run-test` script mounts `test-reports` and `coverage` directories and runs
+the test script `tests/run_tests.sh` inside of the Docker test container.
 
 
 ## Test Locally
@@ -42,14 +42,14 @@ the test script `tests/run_tests.sh` inside of a Docker test container.
 ### Create isolated environment
 
 ```bash
-conda create --name hga python=3.8 --channel conda-forge
+conda create --name hga python=3.10 --channel conda-forge
 conda activate hga
 ```
 
 ### Install requirements
 
 ```bash
-conda install gdal==3.4.3
+conda install gdal==3.6.4
 pip install -r requirements.txt -r requirements_dev.txt
 ```
 
@@ -144,9 +144,8 @@ within this repository. Other developers will need to follow the
 [fork-and-pull model](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/getting-started/about-collaborative-development-models#fork-and-pull-model).
 
 In addition to any DAAC stakeholders, please add members of the EED Data
-Services team (currently: David Auty, Ken Cockerill, Owen Littlejohns and Matt
-Savoie) as PR reviewers. One of these developers must approve the PR before
-it is merged.
+Services team (currently: David Auty, Owen Littlejohns and Matt Savoie) as PR
+reviewers. One of these developers must approve the PR before it is merged.
 
 NASA GitHub contributers will have the required GitHub permissions to merge
 their PRs after the peer review is complete. Please consider using the
