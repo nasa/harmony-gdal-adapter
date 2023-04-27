@@ -1,3 +1,7 @@
+[version 1.2.12] 2023-04-26
+* Rename function `combin_transfer` -> `perform_transforms`
+* Removes unused code module `capture_operation.py`
+* Tidies Readme
 [version 1.2.11] 2022-12-23
 * Refactor `HarmonyAdapter.process_item` to move staging and STAC record
   generation to separate class method.

@@ -205,7 +205,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             filename = input_filename
             layer_id = basename + '__all'
             band = None
-            layer_id, filename, output_dir = self.combin_transfer(
+            layer_id, filename, output_dir = self.perform_transforms(
                 layer_id, filename, output_dir, band)
 
             filelist.append(filename)
@@ -232,7 +232,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 if band:
                     filename = input_filename
                     layer_id = basename + '__' + variable.name
-                    layer_id, filename, output_dir = self.combin_transfer(
+                    layer_id, filename, output_dir = self.perform_transforms(
                         layer_id, filename, output_dir, band)
                     layernames.append(layer_id)
                     filelist.append(filename)
@@ -263,7 +263,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             # convert a subdataset in the nc file into the GeoTIFF file
             filename = self.nc2tiff(layer_id, filename, output_dir)
             if filename:
-                layer_id, filename, output_dir = self.combin_transfer(
+                layer_id, filename, output_dir = self.perform_transforms(
                     layer_id, filename, output_dir, band
                 )
 
@@ -378,6 +378,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return dstfile
 
     def subset(self, layerid, srcfile, dstdir, band=None):
+        """Subset layer to region defined in message.subset."""
         normalized_layerid = layerid.replace('/', '_')
         subset = self.message.subset
         if subset.bbox is None and subset.shape is None:
@@ -477,6 +478,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return outfile
 
     def resize(self, layerid, srcfile, dstdir):
+        """Resizes the input layer
+
+        Uses a call to gdal_translate using information in message.format.
+
+        """
         interpolation = self.message.format.process('interpolation')
         if interpolation in resampling_methods:
             resample_method = interpolation
@@ -804,7 +810,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return result
 
-    def combin_transfer(self, layer_id, filename, output_dir, band):
+    def perform_transforms(self, layer_id, filename, output_dir, band):
+        """Push layer through the series of transforms. """
         filename = self.subset(layer_id, filename, output_dir, band)
         filename = self.reproject(layer_id, filename, output_dir)
         filename = self.resize(layer_id, filename, output_dir)
