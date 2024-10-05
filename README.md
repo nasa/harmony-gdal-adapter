@@ -26,7 +26,7 @@ Creates the image `ghcr.io/nasa/harmony-gdal-adapter`.
 ```bash
 bin/build-test
 ```
-Creates the `nasa/harmony-gdal-adapter-test` test image.
+Creates the `ghcr.io/nasa/harmony-gdal-adapter-test` test image.
 
 ### Run Tests
 ```bash

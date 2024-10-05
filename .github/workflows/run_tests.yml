@@ -20,6 +20,9 @@ jobs:
         with:
           python-version: 3.9
 
+      - name: Build service image
+        run: ./bin/build-image
+
       - name: Build test image
         run: ./bin/build-test
 
