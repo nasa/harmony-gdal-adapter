@@ -1,6 +1,6 @@
 #!/bin/bash
 ###############################################################################
-# Execute the harmonyservices/harmony-gdal-adapter-test Docker image as a
+# Execute the ghcr.io/nasa/harmony-gdal-adapter-test Docker image as a
 # container. This will run the unit test suite and check for Python linting
 # error.
 #
@@ -20,7 +20,7 @@ mkdir -p coverage
 
 # Run the tests in a Docker container with mounted volumes for XML report
 # output and test coverage reporting
-docker run --rm \
+docker run --platform linux/amd64 --rm \
 	-v $(pwd)/test-reports:/home/tests/reports \
 	-v $(pwd)/coverage:/home/tests/coverage \
-	nasa/harmony-gdal-adapter-test
+	ghcr.io/nasa/harmony-gdal-adapter-test

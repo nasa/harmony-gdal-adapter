@@ -1,6 +1,6 @@
 #!/bin/bash
 
-image="nasa/harmony-gdal-adapter-test"
+image="ghcr.io/nasa/harmony-gdal-adapter-test"
 tag=${1:-latest}
 
 
@@ -13,4 +13,4 @@ fi
 
 # Build the image
 #
-docker build -t ${image}:${tag} -f docker/tests.Dockerfile .
+docker build --platform linux/amd64 -t ${image}:${tag} -f docker/tests.Dockerfile .

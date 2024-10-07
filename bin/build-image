@@ -1,4 +1,9 @@
 #!/bin/bash
+###############################################################################
+#
+# 2024-10-04: Updated to support amd64.
+#
+###############################################################################
 
 set -e
 
@@ -9,4 +14,4 @@ find . | grep -E "(__pycache__|\.pyc|\.pyo$)" | xargs rm -rf
 image="ghcr.io/nasa/harmony-gdal-adapter"
 tag=${1:-latest}
 
-docker build -t ${image}:${tag} -f docker/service.Dockerfile .
+docker build --platform linux/amd64 -t ${image}:${tag} -f docker/service.Dockerfile .
