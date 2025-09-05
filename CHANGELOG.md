@@ -18,6 +18,8 @@ Changelog](http://keepachangelog.com/en/1.0.0/).
 * Removes code to generate browse imagery via `gdaldem`. Equivalent functionality
   is offered via the
   [Harmony Browse Image Generator (HyBIG)](https://github.com/nasa/harmony-browse-image-generator).
+* Removed duplicate code to parse command line arguments and invoke service
+  adapter from `transform.py`.
 
 ## [v1.2.13] - 2024-10-04
 

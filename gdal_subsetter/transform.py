@@ -1,5 +1,4 @@
 """ CLI for adapting a Harmony operation to GDAL. """
-from argparse import ArgumentParser
 from datetime import datetime
 from shutil import copyfile, rmtree
 from subprocess import check_output
@@ -9,7 +8,6 @@ from zipfile import ZipFile
 import os
 import re
 
-from harmony import is_harmony_cli, run_cli, setup_cli
 from harmony.adapter import BaseHarmonyAdapter
 from harmony.message import Source as HarmonySource, Variable as HarmonyVariable
 from harmony.util import (bbox_to_geometry, download, generate_output_filename,
@@ -1312,28 +1310,3 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             output_netcdf4.Conventions = 'CF-1.7'
 
         return outfile
-
-
-def main():
-    """ Parses command line arguments and invokes the appropriate method to
-        respond to them
-
-        Returns
-        -------
-        None
-    """
-    parser = ArgumentParser(prog='harmony-gdal-adapter',
-                            description='Run the Harmony GDAL Adapter')
-
-    setup_cli(parser)
-    args = parser.parse_args()
-
-    if is_harmony_cli(args):
-        run_cli(parser, args, HarmonyAdapter)
-    else:
-        parser.error('Only --harmony CLIs are supported')
-
-
-if __name__ == '__main__':
-    os.environ['BUFFER'] = '{"degree":0.0001, "meter":10.0}'
-    main()
