@@ -28,6 +28,13 @@ jobs:
       - name: Extract semantic version number
         run: echo "semantic_version=$(cat version.txt)" >> $GITHUB_ENV
 
+      - name: Extract release version notes
+        run: |
+          version_release_notes=$(./bin/extract-release-notes.sh)
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+          echo "${version_release_notes}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
       - name: Log-in to ghcr.io registry
         uses: docker/login-action@v3
         with:
@@ -51,3 +58,11 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Publish GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          body: ${{ env.RELEASE_NOTES }}
+          commit: main
+          name: Version ${{ env.semantic_version }}
+          tag: ${{ env.semantic_version }}
