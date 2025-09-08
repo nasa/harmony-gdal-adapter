@@ -5,6 +5,22 @@ documented in this file. The format is based on [Keep a
 Changelog](http://keepachangelog.com/en/1.0.0/).
 
 
+## [v2.0.0] - 2025-09-05
+
+### Changed:
+
+* The `--override-channels` argument is added when creating the service conda
+  environment in the service Docker image. This prevents the usage of the
+  `defaults` channel.
+
+### Removed:
+
+* Removes code to generate browse imagery via `gdaldem`. Equivalent functionality
+  is offered via the
+  [Harmony Browse Image Generator (HyBIG)](https://github.com/nasa/harmony-browse-image-generator).
+* Removed duplicate code to parse command line arguments and invoke service
+  adapter from `transform.py`.
+
 ## [v1.2.13] - 2024-10-04
 
 ### Changed:
@@ -302,3 +318,6 @@ This is the final version. We will stop the development for a while.
 ## [v1.0.1]
 
 ## [v1.0.0]
+
+[v2.0.0]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/2.0.0
+[v1.1.0]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/1.1.0

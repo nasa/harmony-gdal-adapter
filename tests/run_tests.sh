@@ -14,7 +14,7 @@ export HDF5_DISABLE_VERSION_CHECK=1
 
 # Run the standard set of unit tests, producing JUnit compatible output
 #
-pytest ./tests -s --cov=gdal_subsetter --junitxml=${TEST_DIR}/reports/hga_junit.xml --cov-report=html:${TEST_DIR}/coverage
+pytest ./tests -s --cov=gdal_subsetter --junitxml=${TEST_DIR}/reports/hga_junit.xml --cov-report=html:${TEST_DIR}/coverage --cov-report term
 
 RESULT=$?
 if [ "$RESULT" -ne "0" ]; then

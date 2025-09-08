@@ -42,7 +42,7 @@ the test script `tests/run_tests.sh` inside of the Docker test container.
 ### Create isolated environment
 
 ```bash
-conda create --name hga python=3.10 --channel conda-forge
+conda create --name hga python=3.11 --channel conda-forge
 conda activate hga
 ```
 
@@ -128,10 +128,25 @@ Basic steps for debugging are:
         }
      ```
 
+## `pre-commit` hooks
 
+This repository uses [pre-commit](https://pre-commit.com/) to enable pre-commit
+checks that enforce coding standard best practices. These include:
 
+* Removing trailing whitespaces.
+* Removing blank lines at the end of a file.
+* Ensure JSON and YAML files have valid formats.
+* Ensure no large files are added to the repository.
 
+To enable these checks locally:
 
+```bash
+# Install pre-commit Python package:
+pip install pre-commit
+
+# Install the git hook scripts:
+pre-commit install
+```
 
 ## Contributions:
 
@@ -157,7 +172,7 @@ access to the HGA repository.
 ### Semantic versioning:
 
 When making changes to the HGA service code, it is important to make updates to
-`version.txt` and `CHANGE.md`. Every time code is merged to the `main` branch
+`version.txt` and `CHANGELOG.md`. Every time code is merged to the `main` branch
 and the merged commits contain changes to `version.txt`, a Docker image is
 published to [ghcr.io](https://github.com/nasa/harmony-gdal-adapter/pkgs/container/harmony-gdal-adapter).
 By only triggering image publication when `version.txt` is incremented, the

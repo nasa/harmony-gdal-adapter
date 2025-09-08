@@ -1,5 +1,4 @@
 """ CLI for adapting a Harmony operation to GDAL. """
-from argparse import ArgumentParser
 from datetime import datetime
 from shutil import copyfile, rmtree
 from subprocess import check_output
@@ -9,7 +8,6 @@ from zipfile import ZipFile
 import os
 import re
 
-from harmony import is_harmony_cli, run_cli, setup_cli
 from harmony.adapter import BaseHarmonyAdapter
 from harmony.message import Source as HarmonySource, Variable as HarmonyVariable
 from harmony.util import (bbox_to_geometry, download, generate_output_filename,
@@ -559,71 +557,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         return _regrid(srcfile, dstfile, resampling_mode=resample_method,
                        ref_crs=crs, ref_box=box, ref_xres=xres, ref_yres=yres)
 
-    def recolor(self, layerid, srcfile, dstdir):
-        """ Applies a colormap to output image
-
-        Parameters
-        ----------
-        layerid : string
-            The layer identifier
-        srcfile : string
-            The filename of the source image
-        dstdir: string
-            The output destination directior
-        """
-        fmt = self.message.format
-        dstfile = srcfile  # passthrough if no colormap
-        colormap = None
-        variable = layerid.split('__')[1]
-
-        # Find the colormap URL from relatedUrls in matching variable
-        if '__all' not in layerid:  # '__all' tells us that there are no variables
-            variables = self.message.sources[0].variables
-            for var in variables:
-                # In case of multiple variables, we need to find the one that matches the layer
-                if var.name == variable:
-                    if hasattr(var, 'relatedUrls'):
-                        # Make sure that we have relatedUrls
-                        for related_url in var.relatedUrls:
-                            # Use the Color Map related URL
-                            if related_url.type == 'Color Map':
-                                colormap = f'/vsicurl/{related_url.url}'
-                                discrete = True
-
-        # Don't color tiffs
-        colorable_mime_types = ['image/png', 'image/jpeg']
-        if colormap is None and fmt.mime.lower() in colorable_mime_types:
-            # Use a grayscale colormap if nothing is available
-            colormap = os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                                    'colormaps/Gray.txt')
-            discrete = False
-
-        if colormap:
-            normalized_layerid = layerid.replace('/', '_')
-            dstfile = os.path.join(dstdir, f'{normalized_layerid}__colored')
-            command = ['gdaldem', 'color-relief', '-alpha']
-            if discrete:
-                command.extend(['-nearest_color_entry'])
-            if 'png' in fmt.mime:
-                command.extend(['-of', 'PNG', '-co', 'WORLDFILE=YES'])
-                dstfile += '.png'
-            elif 'jpeg' in fmt.mime:
-                command.extend(['-of', 'JPEG', '-co', 'WORLDFILE=YES'])
-                dstfile += '.jpeg'
-            else:
-                dstfile += '.tif'
-
-            command.extend([srcfile, colormap, dstfile])
-            self.execute_gdal_command(*command)
-            if has_world_file(self.message.format.mime):
-                dstfile_basename, dstfile_ext = os.path.splitext(dstfile)
-                copyfile(dstfile,
-                         os.path.join(dstdir, f'result{dstfile_ext}'))
-                copyfile(f'{dstfile_basename}.wld',
-                         os.path.join(dstdir, 'result.wld'))
-
-        return dstfile
-
     def add_to_result(self, filelist, dstdir):
         dstfile = os.path.join(dstdir, 'result')
         output = None
@@ -815,7 +748,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         filename = self.subset(layer_id, filename, output_dir, band)
         filename = self.reproject(layer_id, filename, output_dir)
         filename = self.resize(layer_id, filename, output_dir)
-        filename = self.recolor(layer_id, filename, output_dir)
 
         return layer_id, filename, output_dir
 
@@ -1378,28 +1310,3 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             output_netcdf4.Conventions = 'CF-1.7'
 
         return outfile
-
-
-def main():
-    """ Parses command line arguments and invokes the appropriate method to
-        respond to them
-
-        Returns
-        -------
-        None
-    """
-    parser = ArgumentParser(prog='harmony-gdal-adapter',
-                            description='Run the Harmony GDAL Adapter')
-
-    setup_cli(parser)
-    args = parser.parse_args()
-
-    if is_harmony_cli(args):
-        run_cli(parser, args, HarmonyAdapter)
-    else:
-        parser.error('Only --harmony CLIs are supported')
-
-
-if __name__ == '__main__':
-    os.environ['BUFFER'] = '{"degree":0.0001, "meter":10.0}'
-    main()
