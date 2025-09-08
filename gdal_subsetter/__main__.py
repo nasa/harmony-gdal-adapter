@@ -28,7 +28,7 @@ def main():
     setup_cli(parser)
     harmony_args = parser.parse_args()
 
-    if (is_harmony_cli(harmony_args)):
+    if is_harmony_cli(harmony_args):
         run_cli(parser, harmony_args, HarmonyAdapter)
     else:
         parser.error("Only --harmony CLIs are supported")

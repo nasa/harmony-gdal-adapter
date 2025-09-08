@@ -42,7 +42,7 @@ the test script `tests/run_tests.sh` inside of the Docker test container.
 ### Create isolated environment
 
 ```bash
-conda create --name hga python=3.10 --channel conda-forge
+conda create --name hga python=3.11 --channel conda-forge
 conda activate hga
 ```
 
