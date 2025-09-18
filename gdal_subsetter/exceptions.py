@@ -14,21 +14,21 @@ class HGAException(HarmonyException):
     """Base class for exceptions in the Harmony GDAL Adapter."""
 
     def __init__(self, message):
-        super().__init__(message, 'nasa/harmony-gdal-adapter')
+        super().__init__(message)
 
 
 class DownloadError(HGAException):
     """Raised when the Harmony GDAL Adapter cannot retrieve input data."""
+
     def __init__(self, url, message):
-        super().__init__(f'Could not download resource: {url}, {message}')
+        super().__init__(f"Could not download resource: {url}, {message}")
 
 
 class UnsupportedFileFormatError(HGAException):
     """Raised when the input file format is cannot processed by the HGA."""
+
     def __init__(self, file_format):
-        super().__init__(
-            f'Cannot process unsupported file format: "{file_format}"'
-        )
+        super().__init__(f'Cannot process unsupported file format: "{file_format}"')
 
 
 class IncompatibleVariablesError(HGAException):
@@ -37,5 +37,6 @@ class IncompatibleVariablesError(HGAException):
     i.e. they have different projections, geotransforms, sizes or data types.
 
     """
+
     def __init__(self, message):
-        super().__init__(f'Incompatible variables: {message}')
+        super().__init__(f"Incompatible variables: {message}")
