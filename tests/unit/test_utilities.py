@@ -1,4 +1,5 @@
-""" Unit tests for functions in the `gdal_subsetter.utilities.py` module. """
+"""Unit tests for functions in the `gdal_subsetter.utilities.py` module."""
+
 from os.path import exists, join as path_join
 from pathlib import Path
 from shutil import rmtree
@@ -14,24 +15,17 @@ from gdal_subsetter.utilities import (
     rename_file,
 )
 
+from tests.utilities import (
+    get_dummy_geotiff_file,
+    get_dummy_netcdf_file,
+)
+
 
 class TestUtilities(TestCase):
-    """ A class to test the functions in the utilities.py module. """
-    @classmethod
-    def setUpClass(cls):
-        """ Define items that can be shared between tests. """
-        cls.granule_dir = 'tests/data/granules'
-        cls.uavsar_granule = path_join(
-            cls.granule_dir, 'uavsar',
-            'gulfco_32010_09045_001_090617_L090_CX_01_pauli.tif'
-        )
-        cls.sentinel_granule = path_join(
-            cls.granule_dir, 'gfrn',
-            'S1-GUNW-D-R-083-tops-20141116_20141023-095646-360325S_38126S-PP-24b3-v2_0_2.nc'
-        )
+    """A class to test the functions in the utilities.py module."""
 
     def setUp(self):
-        """ Define items that need to be unique to each test. """
+        """Define items that need to be unique to each test."""
         self.temp_dir = mkdtemp()
 
     def tearDown(self):
@@ -39,18 +33,20 @@ class TestUtilities(TestCase):
             rmtree(self.temp_dir)
 
     def test_get_file_type(self):
-        """ Ensure the type of file can be recognised from the input extension.
-            If the type is unknown, that extension should be returned. If the
-            file is absent, or the name is None the function should return
-            None.
+        """Ensure the type of file can be recognised from the input extension.
+        If the type is unknown, that extension should be returned. If the
+        file is absent, or the name is None the function should return
+        None.
 
         """
-        test_args = [['NetCDF-4 file (.nc4)', 'file.nc4', 'nc'],
-                     ['NetCDF-4 file (.nc)', 'file.nc', 'nc'],
-                     ['GeoTIFF file (.tif)', 'file.tif', 'tif'],
-                     ['GeoTIFF file (.tiff)', 'file.tiff', 'tif'],
-                     ['Zip file (.zip)', 'file.zip', 'zip'],
-                     ['Unknown extension (.other)', 'file.other', '.other']]
+        test_args = [
+            ["NetCDF-4 file (.nc4)", "file.nc4", "nc"],
+            ["NetCDF-4 file (.nc)", "file.nc", "nc"],
+            ["GeoTIFF file (.tif)", "file.tif", "tif"],
+            ["GeoTIFF file (.tiff)", "file.tiff", "tif"],
+            ["Zip file (.zip)", "file.zip", "zip"],
+            ["Unknown extension (.other)", "file.other", ".other"],
+        ]
 
         for description, input_file_basename, expected_file_type in test_args:
             with self.subTest(description):
@@ -58,27 +54,25 @@ class TestUtilities(TestCase):
                 # Touch the file to make sure it exists:
                 Path(full_input_path).touch()
 
-                self.assertEqual(get_file_type(full_input_path),
-                                 expected_file_type)
+                self.assertEqual(get_file_type(full_input_path), expected_file_type)
 
-        with self.subTest('Filename is None, returns None'):
+        with self.subTest("Filename is None, returns None"):
             self.assertIsNone(get_file_type(None))
 
-        with self.subTest('Non-existent file returned None'):
-            self.assertIsNone(get_file_type('non_existent.tif'))
+        with self.subTest("Non-existent file returned None"):
+            self.assertIsNone(get_file_type("non_existent.tif"))
 
     def test_rename_file(self):
-        """ Ensure a file is renamed as expected using the harmony-service-lib
-            library. The original file should no longer exist, as it should
-            have been moved to the new location.
+        """Ensure a file is renamed as expected using the harmony-service-lib
+        library. The original file should no longer exist, as it should
+        have been moved to the new location.
 
         """
-        asset_href = 'https://example.com/ATL03_20200101T000103.nc4'
-        expected_output_name = path_join(self.temp_dir,
-                                         'ATL03_20200101T000103.nc4')
-        input_file_name = path_join(self.temp_dir, 'test.tmp')
-        with open(input_file_name, 'a', encoding='utf-8') as file_handler:
-            file_handler.write('File content')
+        asset_href = "https://example.com/ATL03_20200101T000103.nc4"
+        expected_output_name = path_join(self.temp_dir, "ATL03_20200101T000103.nc4")
+        input_file_name = path_join(self.temp_dir, "test.tmp")
+        with open(input_file_name, "a", encoding="utf-8") as file_handler:
+            file_handler.write("File content")
 
         self.assertTrue(exists(input_file_name))
 
@@ -87,32 +81,34 @@ class TestUtilities(TestCase):
         self.assertTrue(exists(output_file_name))
         self.assertFalse(exists(input_file_name))
 
-        with open(output_file_name, 'r', encoding='utf-8') as file_handler:
+        with open(output_file_name, "r", encoding="utf-8") as file_handler:
             output_content = file_handler.read()
 
-        self.assertEqual(output_content, 'File content')
+        self.assertEqual(output_content, "File content")
 
     def test_open_gdal(self):
-        """ Ensure that the context manager implementation of OpenGDAL allows
-            access to a GeoTIFF file.
+        """Ensure that the context manager implementation of OpenGDAL allows
+        access to a GeoTIFF file.
 
         """
-        with OpenGDAL(self.uavsar_granule) as uavsar_gdal_object:
-            gdal_metadata = uavsar_gdal_object.GetMetadata()
+        dummy_geotiff = get_dummy_geotiff_file(self.temp_dir)
+        with OpenGDAL(dummy_geotiff) as gdal_object:
+            gdal_metadata = gdal_object.GetMetadata()
 
-        self.assertDictEqual(gdal_metadata,
-                             {'AREA_OR_POINT': 'Area',
-                              'TIFFTAG_RESOLUTIONUNIT': '1 (unitless)',
-                              'TIFFTAG_XRESOLUTION': '1',
-                              'TIFFTAG_YRESOLUTION': '1'})
+        self.assertDictEqual(
+            gdal_metadata,
+            {"AREA_OR_POINT": "Area"},
+        )
 
     def test_is_geotiff(self):
-        """ Ensure that a file is correctly recognised as a GeoTIFF. """
-        with self.subTest('A GeoTIFF granule returns True'):
-            self.assertTrue(is_geotiff(self.uavsar_granule))
+        """Ensure that a file is correctly recognised as a GeoTIFF."""
+        with self.subTest("A GeoTIFF granule returns True"):
+            geotiff_file = get_dummy_geotiff_file(self.temp_dir)
+            self.assertTrue(is_geotiff(geotiff_file))
 
-        with self.subTest('A NetCDF-4 granules returns False'):
-            self.assertFalse(is_geotiff(self.sentinel_granule))
+        with self.subTest("A NetCDF-4 granules returns False"):
+            netcdf_file = get_dummy_netcdf_file(self.temp_dir)
+            self.assertFalse(is_geotiff(netcdf_file))
 
     def test_get_unzipped_geotiffs(self):
         """Ensure that GeoTIFFs extracted from a zip file are returned.
@@ -126,73 +122,73 @@ class TestUtilities(TestCase):
 
         """
         netcdf4_files = [
-            path_join(self.temp_dir, 'granule_amplitude.nc'),
-            path_join(self.temp_dir, 'granule_coherence.nc4'),
+            path_join(self.temp_dir, "granule_amplitude.nc"),
+            path_join(self.temp_dir, "granule_coherence.nc4"),
         ]
         geotiff_files = [
-            path_join(self.temp_dir, 'granule_amplitude.tif'),
-            path_join(self.temp_dir, 'granule_coherence.tiff'),
-            path_join(self.temp_dir, 'granule_variable-one.tif'),
-            path_join(self.temp_dir, 'granule_variable_two.tif'),
+            path_join(self.temp_dir, "granule_amplitude.tif"),
+            path_join(self.temp_dir, "granule_coherence.tiff"),
+            path_join(self.temp_dir, "granule_variable-one.tif"),
+            path_join(self.temp_dir, "granule_variable_two.tif"),
         ]
 
         for netcdf4_file in netcdf4_files:
-            with open(netcdf4_file, 'a', encoding='utf-8') as file_handler:
+            with open(netcdf4_file, "a", encoding="utf-8") as file_handler:
                 file_handler.write(netcdf4_file)
 
         for geotiff_file in geotiff_files:
-            with open(geotiff_file, 'a', encoding='utf-8') as file_handler:
+            with open(geotiff_file, "a", encoding="utf-8") as file_handler:
                 file_handler.write(geotiff_file)
 
-        with self.subTest('No variables, all GeoTIFF files are retrieved.'):
+        with self.subTest("No variables, all GeoTIFF files are retrieved."):
             self.assertListEqual(
                 get_unzipped_geotiffs(self.temp_dir, variable_names=[]),
                 geotiff_files,
             )
 
-        with self.subTest('Only files matching variable names are retrieved.'):
+        with self.subTest("Only files matching variable names are retrieved."):
             self.assertListEqual(
-                get_unzipped_geotiffs(self.temp_dir, variable_names=['amplitude']),
+                get_unzipped_geotiffs(self.temp_dir, variable_names=["amplitude"]),
                 [geotiff_files[0]],
             )
 
-        with self.subTest('No files matching variables returns empty list.'):
+        with self.subTest("No files matching variables returns empty list."):
             self.assertListEqual(
-                get_unzipped_geotiffs(self.temp_dir, variable_names=['wind_speed']),
+                get_unzipped_geotiffs(self.temp_dir, variable_names=["wind_speed"]),
                 [],
             )
 
         with self.subTest('Variable names are ignored if they contain "Band"'):
             self.assertListEqual(
-                get_unzipped_geotiffs(self.temp_dir, variable_names=['Band1', 'Band2']),
+                get_unzipped_geotiffs(self.temp_dir, variable_names=["Band1", "Band2"]),
                 geotiff_files,
             )
 
-        with self.subTest('Variable name hyphens converted to underscores.'):
+        with self.subTest("Variable name hyphens converted to underscores."):
             self.assertListEqual(
-                get_unzipped_geotiffs(self.temp_dir, variable_names=['variable-two']),
+                get_unzipped_geotiffs(self.temp_dir, variable_names=["variable-two"]),
                 [geotiff_files[3]],
             )
 
-        with self.subTest('File name hyphens converted to underscores.'):
+        with self.subTest("File name hyphens converted to underscores."):
             self.assertListEqual(
-                get_unzipped_geotiffs(self.temp_dir, variable_names=['variable_one']),
+                get_unzipped_geotiffs(self.temp_dir, variable_names=["variable_one"]),
                 [geotiff_files[2]],
             )
 
     def test_has_world_file(self):
-        """ Ensure that files are correctly identified as having an associated
-            ESRI world file based on their MIME type.
+        """Ensure that files are correctly identified as having an associated
+        ESRI world file based on their MIME type.
 
         """
-        with self.subTest('PNG returns True.'):
-            self.assertTrue(has_world_file('image/png'))
+        with self.subTest("PNG returns True."):
+            self.assertTrue(has_world_file("image/png"))
 
-        with self.subTest('JPEG returns True.'):
-            self.assertTrue(has_world_file('image/jpeg'))
+        with self.subTest("JPEG returns True."):
+            self.assertTrue(has_world_file("image/jpeg"))
 
-        with self.subTest('GeoTIFF returns False.'):
-            self.assertFalse(has_world_file('image/tiff'))
+        with self.subTest("GeoTIFF returns False."):
+            self.assertFalse(has_world_file("image/tiff"))
 
-        with self.subTest('NetCDF-4 returns False.'):
-            self.assertFalse(has_world_file('application/x-netcdf4'))
+        with self.subTest("NetCDF-4 returns False."):
+            self.assertFalse(has_world_file("application/x-netcdf4"))
