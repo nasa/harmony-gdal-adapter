@@ -1,17 +1,20 @@
-""" CLI for adapting a Harmony operation to GDAL. """
+"""Adapter for the Harmony GDAL Adapter service."""
 from datetime import datetime
 from shutil import copyfile, rmtree
 from subprocess import check_output
 from tempfile import mkdtemp
-from typing import List
 from zipfile import ZipFile
 import os
 import re
 
 from harmony.adapter import BaseHarmonyAdapter
 from harmony.message import Source as HarmonySource, Variable as HarmonyVariable
-from harmony.util import (bbox_to_geometry, download, generate_output_filename,
-                          stage)
+from harmony.util import (
+    bbox_to_geometry,
+    download,
+    generate_output_filename,
+    stage,
+)
 from netCDF4 import Dataset
 from numpy.ma import masked_array
 from osgeo import gdal, osr, ogr, gdal_array
@@ -21,35 +24,51 @@ from pyproj import Proj
 from pystac import Asset, Item
 import numpy as np
 
-from gdal_subsetter.coordinate_utilities import (boxwrs84_boxproj,
-                                                 calc_coord_ij, calc_ij_coord,
-                                                 calc_subset_envelope_window,
-                                                 get_bbox, lonlat_to_projcoord)
-from gdal_subsetter.exceptions import (DownloadError,
-                                       HGAException,
-                                       IncompatibleVariablesError,
-                                       MultipleZippedNetCDF4FilesError,
-                                       UnknownFileFormatError)
-from gdal_subsetter.shape_file_utilities import (box_to_shapefile,
-                                                 convert_to_multipolygon,
-                                                 get_coordinates_unit,
-                                                 shapefile_boxproj)
-from gdal_subsetter.utilities import (get_file_type, get_files_from_unzipfiles,
-                                      get_version, has_world_file, is_geotiff,
-                                      mime_to_extension, mime_to_gdal,
-                                      OpenGDAL, process_flags, rename_file,
-                                      resampling_methods)
+from gdal_subsetter.coordinate_utilities import (
+    boxwrs84_boxproj,
+    calc_coord_ij,
+    calc_ij_coord,
+    calc_subset_envelope_window,
+    get_bbox,
+    lonlat_to_projcoord,
+)
+from gdal_subsetter.exceptions import (
+    DownloadError,
+    HGAException,
+    IncompatibleVariablesError,
+    UnsupportedFileFormatError,
+)
+from gdal_subsetter.shape_file_utilities import (
+    box_to_shapefile,
+    convert_to_multipolygon,
+    get_coordinates_unit,
+    shapefile_boxproj,
+)
+from gdal_subsetter.utilities import (
+    get_file_type,
+    get_unzipped_geotiffs,
+    get_version,
+    has_world_file,
+    is_geotiff,
+    mime_to_extension,
+    mime_to_gdal,
+    OpenGDAL,
+    process_flags,
+    rename_file,
+    resampling_methods,
+)
 
 
 class HarmonyAdapter(BaseHarmonyAdapter):
-    """
+    """Extends the `BaseHarmonyAdapter` to process an item with GDAL.
+
     See https://github.com/nasa/harmony-service-lib-py
     for documentation and examples.
+
     """
 
     def process_item(self, input_item: Item, source: HarmonySource) -> Item:
-        """
-        Converts an input STAC Item's data into Zarr, returning an output STAC item
+        """Applies GDAL transformations to input GeoTIFFs, returns output STAC item
 
         Parameters
         ----------
@@ -61,7 +80,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         Returns
         -------
         pystac.Item
-            a STAC item containing the Zarr output
+            a STAC item containing the transformed output
+
         """
         if self.message.subset and self.message.subset.shape:
             self.logger.warning('Ignoring subset request for user shapefile '
@@ -111,21 +131,16 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     source, output_basename, input_filename, output_dir,
                     layernames
                 )
-            elif file_type == 'nc':
-                layernames, transformed_filename, process_msg = self.process_netcdf(
-                    source, output_basename, input_filename, output_dir,
-                    layernames
-                )
-
             elif file_type == 'zip':
                 layernames, transformed_filename, process_msg = self.process_zip(
                     source, output_basename, input_filename, output_dir,
                     layernames
                 )
             else:
-                self.logger.warning('Will not process Unrecognised input file '
-                                    f'format, "{file_type}".')
-                raise UnknownFileFormatError(file_type)
+                self.logger.warning(
+                    f'Will not process unsupported input file format, "{file_type}".'
+                )
+                raise UnsupportedFileFormatError(file_type)
 
             if layernames and transformed_filename:
                 transformed_bbox = self.get_bbox_lonlat(transformed_filename)
@@ -148,7 +163,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             rmtree(output_dir)
 
     def stage_and_get_output_stac(self, transformed_filename: str,
-                                  transformed_bbox: List[float],
+                                  transformed_bbox: list[float],
                                   input_stac_item: Item,
                                   staged_basename: str) -> Item:
         """ Stage the output file(s). This will be the transformed object and,
@@ -195,7 +210,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
     def process_geotiff(self, source: HarmonySource, basename: str,
                         input_filename: str, output_dir: str,
-                        layernames: List[str]):
+                        layernames: list[str]):
         filelist = []
         if not source.variables:
             # process geotiff and all bands
@@ -239,78 +254,34 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return layernames, result
 
-    def process_netcdf(self, source: HarmonySource, basename:str,
-                       input_filename: str, output_dir: str,
-                       layernames: List[str]):
+    def process_zip(
+        self,
+        source: HarmonySource,
+        basename: str,
+        zipfile_name: str,
+        output_dir: str,
+        layernames: list[str],
+    ) -> tuple[list[str], str | None, str]:
+        """Unpack the input zip file and process the individual files it contains.
 
-        filelist = []
-
-        variables = (source.process('variables')
-                     or self.get_variables(input_filename))
-
-        for variable in variables:
-            band = None
-            # For non-geotiffs, we refer to variables by appending a file path
-            layer_format = self.read_layer_format(source.collection,
-                                                  input_filename,
-                                                  variable.name)
-            filename = layer_format.format(input_filename)
-
-            layer_id = '__'.join([basename, variable.name])
-
-            # convert a subdataset in the nc file into the GeoTIFF file
-            filename = self.nc2tiff(layer_id, filename, output_dir)
-            if filename:
-                layer_id, filename, output_dir = self.perform_transforms(
-                    layer_id, filename, output_dir, band
-                )
-
-                layernames.append(layer_id)
-
-                filelist.append(filename)
-
-        result = self.add_to_result(filelist, output_dir)
-
-        if result:
-            process_msg = 'OK'
-        else:
-            process_msg = 'subsets in the nc file are not stackable, not processed.'
-
-        return layernames, result, process_msg
-
-    def process_zip(self, source: HarmonySource, basename: str,
-                    zipfile_name: str, output_dir: str, layernames: List[str]):
-        """ Unpack the input zip file and process the individual files it
-            contains. If there are GeoTIFF files, only these will be
-            processed.
-
-            `HarmonyAdapter.unpack_zipfile` will attempt to stack multiple
-            GeoTIFFs contained within the zip file, and process those as a
-            single file. The possibility of multiple NetCDF-4 files does not
-            seem to be accounted for here.
+        Only GeoTIFF files will be processed. `HarmonyAdapter.unpack_zipfile`
+        will attempt to stack multiple GeoTIFFs contained within the zip file,
+        and process those as a single file.
 
         """
         variable_names = [item.name for item in source.process('variables')]
-        tiffile, msg_tif, ncfile, msg_nc = self.unpack_zipfile(zipfile_name,
-                                                               output_dir,
-                                                               variable_names)
+        tiffile, msg_tif = self.unpack_zipfile(
+            zipfile_name, output_dir, variable_names,
+        )
 
         if len(tiffile) > 0:
-            layernames, result = self.process_geotiff(source, basename,
-                                                      tiffile, output_dir,
-                                                      layernames)
+            layernames, result = self.process_geotiff(
+                source, basename, tiffile, output_dir, layernames,
+            )
             message = msg_tif
-        elif len(ncfile) > 1:
-            raise MultipleZippedNetCDF4FilesError(zipfile_name)
-        elif len(ncfile) == 1:
-            layernames, result = self.process_netcdf(source, basename,
-                                                     ncfile[0], output_dir,
-                                                     layernames)
-            message = msg_nc
         else:
             result = None
-            message = ('The granule does not have GeoTIFF or NetCDF-4 files, '
-                       'will not process.')
+            message = ('The granule does not have GeoTIFF files, will not process.')
 
         return layernames, result, message
 
@@ -329,40 +300,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             for index, layer_name in enumerate(layer_names, start=1):
                 dataset.GetRasterBand(index).SetDescription(layer_name)
 
-    def execute_gdal_command(self, *args) -> List[str]:
+    def execute_gdal_command(self, *args) -> list[str]:
         """ This is used to execute gdal* commands. """
         self.logger.info(
             args[0] + ' ' + ' '.join(["'{}'".format(arg) for arg in args[1:]])
         )
         result_str = check_output(args).decode('utf-8')
         return result_str.split('\n')
-
-    def nc2tiff(self, layerid, filename, dstdir):
-
-        def search(input_dict, lookup_key):
-            for dictionary_key, dictionary_value in input_dict.items():
-                if lookup_key in dictionary_key:
-                    return dictionary_value
-
-        normalized_layerid = layerid.replace('/', '_')
-        dstfile = os.path.join(dstdir, f'{normalized_layerid}__nc2tiff.tif')
-
-        try:
-            with OpenGDAL(filename) as dataset:
-                crs_wkt = search(dataset.GetMetadata(), 'crs_wkt')
-
-            if crs_wkt is None:
-                crs_wkt = 'EPSG:4326'
-
-            command = ['gdal_translate', '-a_srs']
-            command.extend([crs_wkt])
-            command.extend([filename, dstfile])
-            self.execute_gdal_command(*command)
-
-            return dstfile
-        except Exception as error:
-            self.logger.exception(error)
-            raise HGAException('Could not convert NetCDF-4 to GeoTIFF')
 
     def varsubset(self, srcfile, dstfile, band=None):
         if not band:
@@ -577,7 +521,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 )
         return output
 
-    def stack_multi_file_with_metadata(self, infilelist: List[str],
+    def stack_multi_file_with_metadata(self, infilelist: list[str],
                                        outfile: str) -> str:
         """ The infilelist includes multiple files, each file does may not have
             the same number of bands, but they must have the same projection
@@ -700,20 +644,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             self.execute_gdal_command(*command)
             return dstfile
 
-    def read_layer_format(self, collection, filename, layer_id):
-        gdalinfo_lines = gdal.Info(filename).splitlines()
-
-        layer_line = next((line for line in gdalinfo_lines
-                           if re.search(f'SUBDATASET.*{layer_id}$', line)
-                           is not None), None)
-
-        if layer_line is None:
-            print('Invalid Layer:', layer_id)
-
-        layer = layer_line.split('=')[-1]
-
-        return layer.replace(filename, '{}')
-
     def get_variables(self, filename: str):
         """ filename is either nc or tif. """
         gdalinfo_lines = gdal.Info(filename).splitlines()
@@ -751,7 +681,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return layer_id, filename, output_dir
 
-    def get_bbox_lonlat(self, filename: str) -> List[float]:
+    def get_bbox_lonlat(self, filename: str) -> list[float]:
         """ Get the bbox in longitude and latitude of the raster file, and
             update the bbox and extent for the file, and return bbox.
 
@@ -811,7 +741,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return bbox
 
-    def is_stackable(self, files_to_stack: List[str]) -> bool:
+    def is_stackable(self, files_to_stack: list[str]) -> bool:
         """ Returns a boolean value indicating if all files in the input list
             can be stacked. This is indicated by whether they have the same
             projection, geotransform and raster sizes. PNG files cannot be
@@ -847,22 +777,23 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return same_grid and stackable_format
 
-    def unpack_zipfile(self, zipfilename: str, output_dir: str,
-                       variable_names: List[str]):
-        """ Extract the files contained within an input zip file. If the zip
-            file contains GeoTIFF format files, this function assumes that the
-            constituent files are separate single bands that represent the same
-            variable. The function will attempt to stack these separate GeoTIFF
-            files into a single multi-band file, the path to which will be
-            returned from this function.
+    def unpack_zipfile(
+        self, zipfilename: str, output_dir: str, variable_names: list[str]
+    ) -> tuple[list[str] | None, str]:
+        """Extract the files contained within an input zip file.
+
+        If the zip file contains GeoTIFF format files, this function assumes
+        that the constituent files are separate single bands that represent the
+        same variable. The function will attempt to stack these separate
+        GeoTIFF files into a single multi-band file, the path to which will be
+        returned from this function.
 
         """
         with ZipFile(zipfilename, 'r') as zip_ref:
             zip_ref.extractall(output_dir+'/unzip')
 
         tmptif = None
-        filelist_tif = get_files_from_unzipfiles(f'{output_dir}/unzip',
-                                                 'tif', variable_names)
+        filelist_tif = get_unzipped_geotiffs(f'{output_dir}/unzip', variable_names)
         if len(filelist_tif) > 0:
             if self.is_stackable(filelist_tif):
                 tmpfile = f'{output_dir}/tmpfile'
@@ -873,15 +804,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         else:
             msg_tif = 'no available data for the variables in the granule, not process.'
 
-        tmpnc = None
-        filelist_nc = get_files_from_unzipfiles(f'{output_dir}/unzip', 'nc')
-        if len(filelist_nc) > 0:
-            tmpnc = filelist_nc
-            msg_nc = 'OK'
-        else:
-            msg_nc = 'no available data for the variables, not process.'
-
-        return tmptif, msg_tif, tmpnc, msg_nc
+        return tmptif, msg_tif
 
     def subset2(self, tiffile: str, outputfile: str, bbox=None,
                 band=None, shapefile=None) -> str:

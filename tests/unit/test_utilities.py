@@ -5,9 +5,14 @@ from shutil import rmtree
 from tempfile import mkdtemp
 from unittest import TestCase
 
-from gdal_subsetter.utilities import (get_file_type, get_files_from_unzipfiles,
-                                      has_world_file, is_geotiff, OpenGDAL,
-                                      rename_file)
+from gdal_subsetter.utilities import (
+    get_file_type,
+    get_unzipped_geotiffs,
+    has_world_file,
+    is_geotiff,
+    OpenGDAL,
+    rename_file,
+)
 
 
 class TestUtilities(TestCase):
@@ -109,23 +114,27 @@ class TestUtilities(TestCase):
         with self.subTest('A NetCDF-4 granules returns False'):
             self.assertFalse(is_geotiff(self.sentinel_granule))
 
-    def test_get_files_from_unzipfiles(self):
-        """ Ensure that files extracted from a zip file can be filtered based
-            on their extensions. In addition, if variables are specified, and
-            are not "Band1", "Band2", etc, the output file list should be
-            further filtered to only those paths that match to a variable name.
+    def test_get_unzipped_geotiffs(self):
+        """Ensure that GeoTIFFs extracted from a zip file are returned.
 
-            The tests below verify that files with ".nc" and ".nc4" extensions
-            are both recognised as having type "nc", while files with ".tif"
-            and ".tiff" extensions are both recognised as GeoTIFFs.
+        In addition, if variables are specified, and are not "Band1", "Band2",
+        etc, the output file list should be further filtered to only those
+        paths that match to a variable name.
+
+        The tests below verify that files with ".tif" and ".tiff" extensions
+        are both recognised as GeoTIFFs.
 
         """
-        netcdf4_files = [path_join(self.temp_dir, 'granule_amplitude.nc'),
-                         path_join(self.temp_dir, 'granule_coherence.nc4'),
-                         path_join(self.temp_dir, 'granule_variable-one.nc'),
-                         path_join(self.temp_dir, 'granule_variable_two.nc')]
-        geotiff_files = [path_join(self.temp_dir, 'granule_amplitude.tif'),
-                         path_join(self.temp_dir, 'granule_coherence.tiff')]
+        netcdf4_files = [
+            path_join(self.temp_dir, 'granule_amplitude.nc'),
+            path_join(self.temp_dir, 'granule_coherence.nc4'),
+        ]
+        geotiff_files = [
+            path_join(self.temp_dir, 'granule_amplitude.tif'),
+            path_join(self.temp_dir, 'granule_coherence.tiff'),
+            path_join(self.temp_dir, 'granule_variable-one.tif'),
+            path_join(self.temp_dir, 'granule_variable_two.tif'),
+        ]
 
         for netcdf4_file in netcdf4_files:
             with open(netcdf4_file, 'a', encoding='utf-8') as file_handler:
@@ -137,50 +146,38 @@ class TestUtilities(TestCase):
 
         with self.subTest('No variables, all GeoTIFF files are retrieved.'):
             self.assertListEqual(
-                get_files_from_unzipfiles(self.temp_dir, 'tif',
-                                          variable_names=[]),
-                geotiff_files
-            )
-
-        with self.subTest('No variables, all NetCDF-4 files are retrieved.'):
-            self.assertListEqual(
-                get_files_from_unzipfiles(self.temp_dir, 'nc'),
-                netcdf4_files
+                get_unzipped_geotiffs(self.temp_dir, variable_names=[]),
+                geotiff_files,
             )
 
         with self.subTest('Only files matching variable names are retrieved.'):
             self.assertListEqual(
-                get_files_from_unzipfiles(self.temp_dir, 'nc',
-                                          variable_names=['amplitude']),
-                [netcdf4_files[0]]
+                get_unzipped_geotiffs(self.temp_dir, variable_names=['amplitude']),
+                [geotiff_files[0]],
             )
 
         with self.subTest('No files matching variables returns empty list.'):
             self.assertListEqual(
-                get_files_from_unzipfiles(self.temp_dir, 'nc',
-                                          variable_names=['wind_speed']),
-                []
+                get_unzipped_geotiffs(self.temp_dir, variable_names=['wind_speed']),
+                [],
             )
 
         with self.subTest('Variable names are ignored if they contain "Band"'):
             self.assertListEqual(
-                get_files_from_unzipfiles(self.temp_dir, 'tif',
-                                          variable_names=['Band1', 'Band2']),
-                geotiff_files
+                get_unzipped_geotiffs(self.temp_dir, variable_names=['Band1', 'Band2']),
+                geotiff_files,
             )
 
         with self.subTest('Variable name hyphens converted to underscores.'):
             self.assertListEqual(
-                get_files_from_unzipfiles(self.temp_dir, 'nc',
-                                          variable_names=['variable-two']),
-                [netcdf4_files[3]]
+                get_unzipped_geotiffs(self.temp_dir, variable_names=['variable-two']),
+                [geotiff_files[3]],
             )
 
         with self.subTest('File name hyphens converted to underscores.'):
             self.assertListEqual(
-                get_files_from_unzipfiles(self.temp_dir, 'nc',
-                                          variable_names=['variable_one']),
-                [netcdf4_files[2]]
+                get_unzipped_geotiffs(self.temp_dir, variable_names=['variable_one']),
+                [geotiff_files[2]],
             )
 
     def test_has_world_file(self):

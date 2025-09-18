@@ -1,7 +1,8 @@
-"""This module contains custom exceptions specific to the Harmony GDAL Adapter
-    service. These exceptions are intended to allow for clearer messages to the
-    end-user and easier debugging of expected errors that arise during an
-    invocation of the service.
+"""Contains custom exceptions specific to the Harmony GDAL Adapter service.
+
+These exceptions are intended to allow for clearer messages to the
+end-user and easier debugging of expected errors that arise during an
+invocation of the service.
 
 """
 # noqa: D107
@@ -17,38 +18,24 @@ class HGAException(HarmonyException):
 
 
 class DownloadError(HGAException):
-    """ This exception is raised when the Harmony GDAL Adapter cannot retrieve
-        input data.
-
-    """
+    """Raised when the Harmony GDAL Adapter cannot retrieve input data."""
     def __init__(self, url, message):
         super().__init__(f'Could not download resource: {url}, {message}')
 
 
-class UnknownFileFormatError(HGAException):
-    """ This is raised when the input file format is one that cannot by
-        processed by the Harmony GDAL Adapter.
-
-    """
+class UnsupportedFileFormatError(HGAException):
+    """Raised when the input file format is cannot processed by the HGA."""
     def __init__(self, file_format):
-        super().__init__('Cannot process unrecognised file format: '
-                         f'"{file_format}"')
+        super().__init__(
+            f'Cannot process unsupported file format: "{file_format}"'
+        )
 
 
 class IncompatibleVariablesError(HGAException):
-    """ This exception is raised when the dataset variables requested are not
-    compatible, i.e. they have different projections, geotransforms, sizes or
-    data types.
+    """Raised when the dataset variables requested are not compatible.
+
+    i.e. they have different projections, geotransforms, sizes or data types.
 
     """
     def __init__(self, message):
         super().__init__(f'Incompatible variables: {message}')
-
-
-class MultipleZippedNetCDF4FilesError(HGAException):
-    """ This exception is raised when the input file supplied to HGA is a zip
-        file containing multiple NetCDF-4 files, as these cannot be aggregated.
-
-    """
-    def __init__(self, zip_file):
-        super().__init__(f'Multiple NetCDF-4 files within input: {zip_file}.')

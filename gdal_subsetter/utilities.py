@@ -5,7 +5,6 @@
 from glob import glob
 from os import rename
 from os.path import dirname, exists, join as path_join, splitext
-from typing import List
 
 from harmony.util import generate_output_filename
 from osgeo import gdal
@@ -71,45 +70,46 @@ def is_geotiff(file_name: str) -> bool:
     return gdalinfo_lines[0] == 'Driver: GTiff/GeoTIFF'
 
 
-def get_files_from_unzipfiles(extract_dir: str, file_type: str,
-                              variable_names: List[str] = []) -> List[str]:
-    """ Retrieve a filtered list of files that have been extracted from an
-        input zip file based on a specific file type ('nc' or 'tif').
+def get_unzipped_geotiffs(extract_dir: str, variable_names: list[str] = []) -> list[str]:
+    """Get a list of GeoTIFFs unzipped from a zip-format granule.
 
-        If a list of variables names is specified, and the first variable name
-        does not include "Band", the list of extracted files with the expected
-        extension will be further filtered to only return those file names that
-        include one of the requested variable names.
-
-        As currently called, requests to determine NetCDF-4 files will not
-        include a filtering list of variable names.
+    If a list of variables names is specified, and the first variable name does
+    not include "Band", the list of extracted GeoTIFFs will be further filtered
+    to only return those file names that include one of the requested variable
+    names.
 
     """
-    file_extensions = [file_extension for file_extension, known_file_type
-                       in known_file_types.items()
-                       if known_file_type == file_type]
+    geotiff_file_extensions = [
+        file_extension
+        for file_extension, known_file_type in known_file_types.items()
+        if known_file_type == 'tif'
+    ]
 
-    files_with_type = []
-
-    for file_extension in file_extensions:
-        files_with_type.extend(glob(path_join(extract_dir,
-                                              f'*{file_extension}')))
-
-    files_with_type.sort()
+    geotiff_files = [
+        unzipped_file
+        for unzipped_file in glob(f'{extract_dir}/**', recursive=True)
+        if unzipped_file.endswith(tuple(geotiff_file_extensions))
+    ]
+    geotiff_files.sort()
 
     if len(variable_names) > 0 and 'Band' not in variable_names[0]:
-        formatted_variable_names = [variable_name.replace('-', '_')
-                                    for variable_name in variable_names]
+        formatted_variable_names = [
+            variable_name.replace('-', '_')
+            for variable_name in variable_names
+        ]
 
-        filtered_file_list = [
-            file_name for file_name in files_with_type
-            if any(variable_name in file_name.replace('-', '_')
-                   for variable_name in formatted_variable_names)
+        filtered_geotiff_files = [
+            file_name
+            for file_name in geotiff_files
+            if any(
+                variable_name in file_name.replace('-', '_')
+                for variable_name in formatted_variable_names
+            )
         ]
     else:
-        filtered_file_list = files_with_type
+        filtered_geotiff_files = geotiff_files
 
-    return filtered_file_list
+    return filtered_geotiff_files
 
 
 def rename_file(input_filename: str, stac_asset_href: str) -> str:
