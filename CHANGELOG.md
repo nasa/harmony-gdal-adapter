@@ -5,6 +5,27 @@ documented in this file. The format is based on [Keep a
 Changelog](http://keepachangelog.com/en/1.0.0/).
 
 
+## [v3.0.0] - 2025-09-18
+
+### Added:
+
+* `ruff` hooks have been added to the `pre-commit` settings for this repository.
+  They exclude large legacy files, but will otherwise scan smaller files as
+  they are iterated.
+
+### Changed:
+
+* Functionality to generate netCDF4 output files from GeoTIFFs has been migrated
+  into a new separate module. This may be a step towards a separate microservice
+  for this operation.
+
+### Removed:
+
+* Input files that are netCDF4 or zip files containing netCDF4 files will no
+  longer be processed in this service. Instead, the [net2cog](https://github.com/podaac/net2cog)
+  service should be used as a preceding step to ensure a GeoTIFF input to this
+  service.
+
 ## [v2.0.0] - 2025-09-05
 
 ### Changed:
@@ -319,5 +340,6 @@ This is the final version. We will stop the development for a while.
 
 ## [v1.0.0]
 
+[v3.0.0]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/3.0.0
 [v2.0.0]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/2.0.0
 [v1.1.0]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/1.1.0
