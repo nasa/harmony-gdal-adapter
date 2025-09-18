@@ -1,55 +1,72 @@
-""" CLI for adapting a Harmony operation to GDAL. """
-from datetime import datetime
+"""Adapter for the Harmony GDAL Adapter service."""
 from shutil import copyfile, rmtree
 from subprocess import check_output
 from tempfile import mkdtemp
-from typing import List
 from zipfile import ZipFile
 import os
 import re
 
 from harmony.adapter import BaseHarmonyAdapter
 from harmony.message import Source as HarmonySource, Variable as HarmonyVariable
-from harmony.util import (bbox_to_geometry, download, generate_output_filename,
-                          stage)
+from harmony.util import (
+    bbox_to_geometry,
+    download,
+    generate_output_filename,
+    stage,
+)
 from netCDF4 import Dataset
-from numpy.ma import masked_array
 from osgeo import gdal, osr, ogr, gdal_array
 from osgeo.gdalconst import GA_ReadOnly, GA_Update, GMF_PER_DATASET
-from pycrs.parse import from_ogc_wkt as parse_crs_from_ogc_wkt
 from pyproj import Proj
 from pystac import Asset, Item
 import numpy as np
 
-from gdal_subsetter.coordinate_utilities import (boxwrs84_boxproj,
-                                                 calc_coord_ij, calc_ij_coord,
-                                                 calc_subset_envelope_window,
-                                                 get_bbox, lonlat_to_projcoord)
-from gdal_subsetter.exceptions import (DownloadError,
-                                       HGAException,
-                                       IncompatibleVariablesError,
-                                       MultipleZippedNetCDF4FilesError,
-                                       UnknownFileFormatError)
-from gdal_subsetter.shape_file_utilities import (box_to_shapefile,
-                                                 convert_to_multipolygon,
-                                                 get_coordinates_unit,
-                                                 shapefile_boxproj)
-from gdal_subsetter.utilities import (get_file_type, get_files_from_unzipfiles,
-                                      get_version, has_world_file, is_geotiff,
-                                      mime_to_extension, mime_to_gdal,
-                                      OpenGDAL, process_flags, rename_file,
-                                      resampling_methods)
+from gdal_subsetter.coordinate_utilities import (
+    boxwrs84_boxproj,
+    calc_coord_ij,
+    calc_ij_coord,
+    calc_subset_envelope_window,
+    get_bbox,
+    lonlat_to_projcoord,
+)
+from gdal_subsetter.exceptions import (
+    DownloadError,
+    HGAException,
+    IncompatibleVariablesError,
+    UnsupportedFileFormatError,
+)
+from gdal_subsetter.reformat import convert_geotiff_to_netcdf
+from gdal_subsetter.shape_file_utilities import (
+    box_to_shapefile,
+    convert_to_multipolygon,
+    get_coordinates_unit,
+    shapefile_boxproj,
+)
+from gdal_subsetter.utilities import (
+    get_file_type,
+    get_unzipped_geotiffs,
+    get_version,
+    has_world_file,
+    is_geotiff,
+    mime_to_extension,
+    mime_to_gdal,
+    OpenGDAL,
+    process_flags,
+    rename_file,
+    resampling_methods,
+)
 
 
 class HarmonyAdapter(BaseHarmonyAdapter):
-    """
+    """Extends the `BaseHarmonyAdapter` to process an item with GDAL.
+
     See https://github.com/nasa/harmony-service-lib-py
     for documentation and examples.
+
     """
 
     def process_item(self, input_item: Item, source: HarmonySource) -> Item:
-        """
-        Converts an input STAC Item's data into Zarr, returning an output STAC item
+        """Applies GDAL transformations to input GeoTIFFs, returns output STAC item
 
         Parameters
         ----------
@@ -61,7 +78,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         Returns
         -------
         pystac.Item
-            a STAC item containing the Zarr output
+            a STAC item containing the transformed output
+
         """
         if self.message.subset and self.message.subset.shape:
             self.logger.warning('Ignoring subset request for user shapefile '
@@ -111,21 +129,16 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     source, output_basename, input_filename, output_dir,
                     layernames
                 )
-            elif file_type == 'nc':
-                layernames, transformed_filename, process_msg = self.process_netcdf(
-                    source, output_basename, input_filename, output_dir,
-                    layernames
-                )
-
             elif file_type == 'zip':
                 layernames, transformed_filename, process_msg = self.process_zip(
                     source, output_basename, input_filename, output_dir,
                     layernames
                 )
             else:
-                self.logger.warning('Will not process Unrecognised input file '
-                                    f'format, "{file_type}".')
-                raise UnknownFileFormatError(file_type)
+                self.logger.warning(
+                    f'Will not process unsupported input file format, "{file_type}".'
+                )
+                raise UnsupportedFileFormatError(file_type)
 
             if layernames and transformed_filename:
                 transformed_bbox = self.get_bbox_lonlat(transformed_filename)
@@ -148,7 +161,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             rmtree(output_dir)
 
     def stage_and_get_output_stac(self, transformed_filename: str,
-                                  transformed_bbox: List[float],
+                                  transformed_bbox: list[float],
                                   input_stac_item: Item,
                                   staged_basename: str) -> Item:
         """ Stage the output file(s). This will be the transformed object and,
@@ -195,7 +208,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
     def process_geotiff(self, source: HarmonySource, basename: str,
                         input_filename: str, output_dir: str,
-                        layernames: List[str]):
+                        layernames: list[str]):
         filelist = []
         if not source.variables:
             # process geotiff and all bands
@@ -239,78 +252,34 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return layernames, result
 
-    def process_netcdf(self, source: HarmonySource, basename:str,
-                       input_filename: str, output_dir: str,
-                       layernames: List[str]):
+    def process_zip(
+        self,
+        source: HarmonySource,
+        basename: str,
+        zipfile_name: str,
+        output_dir: str,
+        layernames: list[str],
+    ) -> tuple[list[str], str | None, str]:
+        """Unpack the input zip file and process the individual files it contains.
 
-        filelist = []
-
-        variables = (source.process('variables')
-                     or self.get_variables(input_filename))
-
-        for variable in variables:
-            band = None
-            # For non-geotiffs, we refer to variables by appending a file path
-            layer_format = self.read_layer_format(source.collection,
-                                                  input_filename,
-                                                  variable.name)
-            filename = layer_format.format(input_filename)
-
-            layer_id = '__'.join([basename, variable.name])
-
-            # convert a subdataset in the nc file into the GeoTIFF file
-            filename = self.nc2tiff(layer_id, filename, output_dir)
-            if filename:
-                layer_id, filename, output_dir = self.perform_transforms(
-                    layer_id, filename, output_dir, band
-                )
-
-                layernames.append(layer_id)
-
-                filelist.append(filename)
-
-        result = self.add_to_result(filelist, output_dir)
-
-        if result:
-            process_msg = 'OK'
-        else:
-            process_msg = 'subsets in the nc file are not stackable, not processed.'
-
-        return layernames, result, process_msg
-
-    def process_zip(self, source: HarmonySource, basename: str,
-                    zipfile_name: str, output_dir: str, layernames: List[str]):
-        """ Unpack the input zip file and process the individual files it
-            contains. If there are GeoTIFF files, only these will be
-            processed.
-
-            `HarmonyAdapter.unpack_zipfile` will attempt to stack multiple
-            GeoTIFFs contained within the zip file, and process those as a
-            single file. The possibility of multiple NetCDF-4 files does not
-            seem to be accounted for here.
+        Only GeoTIFF files will be processed. `HarmonyAdapter.unpack_zipfile`
+        will attempt to stack multiple GeoTIFFs contained within the zip file,
+        and process those as a single file.
 
         """
         variable_names = [item.name for item in source.process('variables')]
-        tiffile, msg_tif, ncfile, msg_nc = self.unpack_zipfile(zipfile_name,
-                                                               output_dir,
-                                                               variable_names)
+        tiffile, msg_tif = self.unpack_zipfile(
+            zipfile_name, output_dir, variable_names,
+        )
 
         if len(tiffile) > 0:
-            layernames, result = self.process_geotiff(source, basename,
-                                                      tiffile, output_dir,
-                                                      layernames)
+            layernames, result = self.process_geotiff(
+                source, basename, tiffile, output_dir, layernames,
+            )
             message = msg_tif
-        elif len(ncfile) > 1:
-            raise MultipleZippedNetCDF4FilesError(zipfile_name)
-        elif len(ncfile) == 1:
-            layernames, result = self.process_netcdf(source, basename,
-                                                     ncfile[0], output_dir,
-                                                     layernames)
-            message = msg_nc
         else:
             result = None
-            message = ('The granule does not have GeoTIFF or NetCDF-4 files, '
-                       'will not process.')
+            message = ('The granule does not have GeoTIFF files, will not process.')
 
         return layernames, result, message
 
@@ -329,40 +298,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             for index, layer_name in enumerate(layer_names, start=1):
                 dataset.GetRasterBand(index).SetDescription(layer_name)
 
-    def execute_gdal_command(self, *args) -> List[str]:
+    def execute_gdal_command(self, *args) -> list[str]:
         """ This is used to execute gdal* commands. """
         self.logger.info(
             args[0] + ' ' + ' '.join(["'{}'".format(arg) for arg in args[1:]])
         )
         result_str = check_output(args).decode('utf-8')
         return result_str.split('\n')
-
-    def nc2tiff(self, layerid, filename, dstdir):
-
-        def search(input_dict, lookup_key):
-            for dictionary_key, dictionary_value in input_dict.items():
-                if lookup_key in dictionary_key:
-                    return dictionary_value
-
-        normalized_layerid = layerid.replace('/', '_')
-        dstfile = os.path.join(dstdir, f'{normalized_layerid}__nc2tiff.tif')
-
-        try:
-            with OpenGDAL(filename) as dataset:
-                crs_wkt = search(dataset.GetMetadata(), 'crs_wkt')
-
-            if crs_wkt is None:
-                crs_wkt = 'EPSG:4326'
-
-            command = ['gdal_translate', '-a_srs']
-            command.extend([crs_wkt])
-            command.extend([filename, dstfile])
-            self.execute_gdal_command(*command)
-
-            return dstfile
-        except Exception as error:
-            self.logger.exception(error)
-            raise HGAException('Could not convert NetCDF-4 to GeoTIFF')
 
     def varsubset(self, srcfile, dstfile, band=None):
         if not band:
@@ -577,7 +519,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 )
         return output
 
-    def stack_multi_file_with_metadata(self, infilelist: List[str],
+    def stack_multi_file_with_metadata(self, infilelist: list[str],
                                        outfile: str) -> str:
         """ The infilelist includes multiple files, each file does may not have
             the same number of bands, but they must have the same projection
@@ -687,7 +629,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         if output_mime in ('application/x-netcdf4', 'application/x-zarr'):
             dstfile = os.path.join(dstdir, 'translated.nc')
-            dstfile = self.geotiff2netcdf_direct(srcfile, dstfile)
+            dstfile = convert_geotiff_to_netcdf(srcfile, dstfile)
             return dstfile
         else:
             # png, jpeg, gif, etc.
@@ -699,20 +641,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                        '-scale', srcfile, dstfile]
             self.execute_gdal_command(*command)
             return dstfile
-
-    def read_layer_format(self, collection, filename, layer_id):
-        gdalinfo_lines = gdal.Info(filename).splitlines()
-
-        layer_line = next((line for line in gdalinfo_lines
-                           if re.search(f'SUBDATASET.*{layer_id}$', line)
-                           is not None), None)
-
-        if layer_line is None:
-            print('Invalid Layer:', layer_id)
-
-        layer = layer_line.split('=')[-1]
-
-        return layer.replace(filename, '{}')
 
     def get_variables(self, filename: str):
         """ filename is either nc or tif. """
@@ -751,7 +679,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return layer_id, filename, output_dir
 
-    def get_bbox_lonlat(self, filename: str) -> List[float]:
+    def get_bbox_lonlat(self, filename: str) -> list[float]:
         """ Get the bbox in longitude and latitude of the raster file, and
             update the bbox and extent for the file, and return bbox.
 
@@ -811,7 +739,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return bbox
 
-    def is_stackable(self, files_to_stack: List[str]) -> bool:
+    def is_stackable(self, files_to_stack: list[str]) -> bool:
         """ Returns a boolean value indicating if all files in the input list
             can be stacked. This is indicated by whether they have the same
             projection, geotransform and raster sizes. PNG files cannot be
@@ -847,22 +775,23 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return same_grid and stackable_format
 
-    def unpack_zipfile(self, zipfilename: str, output_dir: str,
-                       variable_names: List[str]):
-        """ Extract the files contained within an input zip file. If the zip
-            file contains GeoTIFF format files, this function assumes that the
-            constituent files are separate single bands that represent the same
-            variable. The function will attempt to stack these separate GeoTIFF
-            files into a single multi-band file, the path to which will be
-            returned from this function.
+    def unpack_zipfile(
+        self, zipfilename: str, output_dir: str, variable_names: list[str]
+    ) -> tuple[list[str] | None, str]:
+        """Extract the files contained within an input zip file.
+
+        If the zip file contains GeoTIFF format files, this function assumes
+        that the constituent files are separate single bands that represent the
+        same variable. The function will attempt to stack these separate
+        GeoTIFF files into a single multi-band file, the path to which will be
+        returned from this function.
 
         """
         with ZipFile(zipfilename, 'r') as zip_ref:
             zip_ref.extractall(output_dir+'/unzip')
 
         tmptif = None
-        filelist_tif = get_files_from_unzipfiles(f'{output_dir}/unzip',
-                                                 'tif', variable_names)
+        filelist_tif = get_unzipped_geotiffs(f'{output_dir}/unzip', variable_names)
         if len(filelist_tif) > 0:
             if self.is_stackable(filelist_tif):
                 tmpfile = f'{output_dir}/tmpfile'
@@ -873,15 +802,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         else:
             msg_tif = 'no available data for the variables in the granule, not process.'
 
-        tmpnc = None
-        filelist_nc = get_files_from_unzipfiles(f'{output_dir}/unzip', 'nc')
-        if len(filelist_nc) > 0:
-            tmpnc = filelist_nc
-            msg_nc = 'OK'
-        else:
-            msg_nc = 'no available data for the variables, not process.'
-
-        return tmptif, msg_tif, tmpnc, msg_nc
+        return tmptif, msg_tif
 
     def subset2(self, tiffile: str, outputfile: str, bbox=None,
                 band=None, shapefile=None) -> str:
@@ -1012,301 +933,3 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         out_mskband.WriteArray(out_msk)
         out_mskband.FlushCache()
         out_band.FlushCache()
-
-    def geotiff2netcdf_direct(self, infile: str, outfile: str):
-        """ Convert GeoTIFF file to NetCDF-4 file by reading the GeoTIFF and
-            writing to a new NetCDF-44 format file.
-
-            input:
-                infile - geotiff file name
-            return:
-                outfile - netcdf file name
-        """
-        def _process_projected(ds_in: gdal.Dataset, dst: Dataset):
-            gt = ds_in.GetGeoTransform()
-            crs = parse_crs_from_ogc_wkt(ds_in.GetProjectionRef())
-            unitname = crs.unit.unitname.proj4
-            # define dimensions
-            dst.createDimension('x', ds_in.RasterXSize)
-            dst.createDimension('y', ds_in.RasterYSize)
-            # copy attributes, geotiff metadata is party of attributes in netcdf.
-            # Conventions, GDAL, history
-            for attribute_name, attribute_value in ds_in.GetMetadata().items():
-                if attribute_name.find(r'#') > -1:
-                    tmp = attribute_name.split(r'#')
-                    if tmp[0] == 'NC_GLOBAL':
-                        dst.setncattr(tmp[1], attribute_value.rstrip('\n'))
-                else:
-                    if attribute_name not in ('_FillValue', 'Conventions'):
-                        dst.setncattr(attribute_name,
-                                      attribute_value.rstrip('\n'))
-
-            # create georeference variable
-            crs_name = crs.proj.name.ogc_wkt.lower()
-            geovar = dst.createVariable(crs_name, 'S1')
-            geovar.grid_mapping_name = crs_name
-            geovar.long_name = 'CRS definition'
-            for item in crs.params:
-                attr_name = str(item).split('.')[-1].split(' ')[0]
-                attr_lst = re.findall('[A-Z][^A-Z]*', attr_name)
-                name = '_'.join(attr_lst).lower()
-                geovar.setncattr(name, item.value)
-
-            geovar.longitude_of_prime_meridian = crs.geogcs.prime_mer.value
-            if crs.geogcs.datum.ellips:
-                geovar.semi_major_axis = crs.geogcs.datum.ellips.semimaj_ax.value
-                geovar.inverse_flattening = crs.geogcs.datum.ellips.inv_flat.value
-
-            geovar.spatial_ref = ds_in.GetProjectionRef()
-            geovar.GeoTransform = ' '.join(map(str, list(gt)))
-
-            # create 1D coordinate variables if the geotiff is not rotated image
-            if gt[2] == 0.0 and gt[4] == 0.0:
-                x_array = gt[0] + gt[1]*(np.arange(ds_in.RasterXSize) + 0.5)
-                y_array = gt[3] + gt[5]*(np.arange(ds_in.RasterYSize) + 0.5)
-                xvar = dst.createVariable('x', np.dtype('float64'), ('x'))
-                xvar[:] = x_array
-                xvar.setncattr('standard_name', 'projection_x_coordinate')
-                xvar.setncattr('axis', 'X')
-                xvar.setncattr('long_name',
-                               'x-coordinate in projected coordinate system')
-                xvar.setncattr('units', unitname)
-                yvar = dst.createVariable('y', np.dtype('float64'), ('y'))
-                yvar[:] = y_array
-                yvar.setncattr('standard_name', 'projection_y_coordinate')
-                xvar.setncattr('axis', 'Y')
-                yvar.setncattr('long_name',
-                               'y-coordinate in projected coordinate system')
-                yvar.setncattr('units', unitname)
-                lcc =Proj(ds_in.GetProjectionRef())
-
-                # lon 1D
-                tmp_y = np.zeros(x_array.shape, x_array.dtype)
-                tmp_y[:] = y_array[0]
-                lon, tmp_lat = lcc(x_array, tmp_y, inverse=True)
-
-                # lat 1D
-                tmp_x = np.zeros(y_array.shape, y_array.dtype)
-                tmp_x[:] = x_array[0]
-                tmp_lon, lat = lcc(tmp_x, y_array, inverse=True)
-
-                lon_var = dst.createVariable('lon', np.float64, ('x'), zlib=True)
-                lon_var[:] = lon
-                lon_var.units = 'degrees_east'
-                lon_var.standard_name = 'longitude'
-                lon_var.long_name = 'longitude'
-
-                lat_var = dst.createVariable('lat', np.float64, ('y'), zlib=True)
-                lat_var[:] = lat
-                lat_var.units = 'degrees_north'
-                lat_var.standard_name = 'latitude'
-                lat_var.long_name = 'latitude'
-
-            # create data variables
-            for band_index in range(1, ds_in.RasterCount + 1):
-                band = ds_in.GetRasterBand(band_index)
-                meta = band.GetMetadata()
-                mask_band = band.GetMaskBand()
-                data = band.ReadAsArray()
-                mask = mask_band.ReadAsArray()
-                mx = masked_array(data, mask=mask == 0)
-                # get varname
-                varnames = [item for item in meta if item == 'standard_name']
-                if varnames:
-                    varname =meta[varnames[0]].replace('-', '_')
-                else:
-                    varname = f'Band{band_index}'.replace('-', '_')
-
-                vardatatype = mx.data.dtype
-                fillvalue = band.GetNoDataValue()
-                if fillvalue:
-                    datavar = dst.createVariable(varname, vardatatype,
-                                                 ('y', 'x'), zlib=True,
-                                                 fill_value=fillvalue)
-                else:
-                    datavar = dst.createVariable(varname, vardatatype,
-                                                 ('y', 'x'), zlib=True)
-
-                datavar[:, :] = mx
-
-                # write attrs of the variabale datavar
-                for attribute_name, attribute_value in band.GetMetadata().items():
-                    if attribute_name.find(r'#') > -1:
-                        tmp = attribute_name.split(r'#')
-                        if tmp[0] == 'NC_GLOBAL':
-                            dst.setncattr(tmp[1], attribute_value.rstrip('\n'))
-
-                    else:
-                        if attribute_name != '_FillValue':
-                            if (
-                                attribute_name == 'units'
-                                and attribute_value == 'unitless'
-                            ):
-                                datavar.setncattr(attribute_name, '1')
-                            else:
-                                datavar.setncattr(
-                                    attribute_name,
-                                    attribute_value.rstrip('\n').replace('-', '_')
-                                )
-
-                datavar.grid_mapping = crs_name
-
-                # add standard_name no standard_name in datavar
-                lst = [attr for attr in datavar.ncattrs()
-                       if attr in ['standard_name', 'long_name']]
-
-                if not lst:
-                    datavar.standard_name = varname
-
-                # add units attr
-                if 'units' not in datavar.ncattrs():
-                    datavar.setncattr('units', '1')
-
-        def _process_geogcs(ds_in: gdal.Dataset, dst: Dataset):
-            gt = ds_in.GetGeoTransform()
-            crs = parse_crs_from_ogc_wkt(ds_in.GetProjectionRef())
-            # define dimensions
-            dst.createDimension('lon', ds_in.RasterXSize)
-            dst.createDimension('lat', ds_in.RasterYSize)
-            # copy attributes, geotiff metadata is party of attributes in netcdf.
-            for attribute_name, attribute_value in ds_in.GetMetadata().items():
-                if attribute_name.find(r'#') > -1:
-                    tmp = attribute_name.split(r'#')
-                    if tmp[0] == 'NC_GLOBAL':
-                        dst.setncattr(tmp[1], attribute_value.rstrip('\n'))
-
-                else:
-                    if attribute_name not in ('_FillValue', 'Conventions'):
-                        dst.setncattr(attribute_name,
-                                      attribute_value.rstrip('\n'))
-
-            # create georeference variable
-            crs_name = 'latitude_longitude'
-            geovar = dst.createVariable(crs_name, 'S1')
-            geovar.grid_mapping_name = crs_name
-            geovar.long_name = 'CRS definition'
-            geovar.longitude_of_prime_meridian = crs.prime_mer.value
-            if crs.datum.ellips:
-                geovar.semi_major_axis = crs.datum.ellips.semimaj_ax.value
-                geovar.inverse_flattening = crs.datum.ellips.inv_flat.value
-
-            geovar.spatial_ref = ds_in.GetProjectionRef()
-            geovar.GeoTransform = ' '.join(map(str, list(gt)))
-            # create coordinate variables if the geotiff is a non-rotated image
-            if gt[2] == 0.0 and gt[4] == 0.0:
-                lon_array = gt[0] + gt[1] * (np.arange(ds_in.RasterXSize) + 0.5)
-                lat_array = gt[3] + gt[5] * (np.arange(ds_in.RasterYSize) + 0.5)
-                lonvar = dst.createVariable('lon', np.dtype('float64'), ('lon'))
-                lonvar[:] = lon_array
-                lonvar.setncattr('standard_name', 'longitude')
-                lonvar.setncattr('long_name', 'longitude')
-                lonvar.setncattr('units', 'degrees_east')
-                latvar = dst.createVariable('lat', np.dtype('float64'), ('lat'))
-                latvar[:] = lat_array
-                latvar.setncattr('standard_name', 'latitude')
-                latvar.setncattr('long_name', 'latitude')
-                latvar.setncattr('units', 'degrees_north')
-            # else:
-            #  create auxilliary coordinates
-            # lcc =Proj(ds_in.GetProjectionRef())
-            # J, I = np.meshgrid(np.arange(dst.dimensions['lon'].size), np.arange(dst.dimensions['lat'].size) )
-            # lon_array = gt[0] + gt[1]*(J + 0.5) + gt[2]*(I + 0.5)
-            # lat_array = gt[3] + gt[4]*(J + 0.5) + gt[5]*(I + 0.5)
-            # lon, lat = lcc(lon_array, lat_array,inverse=True )
-            # lon_var = dst.createVariable('lon', np.float64, ('lat', 'lon'), zlib=True)
-            # lon_var[:,:] = lon
-            # lon_var.units = 'degrees_east'
-            # lon_var.standard_name = 'longitude'
-            # lon_var.long_name = 'longitude'
-            # lat_var = dst.createVariable('lat', np.float64, ('lat', 'lon'), zlib=True)
-            # lat_var[:,:] = lat
-            # lat_var.units = 'degrees_north'
-            # lat_var.standard_name = 'latitude'
-            # lat_var.long_name = 'latitude'
-
-            # create data variables
-            for band_index in range(1, ds_in.RasterCount + 1):
-                band = ds_in.GetRasterBand(band_index)
-                meta = band.GetMetadata()
-                mask_band = band.GetMaskBand()
-                data = band.ReadAsArray()
-                mask = mask_band.ReadAsArray()
-                mx = masked_array(data, mask=mask == 0)
-                # get varname
-                varnames = [item for item in meta if item == 'standard_name']
-                if varnames:
-                    varname =meta[varnames[0]].replace('-', '_')
-                else:
-                    varname = f'Band{band_index}'.replace('-', '_')
-
-                vardatatype = mx.data.dtype
-                fillvalue = band.GetNoDataValue()
-                if fillvalue:
-                    datavar = dst.createVariable(varname, vardatatype,
-                                                 ('lat', 'lon'), zlib=True,
-                                                 fill_value=fillvalue)
-                else:
-                    datavar = dst.createVariable(varname, vardatatype,
-                                                 ('lat', 'lon'), zlib=True)
-
-                datavar[:, :] = mx
-                # write attrs of the variable datavar
-                for attribute_name, attribute_value in band.GetMetadata().items():
-                    if attribute_name.find(r'#') > -1:
-                        tmp = attribute_name.split(r'#')
-                        if tmp[0] == 'NC_GLOBAL':
-                            dst.setncattr(tmp[1], attribute_value.rstrip('\n'))
-
-                    else:
-                        if attribute_name != '_FillValue':
-                            if (
-                                attribute_name == 'units'
-                                and attribute_value == 'unitless'
-                            ):
-                                datavar.setncattr(attribute_name, '1')
-                            else:
-                                datavar.setncattr(
-                                    attribute_name,
-                                    attribute_value.rstrip('\n').replace('-', '_')
-                                )
-
-                datavar.grid_mapping = crs_name
-
-                # add standard_name if there is no standard_name or long_name
-                # attributes associated with datavar
-                lst = [attr for attr in datavar.ncattrs()
-                       if attr in ['standard_name', 'long_name']]
-
-                if not lst:
-                    datavar.standard_name = varname
-
-                # add units attribute
-                if 'units' not in datavar.ncattrs():
-                    datavar.setncattr('units', '1')
-
-                if gt[2] == 0.0 and gt[4] == 0.0:
-                    datavar.coordinates = 'lon lat'
-
-        with (
-            OpenGDAL(infile) as input_geotiff,
-            Dataset(outfile, mode='w', format='NETCDF4') as output_netcdf4
-        ):
-            # define global attributes
-            output_netcdf4.title = ''
-            output_netcdf4.institution = 'Alaska Satellite Facility'
-            output_netcdf4.source = ''
-            output_netcdf4.references = ''
-            output_netcdf4.comment = ''
-            output_netcdf4.history = f'{datetime.utcnow():%d/%m/%Y %H:%M:%S} (UTC)'
-            output_netcdf4.GDAL = f'Version {gdal.__version__}'
-
-            # create dimensions
-            crs = parse_crs_from_ogc_wkt(input_geotiff.GetProjectionRef())
-            if crs.cs_type == 'Projected':
-                _process_projected(input_geotiff, output_netcdf4)
-            else:
-                _process_geogcs(input_geotiff, output_netcdf4)
-
-            output_netcdf4.Conventions = 'CF-1.7'
-
-        return outfile
