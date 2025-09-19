@@ -22,17 +22,15 @@ if [ "$RESULT" -ne "0" ]; then
     echo "ERROR: pytest generated errors"
 fi
 
-# Run pylint (uncomment block below to enable, or use a pylint/flake8 plugin
-# for pytest)
+# Run pylint
 #
 
-# pylint gdal_subsetter --disable=E0401 --extension-pkg-whitelist=netCDF4
-# RESULT=$?
-# RESULT=$((3 & $RESULT))
-# if [ "$RESULT" -ne "0" ]; then
-#     STATUS=1
-#     echo "ERROR: pylint generated errors"
-# fi
-echo "pylint check currently disabled - lots of linting errors need fixing."
+pylint gdal_subsetter --disable=E0401 --extension-pkg-whitelist=netCDF4
+RESULT=$?
+RESULT=$((3 & $RESULT))
+if [ "$RESULT" -ne "0" ]; then
+    STATUS=1
+    echo "ERROR: pylint generated errors"
+fi
 
 exit $STATUS

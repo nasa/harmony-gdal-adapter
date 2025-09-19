@@ -4,6 +4,13 @@ HGA follows semantic versioning. All notable changes to this project will be
 documented in this file. The format is based on [Keep a
 Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [v3.0.1] - 2025-09-19
+
+### Changed:
+
+* The `ruff` hook has been applied to the entire repository. `pylint` checks
+  during CI/CD have also been enabled. There are no functional changes in this
+  version of HGA.
 
 ## [v3.0.0] - 2025-09-18
 
