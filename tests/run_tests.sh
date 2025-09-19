@@ -22,8 +22,7 @@ if [ "$RESULT" -ne "0" ]; then
     echo "ERROR: pytest generated errors"
 fi
 
-# Run pylint (uncomment block below to enable, or use a pylint/flake8 plugin
-# for pytest)
+# Run pylint
 #
 
 pylint gdal_subsetter --disable=E0401 --extension-pkg-whitelist=netCDF4
