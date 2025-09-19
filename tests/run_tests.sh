@@ -26,13 +26,12 @@ fi
 # for pytest)
 #
 
-# pylint gdal_subsetter --disable=E0401 --extension-pkg-whitelist=netCDF4
-# RESULT=$?
-# RESULT=$((3 & $RESULT))
-# if [ "$RESULT" -ne "0" ]; then
-#     STATUS=1
-#     echo "ERROR: pylint generated errors"
-# fi
-echo "pylint check currently disabled - lots of linting errors need fixing."
+pylint gdal_subsetter --disable=E0401 --extension-pkg-whitelist=netCDF4
+RESULT=$?
+RESULT=$((3 & $RESULT))
+if [ "$RESULT" -ne "0" ]; then
+    STATUS=1
+    echo "ERROR: pylint generated errors"
+fi
 
 exit $STATUS
