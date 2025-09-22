@@ -7,9 +7,12 @@ from zipfile import ZipFile
 import os
 import re
 
-from harmony.adapter import BaseHarmonyAdapter
-from harmony.message import Source as HarmonySource, Variable as HarmonyVariable
-from harmony.util import (
+from harmony_service_lib.adapter import BaseHarmonyAdapter
+from harmony_service_lib.message import (
+    Source as HarmonySource,
+    Variable as HarmonyVariable,
+)
+from harmony_service_lib.util import (
     bbox_to_geometry,
     download,
     generate_output_filename,
@@ -109,18 +112,13 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 if "data" in (item_asset.roles or [])
             )
 
-            if self.config.fallback_authn_enabled:
-                access_token = None
-            else:
-                access_token = self.message.accessToken
-
             try:
                 temporary_filename = download(
                     asset.href,
                     output_dir,
                     logger=self.logger,
                     cfg=self.config,
-                    access_token=access_token,
+                    access_token=self.message.accessToken,
                 )
             except Exception as exception:
                 raise DownloadError(asset.href, str(exception)) from exception

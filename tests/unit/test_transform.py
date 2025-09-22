@@ -3,8 +3,8 @@ from random import choice
 from unittest import TestCase
 from unittest.mock import call, MagicMock, patch
 
-from harmony.message import Message
-from harmony.util import config
+from harmony_service_lib.message import Message
+from harmony_service_lib.util import config
 from osgeo.gdal import Band as GdalBand, Dataset as GdalDataset
 
 from gdal_subsetter.transform import HarmonyAdapter
@@ -16,6 +16,11 @@ def random_file(size=6, chars=ascii_letters + digits):
 
 
 class TestAddToList(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        """Define test fixtures to be shared between tests."""
+        cls.config = config(validate=False)
+
     @patch.object(HarmonyAdapter, "stack_multi_file_with_metadata")
     @patch.object(HarmonyAdapter, "is_stackable")
     def test_add_to_result_stacks_if_stackable_with_netcdf(
@@ -26,7 +31,9 @@ class TestAddToList(TestCase):
         expected = f"{dstdir}/result.tif"
 
         test_adapter = HarmonyAdapter(
-            Message({"format": {"mime": "application/x-netcdf4"}}), "", None
+            Message({"format": {"mime": "application/x-netcdf4"}}),
+            config=self.config,
+            catalog=None,
         )
 
         stack_multi_mock.return_value = expected
@@ -47,20 +54,21 @@ class TestAddToList(TestCase):
         dstfile = f"{dstdir}/result.tif"
 
         test_adapter = HarmonyAdapter(
-            Message({"format": {"mime": "application/x-netcdf4"}}), "", None
+            Message({"format": {"mime": "application/x-netcdf4"}}),
+            config=self.config,
+            catalog=None,
         )
 
         stack_multi_mock.return_value = dstfile
         is_stackable_mock.return_value = False
 
-        with self.assertRaises(IncompatibleVariablesError) as error:
+        with self.assertRaisesRegex(
+            IncompatibleVariablesError,
+            "Request cannot be completed: datasets are incompatible and cannot be combined.",
+        ):
             test_adapter.add_to_result(filelist, dstdir)
 
         stack_multi_mock.assert_not_called()
-        self.assertEqual(
-            "Request cannot be completed: datasets are incompatible and cannot be combined.",
-            str(error.exception),
-        )
 
     @patch.object(HarmonyAdapter, "stack_multi_file_with_metadata")
     @patch.object(HarmonyAdapter, "is_stackable")
@@ -69,7 +77,11 @@ class TestAddToList(TestCase):
         dstdir = random_file()
         expected = f"{dstdir}/result.png"
 
-        test_adapter = HarmonyAdapter(Message({"format": {"mime": "png"}}), "", None)
+        test_adapter = HarmonyAdapter(
+            Message({"format": {"mime": "png"}}),
+            config=self.config,
+            catalog=None,
+        )
 
         is_stackable_mock.return_value = False
 
@@ -85,7 +97,11 @@ class TestAddToList(TestCase):
         dstdir = random_file()
         expected = f"{dstdir}/result.jpeg"
 
-        test_adapter = HarmonyAdapter(Message({"format": {"mime": "jpeg"}}), "", None)
+        test_adapter = HarmonyAdapter(
+            Message({"format": {"mime": "jpeg"}}),
+            config=self.config,
+            catalog=None,
+        )
 
         is_stackable_mock.return_value = False
 
@@ -130,7 +146,7 @@ class TestIsStackable(TestCase):
         geotransform, etc) should each return False.
 
         """
-        test_adapter = HarmonyAdapter(Message({}), self.config, None)
+        test_adapter = HarmonyAdapter(Message({}), config=self.config, catalog=None)
 
         self.assertFalse(test_adapter.is_stackable([]))
         mock_gdal_open.assert_not_called()
@@ -153,7 +169,7 @@ class TestIsStackable(TestCase):
 
         mock_gdal_open.side_effect = [self.geotiff_one, mock_geotiff_two]
 
-        test_adapter = HarmonyAdapter(Message({}), self.config, None)
+        test_adapter = HarmonyAdapter(Message({}), config=self.config, catalog=None)
 
         self.assertTrue(test_adapter.is_stackable(["file1.tif", "file2.tif"]))
         self.assertEqual(mock_gdal_open.call_count, 2)
@@ -177,7 +193,7 @@ class TestIsStackable(TestCase):
 
         mock_gdal_open.side_effect = [self.geotiff_one, mock_geotiff_two]
 
-        test_adapter = HarmonyAdapter(Message({}), self.config, None)
+        test_adapter = HarmonyAdapter(Message({}), config=self.config, catalog=None)
 
         self.assertFalse(test_adapter.is_stackable(["file1.png", "file2.png"]))
         self.assertEqual(mock_gdal_open.call_count, 2)
@@ -198,7 +214,7 @@ class TestIsStackable(TestCase):
 
         mock_gdal_open.side_effect = [self.geotiff_one, mock_geotiff_two]
 
-        test_adapter = HarmonyAdapter(Message({}), self.config, None)
+        test_adapter = HarmonyAdapter(Message({}), config=self.config, catalog=None)
 
         self.assertFalse(test_adapter.is_stackable(["file1.tif", "file2.tif"]))
         self.assertEqual(mock_gdal_open.call_count, 2)
@@ -219,7 +235,7 @@ class TestIsStackable(TestCase):
 
         mock_gdal_open.side_effect = [self.geotiff_one, mock_geotiff_two]
 
-        test_adapter = HarmonyAdapter(Message({}), self.config, None)
+        test_adapter = HarmonyAdapter(Message({}), config=self.config, catalog=None)
 
         self.assertFalse(test_adapter.is_stackable(["file1.tif", "file2.tif"]))
         self.assertEqual(mock_gdal_open.call_count, 2)
@@ -240,7 +256,7 @@ class TestIsStackable(TestCase):
 
         mock_gdal_open.side_effect = [self.geotiff_one, mock_geotiff_two]
 
-        test_adapter = HarmonyAdapter(Message({}), self.config, None)
+        test_adapter = HarmonyAdapter(Message({}), config=self.config, catalog=None)
 
         self.assertFalse(test_adapter.is_stackable(["file1.png", "file2.png"]))
         self.assertEqual(mock_gdal_open.call_count, 2)
@@ -261,7 +277,7 @@ class TestIsStackable(TestCase):
 
         mock_gdal_open.side_effect = [self.geotiff_one, mock_geotiff_two]
 
-        test_adapter = HarmonyAdapter(Message({}), self.config, None)
+        test_adapter = HarmonyAdapter(Message({}), config=self.config, catalog=None)
 
         self.assertFalse(test_adapter.is_stackable(["file1.png", "file2.png"]))
         self.assertEqual(mock_gdal_open.call_count, 2)
@@ -282,7 +298,7 @@ class TestIsStackable(TestCase):
 
         mock_gdal_open.side_effect = [self.geotiff_one, mock_geotiff_two]
 
-        test_adapter = HarmonyAdapter(Message({}), self.config, None)
+        test_adapter = HarmonyAdapter(Message({}), config=self.config, catalog=None)
 
         self.assertFalse(test_adapter.is_stackable(["file1.png", "file2.png"]))
         self.assertEqual(mock_gdal_open.call_count, 2)
@@ -303,7 +319,7 @@ class TestIsStackable(TestCase):
 
         mock_gdal_open.side_effect = [self.geotiff_one, mock_geotiff_two]
 
-        test_adapter = HarmonyAdapter(Message({}), self.config, None)
+        test_adapter = HarmonyAdapter(Message({}), config=self.config, catalog=None)
 
         self.assertFalse(test_adapter.is_stackable(["file1.tif", "file2.tif"]))
         self.assertEqual(mock_gdal_open.call_count, 2)
@@ -328,7 +344,7 @@ class TestIsStackable(TestCase):
 
         mock_gdal_open.side_effect = [self.geotiff_one, mock_geotiff_two]
 
-        test_adapter = HarmonyAdapter(Message({}), self.config, None)
+        test_adapter = HarmonyAdapter(Message({}), config=self.config, catalog=None)
 
         self.assertFalse(test_adapter.is_stackable(["file1.tif", "file2.png"]))
         self.assertEqual(mock_gdal_open.call_count, 2)

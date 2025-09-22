@@ -9,7 +9,7 @@ Runs the harmony_gdal CLI
 import os
 from argparse import ArgumentParser
 
-from harmony import is_harmony_cli, run_cli, setup_cli
+from harmony_service_lib import is_harmony_cli, run_cli, setup_cli
 
 from .transform import HarmonyAdapter
 

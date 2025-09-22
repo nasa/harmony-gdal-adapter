@@ -7,7 +7,7 @@ from glob import glob
 from os import rename
 from os.path import dirname, exists, join as path_join, splitext
 
-from harmony.util import generate_output_filename
+from harmony_service_lib.util import generate_output_filename
 from osgeo import gdal
 
 known_file_types = {

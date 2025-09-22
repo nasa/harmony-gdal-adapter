@@ -20,7 +20,7 @@ from shutil import rmtree
 import os
 import pytest
 
-from harmony.util import download
+from harmony_service_lib.util import download
 
 from tests.config import UnittestAdapter, get_file_info
 
