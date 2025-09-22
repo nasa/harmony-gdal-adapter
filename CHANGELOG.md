@@ -4,6 +4,16 @@ HGA follows semantic versioning. All notable changes to this project will be
 documented in this file. The format is based on [Keep a
 Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [v3.0.2] - 2025-09-22
+
+### Changed:
+
+* The `harmony-service-lib-py` dependency has been updated to v2.8.0. This
+  affects import paths and removes alternative authentication mechanisms from
+  the package.
+* Release notes published in GitHub should now also contain a list of commit
+  messages since the last release. These will omit commits from pre-commit-ci.
+
 ## [v3.0.1] - 2025-09-19
 
 ### Changed:
@@ -347,6 +357,8 @@ This is the final version. We will stop the development for a while.
 
 ## [v1.0.0]
 
+[v3.0.2]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/3.0.2
+[v3.0.1]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/3.0.1
 [v3.0.0]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/3.0.0
 [v2.0.0]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/2.0.0
 [v1.1.0]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/1.1.0

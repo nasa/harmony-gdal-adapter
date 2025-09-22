@@ -24,7 +24,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          fetch-tags: true
 
       - name: Extract semantic version number
         run: echo "semantic_version=$(cat version.txt)" >> $GITHUB_ENV

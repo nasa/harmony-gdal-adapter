@@ -7,7 +7,7 @@ invocation of the service.
 """
 # noqa: D107
 
-from harmony.exceptions import HarmonyException
+from harmony_service_lib.exceptions import HarmonyException
 
 
 class HGAException(HarmonyException):

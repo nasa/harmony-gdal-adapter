@@ -4,9 +4,9 @@ import json
 import sys
 from os.path import abspath, dirname
 
-from harmony.message import Message
-from harmony.logging import setup_stdout_log_formatting
-from harmony.util import config, create_decrypter
+from harmony_service_lib.message import Message
+from harmony_service_lib.logging import setup_stdout_log_formatting
+from harmony_service_lib.util import config, create_decrypter
 from osgeo import gdal
 from osgeo.osr import SpatialReference
 

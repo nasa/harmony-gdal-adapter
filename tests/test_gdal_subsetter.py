@@ -8,8 +8,8 @@ from tempfile import mkdtemp
 from unittest import TestCase
 from unittest.mock import patch
 
-from harmony.message import Message
-from harmony.util import config as harmony_config
+from harmony_service_lib.message import Message
+from harmony_service_lib.util import config as harmony_config
 from pystac import Asset, Catalog, Item
 
 from gdal_subsetter.exceptions import DownloadError, UnsupportedFileFormatError
@@ -57,14 +57,11 @@ class TestEndToEnd(TestCase):
             harmony_message, catalog=stac_catalog, config=self.config
         )
 
-        with self.assertRaises(DownloadError) as context_manager:
-            adapter.invoke()
-
-        # TODO: Simplify with assertRegexRaises or pytest equivalent with h-s-l>=2.8.0
-        self.assertEqual(
-            str(context_manager.exception.message),
+        with self.assertRaisesRegex(
+            DownloadError,
             f"Could not download resource: url.com/file.nc4, {raw_exception_message}",
-        )
+        ):
+            adapter.invoke()
 
     @patch("gdal_subsetter.transform.download")
     def test_unsupported_file_format(self, mock_download):
@@ -93,11 +90,8 @@ class TestEndToEnd(TestCase):
             harmony_message, catalog=stac_catalog, config=self.config
         )
 
-        with self.assertRaises(UnsupportedFileFormatError) as context_manager:
-            adapter.invoke()
-
-        # TODO: Simplify with assertRegexRaises or pytest equivalent with h-s-l>=2.8.0
-        self.assertEqual(
-            str(context_manager.exception.message),
+        with self.assertRaisesRegex(
+            UnsupportedFileFormatError,
             'Cannot process unsupported file format: ".xyz"',
-        )
+        ):
+            adapter.invoke()
