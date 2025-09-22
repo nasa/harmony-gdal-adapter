@@ -41,8 +41,9 @@ else
 fi
 
 # Retrieve the title line of all commit messages since $GIT_REF, filtering out
-# those from the pre-commit-ci[bot] author.
-GIT_COMMIT_MESSAGES=$(git log --oneline --format="%s" --perl-regexp --author='^(?!pre-commit-ci\[bot\]).*$' ${GIT_REF}..HEAD)
+# those from the pre-commit-ci[bot] author and any containing the string
+# "nasa/pre-commit-ci-update-config", which may result from merge commits.
+GIT_COMMIT_MESSAGES=$(git log --oneline --format="%s" --perl-regexp --author='^(?!pre-commit-ci\[bot\]).*$' --grep="nasa\/pre-commit-ci-update-config" --invert-grep ${GIT_REF}..HEAD)
 
 # Append git commit messages to the release notes:
 if [[ ${GIT_COMMIT_MESSAGES} ]]
