@@ -15,15 +15,5 @@ repos:
       - id: ruff
         args: [ "--fix", "--show-fixes" ]
         types_or: [ python, jupyter ]
-        exclude: |
-          (?x)^(
-              gdal_adapter/transform.py|
-              gdal_adapter/reformat.py
-          )$
       - id: ruff-format
         types_or: [ python, jupyter ]
-        exclude: |
-          (?x)^(
-              gdal_adapter/transform.py|
-              gdal_adapter/reformat.py
-          )$

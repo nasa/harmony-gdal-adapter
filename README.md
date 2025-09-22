@@ -133,6 +133,7 @@ Basic steps for debugging are:
 This repository uses [pre-commit](https://pre-commit.com/) to enable pre-commit
 checks that enforce coding standard best practices. These include:
 
+* [ruff](https://github.com/astral-sh/ruff) is used for linting checks and formatting.
 * Removing trailing whitespaces.
 * Removing blank lines at the end of a file.
 * Ensure JSON and YAML files have valid formats.

@@ -5,6 +5,7 @@ __main__.py
 
 Runs the harmony_gdal CLI
 """
+
 import os
 from argparse import ArgumentParser
 
@@ -22,7 +23,8 @@ def main():
     """
 
     parser = ArgumentParser(
-        prog='harmony-gdal-adapter', description='Run the GDAL service',
+        prog="harmony-gdal-adapter",
+        description="Run the GDAL service",
     )
 
     setup_cli(parser)
@@ -35,7 +37,7 @@ def main():
 
 
 if __name__ == "__main__":
-    #os.environ["FALLBACK_AUTHN_ENABLED"] = 'true'
+    # os.environ["FALLBACK_AUTHN_ENABLED"] = 'true'
     os.environ["BUFFER"] = '{"degree":0.0001, "meter":10.0}'
 
     main()
