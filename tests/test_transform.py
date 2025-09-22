@@ -14,6 +14,7 @@ Returns:
 None
 
 """
+
 from pathlib import Path
 from shutil import rmtree
 import os
@@ -26,12 +27,12 @@ from tests.config import UnittestAdapter, get_file_info
 
 @pytest.fixture
 def output_dir():
-    return 'data/results'
+    return "data/results"
 
 
 @pytest.fixture
 def message_files():
-    message_path = './data/messages/prod'
+    message_path = "./data/messages/prod"
 
     return list(Path(message_path).rglob("*.msg"))
 
@@ -47,6 +48,7 @@ def adapters(message_files):
         unittest_adapters.append(UnittestAdapter(messagestr))
 
     return unittest_adapters
+
 
 @pytest.mark.skip("This isn't running properly")
 def test_message(adapters, output_dir):
@@ -103,30 +105,18 @@ def subsetter(unittest_adapter, output_dir):
     basename = os.path.basename(input_filename)
     layernames = []
 
-    operations = {'is_variable_subset': True,
-                  'is_regridded': bool(message.format.crs),
-                  'is_subsetted': bool(message.subset and message.subset.bbox)}
-
     result = None
     file_type = adapter.get_filetype(input_filename)
 
-    if file_type == 'tif':
+    if file_type == "tif":
         layernames, result = adapter.process_geotiff(
             source, basename, input_filename, output_dir, layernames
         )
 
-    elif file_type == 'nc':
-        layernames, result = adapter.process_netcdf(
-            source, basename, input_filename, output_dir, layernames
-        )
-    elif file_type == 'zip':
+    elif file_type == "zip":
         layernames, result = adapter.process_zip(
             source, basename, input_filename, output_dir, layernames
         )
-    else:
-        logger.exception(e)
-        adapter.completed_with_error(
-            'No reconized file foarmat, not process')
 
     # test the result
     assert result
@@ -163,7 +153,7 @@ def subset_result(unittest_adapter, output_dir):
     subsetted_file = unittest_adapter.subsetted_file
     file_type = adapter.get_filetype(downloaded_file)
 
-    if file_type == 'zip':
+    if file_type == "zip":
         [tiffile, ncfile] = adapter.pack_zipfile(downloaded_file, output_dir)
 
         if tiffile:
@@ -172,30 +162,24 @@ def subset_result(unittest_adapter, output_dir):
         if ncfile:
             for variable in variables:
                 layer_format = adapter.read_layer_format(
-                    granule.collection,
-                    granule.local_filename,
-                    variable.name
+                    granule.collection, granule.local_filename, variable.name
                 )
 
-                filename = layer_format.format(
-                    granule.local_filename)
+                filename = layer_format.format(granule.local_filename)
 
-                layer_id = granule.id + '__' + variable.name
+                layer_id = granule.id + "__" + variable.name
                 tifffile = adapter.nc2tiff(layer_id, filename, output_dir)
                 compare_files(message, tifffile, subsetted_file)
 
     elif file_type == "nc":
         for variable in variables:
             layer_format = adapter.read_layer_format(
-                granule.collection,
-                granule.local_filename,
-                variable.name
+                granule.collection, granule.local_filename, variable.name
             )
 
-            filename = layer_format.format(
-                granule.local_filename)
+            filename = layer_format.format(granule.local_filename)
 
-            layer_id = granule.id + '__' + variable.name
+            layer_id = granule.id + "__" + variable.name
             tifffile = adapter.nc2tiff(layer_id, filename, output_dir)
             compare_files(message, tifffile, subsetted_file)
 
@@ -206,22 +190,21 @@ def subset_result(unittest_adapter, output_dir):
 
 
 def compare_files(message, downloaded_file, subsetted_file):
-
     info_downloaded = get_file_info(downloaded_file)
     info_subsetted = get_file_info(subsetted_file)
 
     # test reprojection
     if not message.format.crs:
-        assert info_downloaded['proj_wkt'] == info_subsetted['proj_wkt']
+        assert info_downloaded["proj_wkt"] == info_subsetted["proj_wkt"]
 
     # test spatial subset
-    if message.subset.bbox == None and message.subset.shape == None:
-        assert info_downloaded['gt'] == info_subsetted['gt']
-        assert info_downloaded['xy_size'] == info_subsetted['xy_size']
+    if message.subset.bbox is None and message.subset.shape is None:
+        assert info_downloaded["gt"] == info_subsetted["gt"]
+        assert info_downloaded["xy_size"] == info_subsetted["xy_size"]
 
     # test number of bands
     if message.sources[0].variables:
         variables = message.sources[0].variables
-        assert len(variables) == info_subsetted['bands']
+        assert len(variables) == info_subsetted["bands"]
     else:
-        assert info_downloaded['bands'] == info_subsetted['bands']
+        assert info_downloaded["bands"] == info_subsetted["bands"]
