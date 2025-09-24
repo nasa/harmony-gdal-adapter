@@ -50,8 +50,6 @@ from gdal_subsetter.utilities import (
     get_version,
     has_world_file,
     is_geotiff,
-    mime_to_extension,
-    mime_to_gdal,
     OpenGDAL,
     process_flags,
     rename_file,
@@ -66,6 +64,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     for documentation and examples.
 
     """
+
+    service_version = get_version()
 
     def process_item(self, input_item: Item, source: HarmonySource) -> Item:
         """Applies GDAL transformations to input GeoTIFFs, returns output STAC item
@@ -150,7 +150,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             if layernames and transformed_filename:
                 transformed_bbox = self.get_bbox_lonlat(transformed_filename)
                 # May need to convert transformed output to the MIME type
-                # specified in the request (e.g., GeoTIFF to NetCDF-4).
+                # specified in the request (e.g., netCDF-4).
                 transformed_filename = self.reformat(transformed_filename, output_dir)
                 return self.stage_and_get_output_stac(
                     transformed_filename, transformed_bbox, input_item, output_basename
@@ -652,48 +652,48 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         dst_ds = None
         return outfile
 
-    def reformat(self, srcfile: str, dstdir: str) -> str:
-        """This method converts the transformed outputs produced by the
-        service into a file with the requested MIME type. For example,
-        NetCDF-4 requested outputs, will need to be converted and
-        aggregated from transformed GeoTIFFs back to a NetCDF-4 file.
+    def reformat(self, transformed_geotiff_file: str, dstdir: str) -> str:
+        """If necessary, convert transformed outputs to the requested MIME type.
+
+        * GeoTIFF or no specified output format, will return the GeoTIFF file
+          with a metadata tag stating the service used to generate the file.
+        * netCDF4 requested output will result in reformatting.
+        * Other output formats are not supported within this service. But
+          Harmony only allows requests with correct formats to be sent to
+          service chains, so if the requested output format is not GeoTIFF or
+          netCDF4, then the assumption is a downstream step in a service chain
+          will handle that reformatting.
 
         The return value of this method is the path to the output file with
         the requested MIME type.
 
         """
-        gdal_subsetter_version = f"gdal_subsetter_version={get_version()}"
         output_mime = self.message.format.process("mime")
-        if not output_mime == "image/png" or output_mime == "image/jpeg":
-            command = ["gdal_edit.py", "-mo", gdal_subsetter_version, srcfile]
-            self.execute_gdal_command(*command)
-        if output_mime not in mime_to_gdal:
-            raise Exception(f"Unrecognized output format: {output_mime}")
-        if output_mime == "image/tiff":
-            return srcfile
 
-        dstfile = os.path.join(dstdir, f"translated.{mime_to_extension[output_mime]}")
-
-        if output_mime in ("application/x-netcdf4", "application/x-zarr"):
-            dstfile = os.path.join(dstdir, "translated.nc")
-            dstfile = convert_geotiff_to_netcdf(srcfile, dstfile)
-            return dstfile
+        if output_mime == "application/x-netcdf4":
+            formatted_file_path = os.path.join(dstdir, "translated.nc")
+            formatted_file_path = convert_geotiff_to_netcdf(
+                transformed_geotiff_file,
+                formatted_file_path,
+            )
         else:
-            # png, jpeg, gif, etc.
-            if os.path.exists(f"{os.path.splitext(srcfile)[0]}.wld"):
-                # don't need to reformat files that have been processed earlier
-                return srcfile
-
+            # Covers:
+            # * GeoTIFF requested
+            # * No output specified (GeoTIFF default),
+            # * An alternative format that would be handled in downstream
+            #   services in the chain.
+            gdal_subsetter_version = f"gdal_subsetter_version={self.service_version}"
+            # TODO: Add to consolidated gdal_translate command.
             command = [
-                "gdal_translate",
-                "-of",
-                mime_to_gdal[output_mime],
-                "-scale",
-                srcfile,
-                dstfile,
+                "gdal_edit.py",
+                "-mo",
+                gdal_subsetter_version,
+                transformed_geotiff_file,
             ]
             self.execute_gdal_command(*command)
-            return dstfile
+            formatted_file_path = transformed_geotiff_file
+
+        return formatted_file_path
 
     def get_variables(self, filename: str):
         """filename is either nc or tif."""

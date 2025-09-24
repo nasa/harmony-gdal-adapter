@@ -4,6 +4,20 @@ HGA follows semantic versioning. All notable changes to this project will be
 documented in this file. The format is based on [Keep a
 Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [v3.0.3] - 2025-09-23
+
+### Changed:
+
+* This version of HGA tidies up the `HarmonyAdapter.reformat` method to ensure
+  the following behaviour:
+  * If a GeoTIFF is requested, no reformatting is required and a GeoTIFF is returned.
+  * If no output format is requested, a GeoTIFF is returned.
+  * If a netCDF4 is requested, the output is reformatted to netCDF4.
+  * If any other format is requested, that reformatting is left to downstream
+    steps in the Harmony service chain. Harmony should already have limited the
+    requested output formats to those that can be handled by service chains
+    including HGA, per the service chain configuration.
+
 ## [v3.0.2] - 2025-09-22
 
 ### Changed:
