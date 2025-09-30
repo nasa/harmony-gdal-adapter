@@ -6,8 +6,10 @@ from shutil import rmtree
 from tempfile import mkdtemp
 from unittest import TestCase
 
+from gdal_subsetter.exceptions import UnsupportedFileFormatError
 from gdal_subsetter.utilities import (
     get_file_type,
+    get_geotiff_variables,
     get_unzipped_geotiffs,
     has_world_file,
     is_geotiff,
@@ -109,6 +111,30 @@ class TestUtilities(TestCase):
         with self.subTest("A NetCDF-4 granules returns False"):
             netcdf_file = get_dummy_netcdf_file(self.temp_dir)
             self.assertFalse(is_geotiff(netcdf_file))
+
+    def test_get_geotiff_variables(self):
+        """Ensure correct mapping is retrieved from GeoTIFF.
+
+        * Band1 has no standard_name tag, so the dictionary value should be Band1.
+        * Band2 has a standard_name tag, so the dictionary value should match it.
+
+        """
+        geotiff_file = get_dummy_geotiff_file(self.temp_dir)
+
+        self.assertDictEqual(
+            get_geotiff_variables(geotiff_file),
+            {
+                "Band1": "Band1",
+                "Band2": "sea_surface_temperature",
+            },
+        )
+
+    def test_get_geotiff_variables_netcdf_input(self):
+        """Ensure a non-GeoTIFF input file raises an exception."""
+        netcdf_file = get_dummy_netcdf_file(self.temp_dir)
+
+        with self.assertRaisesRegex(UnsupportedFileFormatError, netcdf_file):
+            get_geotiff_variables(netcdf_file)
 
     def test_get_unzipped_geotiffs(self):
         """Ensure that GeoTIFFs extracted from a zip file are returned.

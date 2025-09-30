@@ -5,13 +5,9 @@ from subprocess import check_output
 from tempfile import mkdtemp
 from zipfile import ZipFile
 import os
-import re
 
 from harmony_service_lib.adapter import BaseHarmonyAdapter
-from harmony_service_lib.message import (
-    Source as HarmonySource,
-    Variable as HarmonyVariable,
-)
+from harmony_service_lib.message import Source as HarmonySource
 from harmony_service_lib.util import (
     bbox_to_geometry,
     download,
@@ -33,8 +29,9 @@ from gdal_subsetter.coordinate_utilities import (
 )
 from gdal_subsetter.exceptions import (
     DownloadError,
-    HGAException,
+    HGANoRetryException,
     IncompatibleVariablesError,
+    MissingVariableError,
     UnsupportedFileFormatError,
 )
 from gdal_subsetter.reformat import convert_geotiff_to_netcdf
@@ -46,10 +43,10 @@ from gdal_subsetter.shape_file_utilities import (
 )
 from gdal_subsetter.utilities import (
     get_file_type,
+    get_geotiff_variables,
     get_unzipped_geotiffs,
     get_version,
     has_world_file,
-    is_geotiff,
     OpenGDAL,
     process_flags,
     rename_file,
@@ -156,7 +153,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                     transformed_filename, transformed_bbox, input_item, output_basename
                 )
             else:
-                raise HGAException(f"No stac_record created: {process_msg}")
+                raise HGANoRetryException(f"No stac_record created: {process_msg}")
 
         except Exception as exception:
             self.logger.exception(exception)
@@ -231,7 +228,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     ):
         filelist = []
         if not source.variables:
-            # process geotiff and all bands
+            # No variables were specified, so process all bands in the GeoTIFF
 
             filename = input_filename
             layer_id = basename + "__all"
@@ -244,30 +241,44 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             result = self.add_to_result(filelist, output_dir)
             layernames.append(layer_id)
         else:
-            # all possible variables (band names) in the input_filenanme
-            variables = self.get_variables(input_filename)
+            # Variables were specified, so only process requested variables
+            # First get all bands and standard names in the input GeoTIFF file
+            geotiff_variables = get_geotiff_variables(input_filename)
+
             # source.process('variables') is user's requested variables (bands)
-            for variable in source.process("variables"):
-                band = None
+            for requested_variable in source.process("variables"):
+                # First check the standard_name of all bands:
+                band = next(
+                    (
+                        band_name
+                        for band_name, standard_name in geotiff_variables.items()
+                        if requested_variable.name.lower() in standard_name.lower()
+                    ),
+                    None,
+                )
 
-                for key, value in variables.items():
-                    if "band" in variable.name.lower():
-                        if variable.name in key:
-                            band = int(key.split("Band")[-1])
-                            break
-                    else:
-                        if variable.name.lower() in value.lower():
-                            band = int(key.split("Band")[-1])
-                            break
+                if band is None:
+                    # No standard name matched, now try raw band names, i.e. BandN
+                    band = next(
+                        (
+                            band_name
+                            for band_name in geotiff_variables
+                            if requested_variable.name.lower() in band_name.lower()
+                        ),
+                        None,
+                    )
 
-                if band:
+                if band is not None:
+                    band_number = int(band.split("Band")[-1])
                     filename = input_filename
-                    layer_id = basename + "__" + variable.name
+                    layer_id = basename + "__" + requested_variable.name
                     layer_id, filename, output_dir = self.perform_transforms(
-                        layer_id, filename, output_dir, band
+                        layer_id, filename, output_dir, band_number
                     )
                     layernames.append(layer_id)
                     filelist.append(filename)
+                else:
+                    raise MissingVariableError(requested_variable.name)
 
             result = self.add_to_result(filelist, output_dir)
 
@@ -695,39 +706,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return formatted_file_path
 
-    def get_variables(self, filename: str):
-        """filename is either nc or tif."""
-        gdalinfo_lines = gdal.Info(filename).splitlines()
-
-        result = []
-        if "netCDF" in gdalinfo_lines[0] or "HDF" in gdalinfo_lines[0]:
-            # netCDF/Network Common Data Format, HDF5/Hierarchical Data Format
-            # Release 5
-            # Normal case of NetCDF / HDF, where variables are subdatasets
-            for subdataset in filter(
-                (lambda line: re.match(r"^\s*SUBDATASET_\d+_NAME=", line)),
-                gdalinfo_lines,
-            ):
-                result.append(HarmonyVariable({"name": re.split(r":", subdataset)[-1]}))
-        elif is_geotiff(filename):
-            #  GTiff/GeoTIFF
-            # GeoTIFFs, directly use Band # as the variables.
-            # for subdataset in filter((lambda line: re.match(r"^Band", line)), gdalinfo_lines):
-            #     tmpline = re.split(r" ", subdataset)
-            #     result.append(ObjectView({"name": tmpline[0].strip()+tmpline[1].strip()}))
-            result = {}
-            with OpenGDAL(filename) as dataset:
-                for band_index in range(1, dataset.RasterCount + 1):
-                    band = dataset.GetRasterBand(band_index)
-                    bmd = band.GetMetadata()
-                    if "standard_name" in bmd:
-                        result.update({f"Band{band_index}": bmd["standard_name"]})
-                    else:
-                        result.update({f"Band{band_index}": f"Band{band_index}"})
-
-        return result
-
-    def perform_transforms(self, layer_id, filename, output_dir, band):
+    def perform_transforms(
+        self, layer_id: str, filename: str, output_dir: str, band: int
+    ):
         """Push layer through the series of transforms."""
         filename = self.subset(layer_id, filename, output_dir, band)
         filename = self.reproject(layer_id, filename, output_dir)
