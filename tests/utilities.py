@@ -51,7 +51,7 @@ def get_dummy_netcdf_file(parent_directory: str) -> str:
 
 
 def get_dummy_geotiff_file(parent_directory: str) -> str:
-    """Create a simple GeoTIFF file and return the path to it."""
+    """Create a simple GeoTIFF file with 2 bands and return the path to it."""
     geotiff_file_path = path_join(parent_directory, "dummy.tif")
 
     height = 100
@@ -63,7 +63,7 @@ def get_dummy_geotiff_file(parent_directory: str) -> str:
         "driver": "GTiff",
         "height": height,
         "width": width,
-        "count": 1,
+        "count": 2,
         "dtype": data.dtype,
         "crs": "EPSG:4326",
         "transform": rio.transform.from_origin(
@@ -77,6 +77,11 @@ def get_dummy_geotiff_file(parent_directory: str) -> str:
 
     # Write the GeoTIFF file
     with rio.open(geotiff_file_path, "w", **profile) as geotiff_ds:
+        # Write a band with no standard_name
         geotiff_ds.write(data, 1)
+
+        # Write a band with a standard_name
+        geotiff_ds.write(data, 2)
+        geotiff_ds.update_tags(2, standard_name="sea_surface_temperature")
 
     return geotiff_file_path

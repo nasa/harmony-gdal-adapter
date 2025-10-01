@@ -4,6 +4,15 @@ HGA follows semantic versioning. All notable changes to this project will be
 documented in this file. The format is based on [Keep a
 Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [v3.0.4] - 2025-09-30
+
+### Changed:
+
+* Functionality to extract variable names from GeoTIFFs has been simplified and
+  migrated to `utilities.py`.
+* Most exceptions are converted to not retry, as they are known failure states
+  that will continue to fail on subsequent executions of the service.
+
 ## [v3.0.3] - 2025-09-23
 
 ### Changed:
@@ -371,6 +380,8 @@ This is the final version. We will stop the development for a while.
 
 ## [v1.0.0]
 
+[v3.0.4]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/3.0.4
+[v3.0.3]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/3.0.3
 [v3.0.2]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/3.0.2
 [v3.0.1]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/3.0.1
 [v3.0.0]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/3.0.0

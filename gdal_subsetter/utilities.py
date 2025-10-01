@@ -10,6 +10,8 @@ from os.path import dirname, exists, join as path_join, splitext
 from harmony_service_lib.util import generate_output_filename
 from osgeo import gdal
 
+from gdal_subsetter.exceptions import UnsupportedFileFormatError
+
 known_file_types = {
     ".nc": "nc",
     ".nc4": "nc",
@@ -84,6 +86,31 @@ def is_geotiff(file_name: str) -> bool:
     """Determine if the given file is a GeoTIFF via `gdalinfo`."""
     gdalinfo_lines = gdal.Info(file_name).splitlines()
     return gdalinfo_lines[0] == "Driver: GTiff/GeoTIFF"
+
+
+def get_geotiff_variables(filename: str) -> dict[str, str]:
+    """Extract band to standard name mapping from a GeoTIFF.
+
+    The keys of the mapping are "BandN" where "N" is the one-based band number.
+    The values are either:
+
+    * The standard_name as retrieved from the band metadata.
+    * "BandN", if there is no standard_name.
+
+    """
+    if is_geotiff(filename):
+        with OpenGDAL(filename) as dataset:
+            result = {
+                f"Band{band_index}": (
+                    dataset.GetRasterBand(band_index).GetMetadata().get("standard_name")
+                    or f"Band{band_index}"
+                )
+                for band_index in range(1, dataset.RasterCount + 1)
+            }
+    else:
+        raise UnsupportedFileFormatError(filename)
+
+    return result
 
 
 def get_unzipped_geotiffs(
