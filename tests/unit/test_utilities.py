@@ -235,7 +235,7 @@ class TestUtilities(TestCase):
                 "nearest",
             )
 
-        with self.subTest("Absent algorithm in Harmony message returns binlinear."):
+        with self.subTest("Absent algorithm in Harmony message returns bilinear."):
             self.assertEqual(
                 get_resample_algorithm(HarmonyMessage({})),
                 "bilinear",
