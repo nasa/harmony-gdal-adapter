@@ -58,3 +58,12 @@ class MissingVariableError(HGANoRetryException):
 
     def __init__(self, variable_name):
         super().__init__(f"Missing variable in input file: {variable_name}")
+
+
+class UnsupportedInterpolationMethodError(HGANoRetryException):
+    """Raised when a Harmony request specified an unknown interpolation method."""
+
+    def __init__(self, interpolation_method):
+        super().__init__(
+            f"Unsupported interpolation method specified: {interpolation_method}"
+        )
