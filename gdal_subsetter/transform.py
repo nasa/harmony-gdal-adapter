@@ -462,7 +462,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
     def resize(self, layerid: str, srcfile: str, dstdir: str) -> str:
         """Resizes the input layer and returns the name of the output file.
 
-        Uses a call to gdal_translate using information in message.format.
+        Uses the `osgeo.gdal.Translate` Python binding to execute
+        gdal_translate using information in the Harmony message.
 
         """
         resample_algorithm = get_resample_algorithm(self.message)
@@ -490,8 +491,12 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         return output_file_name
 
-    def reproject(self, layerid, srcfile, dstdir):
-        """Project input to requested target projection using gdalwarp."""
+    def reproject(self, layerid: str, srcfile: str, dstdir: str) -> str:
+        """Project input to requested target projection using gdalwarp.
+
+        Uses the `osgeo.gdal.Warp` Python binding to call gdalwarp.
+
+        """
         normalized_layerid = layerid.replace("/", "_")
         dstfile = os.path.join(dstdir, f"{normalized_layerid}__reprojected.tif")
 
@@ -518,7 +523,7 @@ class HarmonyAdapter(BaseHarmonyAdapter):
 
         # Extract requested bounding box
         output_x_min = rgetattr(self.message, "format.scaleExtent.x.min", None)
-        output_x_max = rgetattr(self.message, "format,scaleExtent.x.max", None)
+        output_x_max = rgetattr(self.message, "format.scaleExtent.x.max", None)
         output_y_min = rgetattr(self.message, "format.scaleExtent.y.min", None)
         output_y_max = rgetattr(self.message, "format.scaleExtent.y.max", None)
         output_bounds = [output_x_min, output_y_min, output_x_max, output_y_max]
@@ -673,7 +678,6 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             # * No output specified (GeoTIFF default),
             # * An alternative format that would be handled in downstream
             #   services in the chain.
-            # TODO: Add to consolidated gdal_translate command.
             with OpenGDAL(transformed_geotiff_file, GA_Update) as dataset:
                 dataset.SetMetadataItem("gdal_subsetter_version", self.service_version)
 
