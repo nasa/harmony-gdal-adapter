@@ -14,11 +14,11 @@ FROM continuumio/miniconda3
 WORKDIR "/home"
 
 # Create conda environment
-RUN conda create -y --name hga python=3.11 --channel conda-forge --channel nodefaults \
-    --override-channels -q -y && conda clean -a
+RUN conda create -y --name hga python=3.11 --channel conda-forge --override-channels \
+    -q -y && conda clean -a
 
 # Install GDAL
-RUN conda run --name hga conda install gdal=3.6.2
+RUN conda run --name hga conda install gdal=3.6.2 --channel conda-forge --override-channels
 
 # Copy service requirements file into image.
 COPY requirements.txt .
