@@ -217,6 +217,11 @@ def get_resample_algorithm(harmony_message: HarmonyMessage) -> ResampleAlgorithm
 
     If no interpolation method was set, then default to bilinear.
 
+    NOTE: Message parameters are retrieved without marking them as
+    processed. This means that they will be passed on to any subsequent
+    steps in a workflow chain. To change this behaviour, the
+    `harmony_service_lib.message.Message.process` method can be used.
+
     """
 
     interpolation = rgetattr(harmony_message, "format.interpolation", None)

@@ -465,6 +465,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         Uses the `osgeo.gdal.Translate` Python binding to execute
         gdal_translate using information in the Harmony message.
 
+        NOTE: Message parameters are retrieved without marking them as
+        processed. This means that they will be passed on to any subsequent
+        steps in a workflow chain. To change this behaviour, the
+        `harmony_service_lib.message.Message.process` method can be used.
+
         """
         resample_algorithm = get_resample_algorithm(self.message)
 
@@ -495,6 +500,11 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         """Project input to requested target projection using gdalwarp.
 
         Uses the `osgeo.gdal.Warp` Python binding to call gdalwarp.
+
+        NOTE: Message parameters are retrieved without marking them as
+        processed. This means that they will be passed on to any subsequent
+        steps in a workflow chain. To change this behaviour, the
+        `harmony_service_lib.message.Message.process` method can be used.
 
         """
         normalized_layerid = layerid.replace("/", "_")
