@@ -4,6 +4,13 @@ HGA follows semantic versioning. All notable changes to this project will be
 documented in this file. The format is based on [Keep a
 Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [v3.0.5] - 2025-10-01
+
+### Changed:
+
+* `gdalwarp`, `gdal_translate`, `ogr2ogr` and `gdal_edit.py` commands have been
+  migrated to use the Python based bindings from the `osgeo.gdal` module.
+
 ## [v3.0.4] - 2025-09-30
 
 ### Changed:

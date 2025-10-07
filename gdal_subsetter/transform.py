@@ -1,13 +1,13 @@
 """Adapter for the Harmony GDAL Adapter service."""
 
 from shutil import copyfile, rmtree
-from subprocess import check_output
 from tempfile import mkdtemp
 from zipfile import ZipFile
 import os
 
 from harmony_service_lib.adapter import BaseHarmonyAdapter
 from harmony_service_lib.message import Source as HarmonySource
+from harmony_service_lib.message_utility import rgetattr
 from harmony_service_lib.util import (
     bbox_to_geometry,
     download,
@@ -15,6 +15,14 @@ from harmony_service_lib.util import (
     stage,
 )
 from osgeo import gdal, osr, ogr, gdal_array
+from osgeo.gdal import (
+    Translate,
+    TranslateOptions,
+    VectorTranslate,
+    VectorTranslateOptions,
+    Warp,
+    WarpOptions,
+)
 from osgeo.gdalconst import GA_ReadOnly, GA_Update, GMF_PER_DATASET
 from pyproj import Proj
 from pystac import Asset, Item
@@ -44,13 +52,13 @@ from gdal_subsetter.shape_file_utilities import (
 from gdal_subsetter.utilities import (
     get_file_type,
     get_geotiff_variables,
+    get_resample_algorithm,
     get_unzipped_geotiffs,
     get_version,
     has_world_file,
     OpenGDAL,
     process_flags,
     rename_file,
-    resampling_methods,
 )
 
 
@@ -336,26 +344,21 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             for index, layer_name in enumerate(layer_names, start=1):
                 dataset.GetRasterBand(index).SetDescription(layer_name)
 
-    def execute_gdal_command(self, *args) -> list[str]:
-        """This is used to execute gdal* commands."""
-        self.logger.info(
-            args[0] + " " + " ".join(["'{}'".format(arg) for arg in args[1:]])
-        )
-        result_str = check_output(args).decode("utf-8")
-        return result_str.split("\n")
+    def varsubset(self, srcfile: str, dstfile: str, band: int | None = None) -> str:
+        """Perform a single-band variable subset of a GeoTIFF.
 
-    def varsubset(self, srcfile, dstfile, band=None):
-        if not band:
+        If no band is supplied, return the path of the input file.
+
+        """
+        if band is None:
             return srcfile
 
-        command = ["gdal_translate"]
-        command.extend(["-b", str(band)])
-        command.extend([srcfile, dstfile])
-        self.execute_gdal_command(*command)
+        self.logger.info(f"Performing variable subset on {srcfile} for Band {band}")
+        Translate(dstfile, srcfile, options=TranslateOptions(bandList=[band]))
 
         return dstfile
 
-    def subset(self, layerid, srcfile, dstdir, band=None):
+    def subset(self, layerid, srcfile: str, dstdir: str, band: int | None = None):
         """Subset layer to region defined in message.subset."""
         normalized_layerid = layerid.replace("/", "_")
         subset = self.message.subset
@@ -447,109 +450,101 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         tmpfile_geojson = convert_to_multipolygon(shapefile, tmpfile_geojson, buf=buf)
 
         # convert into ESRI shapefile
-        outfile = f"{fileprex}.shp"
-        command = ["ogr2ogr", "-f", "ESRI Shapefile"]
-        command.extend([outfile, tmpfile_geojson])
-        self.execute_gdal_command(*command)
+        output_shape_file = f"{fileprex}.shp"
+        VectorTranslate(
+            output_shape_file,
+            tmpfile_geojson,
+            options=VectorTranslateOptions(format="ESRI Shapefile"),
+        )
 
-        return outfile
+        return output_shape_file
 
-    def resize(self, layerid, srcfile, dstdir):
-        """Resizes the input layer
+    def resize(self, layerid: str, srcfile: str, dstdir: str) -> str:
+        """Resizes the input layer and returns the name of the output file.
 
-        Uses a call to gdal_translate using information in message.format.
+        Uses the `osgeo.gdal.Translate` Python binding to execute
+        gdal_translate using information in the Harmony message.
+
+        NOTE: Message parameters are retrieved without marking them as
+        processed. This means that they will be passed on to any subsequent
+        steps in a workflow chain. To change this behaviour, the
+        `harmony_service_lib.message.Message.process` method can be used.
 
         """
-        interpolation = self.message.format.process("interpolation")
-        if interpolation in resampling_methods:
-            resample_method = interpolation
-        else:
-            resample_method = "bilinear"
+        resample_algorithm = get_resample_algorithm(self.message)
 
-        command = ["gdal_translate"]
-        fmt = self.message.format
         normalized_layerid = layerid.replace("/", "_")
         dstfile = os.path.join(dstdir, f"{normalized_layerid}__resized.tif")
 
-        if self.message.format.mime == "image/png":
-            # need to unscale values to color PNGs correctly
-            command.extend(["-unscale", "-ot", "Float64"])
+        # Retrieve requested height and width from message. If either are not
+        # specified set that size to 0, so the other is used while preserving
+        # the aspect ratio of the original input.
+        output_width = self.message.format.process("width") or 0
+        output_height = self.message.format.process("height") or 0
 
-        if fmt.width or fmt.height:
-            width = fmt.process("width") or 0
-            height = fmt.process("height") or 0
-            command.extend(["-outsize", str(width), str(height)])
-            command.extend(["-r", resample_method])
-            command.extend([srcfile, dstfile])
-            self.execute_gdal_command(*command)
-            return dstfile
+        if output_width or output_height:
+            self.logger.info(f"Resizing {srcfile} to ({output_width}, {output_height})")
+            translate_options = TranslateOptions(
+                resampleAlg=resample_algorithm,
+                height=output_height,
+                width=output_width,
+            )
+            Translate(dstfile, srcfile, options=translate_options)
+            output_file_name = dstfile
         else:
-            return srcfile
+            output_file_name = srcfile
 
-    def reproject(self, layerid, srcfile, dstdir):
-        crs = self.message.format.process("crs")
-        interpolation = self.message.format.process("interpolation")
-        if interpolation in resampling_methods:
-            resample_method = interpolation
-        else:
-            resample_method = "bilinear"
-        if not crs:
-            return srcfile
+        return output_file_name
 
+    def reproject(self, layerid: str, srcfile: str, dstdir: str) -> str:
+        """Project input to requested target projection using gdalwarp.
+
+        Uses the `osgeo.gdal.Warp` Python binding to call gdalwarp.
+
+        NOTE: Message parameters are retrieved without marking them as
+        processed. This means that they will be passed on to any subsequent
+        steps in a workflow chain. To change this behaviour, the
+        `harmony_service_lib.message.Message.process` method can be used.
+
+        """
         normalized_layerid = layerid.replace("/", "_")
         dstfile = os.path.join(dstdir, f"{normalized_layerid}__reprojected.tif")
-        fmt = self.message.format
-        if fmt.scaleSize:
-            xres, yres = fmt.process("scaleSize").x, fmt.process("scaleSize").y
-        else:
-            xres, yres = None, None
-        if fmt.scaleExtent:
-            box = [
-                fmt.process("scaleExtent").x.min,
-                fmt.process("scaleExtent").y.min,
-                fmt.process("scaleExtent").x.max,
-                fmt.process("scaleExtent").y.max,
-            ]
-        else:
-            box = None
 
-        def _regrid(
-            infile,
-            outfile,
-            resampling_mode="bilinear",
-            ref_crs=None,
-            ref_box=None,
-            ref_xres=None,
-            ref_yres=None,
-        ):
-            command = ["gdalwarp", "-of", "GTiff", "-overwrite", "-r", resampling_mode]
+        output_crs = rgetattr(self.message, "format.crs", None)
 
-            if ref_crs:  # proj, box, xres/yres
-                command.extend(["-t_srs", ref_crs])
-                # command.extend([ '-t_srs', "'{ref_crs}'".format(ref_crs=ref_crs)])
-            if ref_box:
-                box = [str(x) for x in ref_box]
-                command.extend(
-                    ["-te", box[0], box[1], box[2], box[3], "-te_srs", ref_crs]
-                )
-                # command.extend(['-te', box[0], box[1], box[2], box[3],
-                #                 '-te_srs', "'{ref_crs`}'".format(ref_crs=ref_crs)])
-            if ref_xres and ref_yres:
-                command.extend(["-tr", str(ref_xres), str(ref_yres)])
+        if output_crs is None:
+            # No reprojection requested, return path to input file
+            return srcfile
 
-            command.extend([infile, outfile])
-            self.execute_gdal_command(*command)
-            return outfile
+        warp_options_dict = {
+            "dstSRS": output_crs,
+            "format": "GTiff",
+            "outputBoundsSRS": output_crs,
+            "resampleAlg": get_resample_algorithm(self.message),
+        }
 
-        return _regrid(
-            srcfile,
-            dstfile,
-            resampling_mode=resample_method,
-            ref_crs=crs,
-            ref_box=box,
-            ref_xres=xres,
-            ref_yres=yres,
-        )
+        # Extract requested x and y resolutions for output
+        output_xres = rgetattr(self.message, "format.scaleSize.x", None)
+        output_yres = rgetattr(self.message, "format.scaleSize.y", None)
+
+        if output_xres is not None and output_yres is not None:
+            warp_options_dict["xRes"] = output_xres
+            warp_options_dict["yRes"] = output_yres
+
+        # Extract requested bounding box
+        output_x_min = rgetattr(self.message, "format.scaleExtent.x.min", None)
+        output_x_max = rgetattr(self.message, "format.scaleExtent.x.max", None)
+        output_y_min = rgetattr(self.message, "format.scaleExtent.y.min", None)
+        output_y_max = rgetattr(self.message, "format.scaleExtent.y.max", None)
+        output_bounds = [output_x_min, output_y_min, output_x_max, output_y_max]
+
+        if all(bound is not None for bound in output_bounds):
+            warp_options_dict["outputBounds"] = output_bounds
+
+        self.logger.info(f"Projecting to CRS: {output_crs}")
+        Warp(dstfile, srcfile, options=WarpOptions(**warp_options_dict))
+
+        return dstfile
 
     def add_to_result(self, filelist, dstdir):
         dstfile = os.path.join(dstdir, "result")
@@ -693,15 +688,9 @@ class HarmonyAdapter(BaseHarmonyAdapter):
             # * No output specified (GeoTIFF default),
             # * An alternative format that would be handled in downstream
             #   services in the chain.
-            gdal_subsetter_version = f"gdal_subsetter_version={self.service_version}"
-            # TODO: Add to consolidated gdal_translate command.
-            command = [
-                "gdal_edit.py",
-                "-mo",
-                gdal_subsetter_version,
-                transformed_geotiff_file,
-            ]
-            self.execute_gdal_command(*command)
+            with OpenGDAL(transformed_geotiff_file, GA_Update) as dataset:
+                dataset.SetMetadataItem("gdal_subsetter_version", self.service_version)
+
             formatted_file_path = transformed_geotiff_file
 
         return formatted_file_path
@@ -866,8 +855,8 @@ class HarmonyAdapter(BaseHarmonyAdapter):
         # covert to absolute path
         tiffile = os.path.abspath(tiffile)
         outputfile = os.path.abspath(outputfile)
-        # RasterFormat = 'GTiff'
         tmpfile = f"{os.path.splitext(outputfile)[0]}-tmp.tif"
+
         if bbox or shapefile:
             if bbox:
                 shapefile_out = box_to_shapefile(tiffile, bbox)
@@ -878,19 +867,21 @@ class HarmonyAdapter(BaseHarmonyAdapter):
                 )
                 boxproj = shapefile_boxproj(shapefile, tiffile, shapefile_out)
 
-            ul_x, ul_y, ul_i, ul_j, cols, rows = calc_subset_envelope_window(
-                tiffile, boxproj
+            _, _, ul_i, ul_j, cols, rows = calc_subset_envelope_window(tiffile, boxproj)
+
+            translate_options_dict = {
+                "srcWin": [str(ul_i), str(ul_j), str(cols), str(rows)],
+            }
+
+            if band is not None:
+                translate_options_dict["bandList"] = [str(band)]
+
+            self.logger.info(
+                f"Subsetting {tiffile} with subwindow {translate_options_dict['srcWin']}",
             )
-
-            command = ["gdal_translate"]
-
-            if band:
-                command.extend(["-b", str(band)])
-
-            command.extend(["-srcwin", str(ul_i), str(ul_j), str(cols), str(rows)])
-
-            command.extend([tiffile, tmpfile])
-            self.execute_gdal_command(*command)
+            Translate(
+                tmpfile, tiffile, options=TranslateOptions(**translate_options_dict)
+            )
             self.mask_via_combined(tmpfile, shapefile_out, outputfile)
         else:
             copyfile(tiffile, outputfile)
