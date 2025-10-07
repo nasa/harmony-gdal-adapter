@@ -6,10 +6,16 @@ from shutil import rmtree
 from tempfile import mkdtemp
 from unittest import TestCase
 
-from gdal_subsetter.exceptions import UnsupportedFileFormatError
+from harmony_service_lib.message import Message as HarmonyMessage
+
+from gdal_subsetter.exceptions import (
+    UnsupportedFileFormatError,
+    UnsupportedInterpolationMethodError,
+)
 from gdal_subsetter.utilities import (
     get_file_type,
     get_geotiff_variables,
+    get_resample_algorithm,
     get_unzipped_geotiffs,
     has_world_file,
     is_geotiff,
@@ -218,3 +224,30 @@ class TestUtilities(TestCase):
 
         with self.subTest("NetCDF-4 returns False."):
             self.assertFalse(has_world_file("application/x-netcdf4"))
+
+    def test_get_resample_algorithm(self):
+        """Ensure a resampling algorithm can be retrieved from a Harmony message."""
+        with self.subTest("Valid algorithm in Harmony message is returned."):
+            self.assertEqual(
+                get_resample_algorithm(
+                    HarmonyMessage({"format": {"interpolation": "nearest"}}),
+                ),
+                "nearest",
+            )
+
+        with self.subTest("Absent algorithm in Harmony message returns bilinear."):
+            self.assertEqual(
+                get_resample_algorithm(HarmonyMessage({})),
+                "bilinear",
+            )
+
+        with self.subTest(
+            "Unsupported algorithm in Harmony message raises an exception."
+        ):
+            with self.assertRaisesRegex(
+                UnsupportedInterpolationMethodError,
+                "Unsupported interpolation method specified: unsupported",
+            ):
+                get_resample_algorithm(
+                    HarmonyMessage({"format": {"interpolation": "unsupported"}})
+                )

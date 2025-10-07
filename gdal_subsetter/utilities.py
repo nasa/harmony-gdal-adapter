@@ -6,11 +6,17 @@ the Harmony GDAL Adapter Service.
 from glob import glob
 from os import rename
 from os.path import dirname, exists, join as path_join, splitext
+from typing import Literal, get_args
 
+from harmony_service_lib.message import Message as HarmonyMessage
+from harmony_service_lib.message_utility import rgetattr
 from harmony_service_lib.util import generate_output_filename
 from osgeo import gdal
 
-from gdal_subsetter.exceptions import UnsupportedFileFormatError
+from gdal_subsetter.exceptions import (
+    UnsupportedFileFormatError,
+    UnsupportedInterpolationMethodError,
+)
 
 known_file_types = {
     ".nc": "nc",
@@ -38,7 +44,7 @@ mime_to_extension = {
 
 process_flags = {"subset": False, "maskband": False}
 
-resampling_methods = [
+ResampleAlgorithms = Literal[
     "nearest",
     "bilinear",
     "cubic",
@@ -204,3 +210,27 @@ class OpenGDAL:
         """Close the file opened via `osgeo.gdal.Open`, if is still open."""
         if self.gdal_object:
             del self.gdal_object
+
+
+def get_resample_algorithm(harmony_message: HarmonyMessage) -> ResampleAlgorithms:
+    """Retrieve the requested resampling algorithm from the Harmony request.
+
+    If no interpolation method was set, then default to bilinear.
+
+    NOTE: Message parameters are retrieved without marking them as
+    processed. This means that they will be passed on to any subsequent
+    steps in a workflow chain. To change this behaviour, the
+    `harmony_service_lib.message.Message.process` method can be used.
+
+    """
+
+    interpolation = rgetattr(harmony_message, "format.interpolation", None)
+
+    if interpolation in get_args(ResampleAlgorithms):
+        resample_algorithm = interpolation
+    elif interpolation is None:
+        resample_algorithm = "bilinear"
+    else:
+        raise UnsupportedInterpolationMethodError(interpolation)
+
+    return resample_algorithm
