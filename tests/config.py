@@ -21,8 +21,7 @@ class UnittestAdapter(HarmonyAdapter):
         secret_key = cfg.shared_secret_key
         decrypter = create_decrypter(bytes(secret_key, "utf-8"))
         message_data = json.loads(message_string)
-        self.adapter = HarmonyAdapter(Message(message_data, decrypter))
-        self.adapter.set_config(cfg)
+        self.adapter = HarmonyAdapter(Message(message_data, decrypter), config=cfg)
 
         self.downloaded_file = None
         self.downloaded_success = False
