@@ -5,7 +5,7 @@ documented in this file. The format is based on [Keep a
 Changelog](http://keepachangelog.com/en/1.0.0/).
 
 
-## [3.0.6] - 2025-12-17
+## [v3.0.6] - 2025-12-17
 
 ### Changed:
 
@@ -395,6 +395,8 @@ This is the final version. We will stop the development for a while.
 
 ## [v1.0.0]
 
+[v3.0.6]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/3.0.6
+[v3.0.5]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/3.0.5
 [v3.0.4]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/3.0.4
 [v3.0.3]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/3.0.3
 [v3.0.2]: https://github.com/nasa/harmony-gdal-adapter/releases/tag/3.0.2
