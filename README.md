@@ -1,7 +1,5 @@
 # Harmony GDAL Adapter (HGA)
 
-![](https://data-services-github-badges.s3.amazonaws.com/cov.svg?dummy=true)
-
 A [Harmony](https://harmony.earthdata.nasa.gov/) backend service that transforms
 input images using GDAL.
 
