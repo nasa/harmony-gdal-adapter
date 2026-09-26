@@ -5,6 +5,14 @@ documented in this file. The format is based on [Keep a
 Changelog](http://keepachangelog.com/en/1.0.0/).
 
 
+## [v3.0.7] - 2026-09-26
+
+### Fixed
+
+* Preserve zero-valued GeoTIFF no-data values when converting geographic and
+  projected rasters to NetCDF, avoiding unintended masking of valid data.
+
+
 ## [v3.0.6] - 2025-12-17
 
 ### Changed:

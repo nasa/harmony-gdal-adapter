@@ -147,7 +147,7 @@ def process_projected(ds_in: gdal.Dataset, dst: Dataset):
 
         vardatatype = mx.data.dtype
         fillvalue = band.GetNoDataValue()
-        if fillvalue:
+        if fillvalue is not None:
             datavar = dst.createVariable(
                 varname, vardatatype, ("y", "x"), zlib=True, fill_value=fillvalue
             )
@@ -267,7 +267,7 @@ def process_geogcs(ds_in: gdal.Dataset, dst: Dataset):
 
         vardatatype = mx.data.dtype
         fillvalue = band.GetNoDataValue()
-        if fillvalue:
+        if fillvalue is not None:
             datavar = dst.createVariable(
                 varname, vardatatype, ("lat", "lon"), zlib=True, fill_value=fillvalue
             )
